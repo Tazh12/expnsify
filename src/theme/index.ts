@@ -63,6 +63,8 @@ export interface Accent {
 }
 
 export interface Theme extends Palette, Accent {
+  id: PaletteId;
+  isLight: boolean;
   amber: string;
   rose: string;
   plum: string;
@@ -138,6 +140,8 @@ const STATIC = {
 
 export function buildTheme(paletteId: PaletteId, accentId: AccentId, fontId: FontId = 'default'): Theme {
   return {
+    id: paletteId,
+    isLight: paletteId === 'cream',
     ...PALETTES[paletteId],
     ...ACCENTS[accentId],
     ...STATIC,

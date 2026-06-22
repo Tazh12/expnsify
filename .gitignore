@@ -10,3 +10,5 @@ dist/
 *.orig.*
 web-build/
 proxy/node_modules/
+.DS_Store
+Screenshot *.png
