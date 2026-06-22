@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StatusBar, Modal, SafeAreaView, ActivityIndicator } from 'react-native';
+import { View, Text, StatusBar, Modal, SafeAreaView, ActivityIndicator, Image } from 'react-native';
 import { useFonts, InstrumentSerif_400Regular, InstrumentSerif_400Regular_Italic } from '@expo-google-fonts/instrument-serif';
 import { Geist_400Regular, Geist_500Medium, Geist_600SemiBold, Geist_700Bold } from '@expo-google-fonts/geist';
 import { GeistMono_400Regular, GeistMono_500Medium } from '@expo-google-fonts/geist-mono';
@@ -130,16 +130,11 @@ export default function App() {
             paddingHorizontal: 20, paddingVertical: 8,
           }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={{
-                width: 22, height: 22, borderRadius: 6,
-                backgroundColor: theme.sage,
-                alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Text style={{
-                  fontFamily: 'InstrumentSerif_400Regular_Italic',
-                  fontSize: 14, color: '#0E0E0C', lineHeight: 18,
-                }}>t</Text>
-              </View>
+              <Image
+                source={require('./assets/app-icon-transparent.png')}
+                style={{ width: 24, height: 24 }}
+                resizeMode="contain"
+              />
               <Text style={{ fontSize: 14, fontWeight: '500', color: theme.cream, letterSpacing: 0.02 }}>
                 expnsify
               </Text>

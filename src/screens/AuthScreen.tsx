@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TextInput, Pressable, StyleSheet,
+  View, Text, TextInput, Pressable, StyleSheet, Image,
   KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
 } from 'react-native';
 import * as Google from 'expo-auth-session/providers/google';
@@ -69,6 +69,11 @@ export default function AuthScreen() {
 
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Image
+        source={require('../../assets/app-icon-transparent.png')}
+        style={s.brandIcon}
+        resizeMode="contain"
+      />
       <View style={s.inner}>
         <Text style={s.wordmark}>expnsify</Text>
         <Text style={s.sub}>Track every expense effortlessly</Text>
@@ -148,6 +153,10 @@ export default function AuthScreen() {
 function styles(theme: ReturnType<typeof useTheme>) {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: theme.bg },
+    brandIcon: {
+      position: 'absolute', top: Platform.OS === 'ios' ? 58 : 24, right: 24,
+      width: 38, height: 38,
+    },
     inner: { flex: 1, justifyContent: 'center', paddingHorizontal: 28, paddingBottom: 40 },
     wordmark: {
       fontFamily: theme.fonts.serifItalic,
