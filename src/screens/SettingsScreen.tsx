@@ -1,0 +1,331 @@
+import React, { useState, useRef } from 'react';
+import { View, Text, ScrollView, Alert, Modal, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { useTheme, PALETTES, ACCENTS, type PaletteId, type AccentId } from '../theme';
+import { Card, Icon, Tap, Toggle } from '../components';
+import { useSettings } from '../store/useSettings';
+import { FONTS, type FontId } from '../theme';
+import { useCategories } from '../store/useCategories';
+import { useAuth } from '../store/useAuth';
+import { SectionHeader, SettingsRow } from './ReportsScreen';
+
+interface Props {
+  onOpenCategories: () => void;
+}
+
+const PALETTE_DATA: { id: PaletteId; label: string; swatches: string[] }[] = [
+  { id: 'midnight', label: 'Midnight', swatches: ['#0E0E0C', '#1B1A17', '#F4EFE6'] },
+  { id: 'cream',    label: 'Cream',    swatches: ['#F4EFE6', '#FAF8F2', '#1F1B16'] },
+  { id: 'carbon',   label: 'Carbon',   swatches: ['#08080A', '#121215', '#EDEDF0'] },
+];
+
+const ACCENT_DATA: { id: AccentId; color: string }[] = [
+  { id: 'sage',  color: '#B8D4B0' },
+  { id: 'amber', color: '#E0B872' },
+  { id: 'rose',  color: '#E0A0A0' },
+  { id: 'blue',  color: '#9FB8D4' },
+];
+
+export function SettingsScreen({ onOpenCategories }: Props) {
+  const C = useTheme();
+  const settings = useSettings();
+  const { categories } = useCategories();
+  const { user, signOut, updateDisplayName } = useAuth();
+
+  const [editNameOpen, setEditNameOpen] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<TextInput>(null);
+
+  function openEditName() {
+    setNameInput(user?.displayName ?? '');
+    setEditNameOpen(true);
+    setTimeout(() => inputRef.current?.focus(), 120);
+  }
+
+  async function saveName() {
+    if (!nameInput.trim()) return;
+    setSaving(true);
+    try {
+      await updateDisplayName(nameInput.trim());
+      setEditNameOpen(false);
+    } catch {
+      Alert.alert('Error', 'Could not update name. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleSignOut() {
+    Alert.alert('Sign out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign out', style: 'destructive', onPress: () => signOut() },
+    ]);
+  }
+
+  const displayName = user?.displayName || user?.email?.split('@')[0] || 'You';
+
+  return (
+    <>
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={{ paddingTop: 8 }}>
+        <Text style={{ fontFamily: C.fonts.serif, fontSize: 38, color: C.cream, letterSpacing: -0.5 }}>Settings</Text>
+        <Text style={{ fontFamily: C.fonts.serifItalic, color: C.muted, marginTop: 6, fontSize: 18 }}>your space</Text>
+      </View>
+
+      {/* Profile */}
+      <Card style={{ marginTop: 20, padding: 20, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+        {/* Tappable avatar */}
+        <Tap onPress={openEditName} haptic style={{ position: 'relative' }}>
+          <View style={{
+            width: 56, height: 56, borderRadius: 28,
+            backgroundColor: C.sage,
+            alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Text style={{ fontFamily: C.fonts.serifItalic, fontSize: 26, color: '#0E0E0C' }}>
+              {displayName.charAt(0).toUpperCase()}
+            </Text>
+          </View>
+          {/* Small edit badge */}
+          <View style={{
+            position: 'absolute', bottom: 0, right: 0,
+            width: 18, height: 18, borderRadius: 9,
+            backgroundColor: C.bgElev,
+            borderWidth: 1, borderColor: C.hair,
+            alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Icon name="edit" size={9} stroke={C.muted} sw={2}/>
+          </View>
+        </Tap>
+
+        <View style={{ flex: 1 }}>
+          <Tap onPress={openEditName}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={{ fontSize: 16, color: C.cream }}>{displayName}</Text>
+              <Icon name="edit" size={12} stroke={C.subtle} sw={1.8}/>
+            </View>
+          </Tap>
+          <Text style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{user?.email ?? ''}</Text>
+        </View>
+        <Tap onPress={handleSignOut} style={{ padding: 6 }}>
+          <Text style={{ fontSize: 12, color: C.muted }}>Sign out</Text>
+        </Tap>
+      </Card>
+
+      {/* Name edit sheet */}
+      <Modal visible={editNameOpen} transparent animationType="slide" onRequestClose={() => setEditNameOpen(false)}>
+        <BlurView intensity={50} tint="dark" style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setEditNameOpen(false)}/>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <View style={{
+              backgroundColor: C.bgElev,
+              borderTopLeftRadius: 28, borderTopRightRadius: 28,
+              borderWidth: 0.5, borderColor: C.hairStrong,
+              paddingTop: 12, paddingBottom: 44, paddingHorizontal: 22,
+            }}>
+              {/* Grabber */}
+              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.subtle, alignSelf: 'center', marginBottom: 24 }}/>
+
+              {/* Avatar preview */}
+              <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                <View style={{
+                  width: 68, height: 68, borderRadius: 34,
+                  backgroundColor: C.sage,
+                  alignItems: 'center', justifyContent: 'center',
+                  marginBottom: 10,
+                }}>
+                  <Text style={{ fontFamily: C.fonts.serifItalic, fontSize: 32, color: '#0E0E0C' }}>
+                    {(nameInput.trim() || displayName).charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 12, color: C.muted }}>{user?.email}</Text>
+              </View>
+
+              {/* Label */}
+              <Text style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.06, marginBottom: 10 }}>
+                Display name
+              </Text>
+
+              {/* Input */}
+              <View style={{
+                flexDirection: 'row', alignItems: 'center', gap: 10,
+                backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
+                borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14,
+                marginBottom: 16,
+              }}>
+                <TextInput
+                  ref={inputRef}
+                  value={nameInput}
+                  onChangeText={setNameInput}
+                  placeholder="Your name"
+                  placeholderTextColor={C.subtle}
+                  style={{ flex: 1, fontSize: 16, color: C.cream, fontFamily: C.fonts.regular }}
+                  returnKeyType="done"
+                  onSubmitEditing={saveName}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  maxLength={40}
+                />
+                {nameInput.length > 0 && (
+                  <Tap onPress={() => setNameInput('')}>
+                    <Icon name="x" size={14} stroke={C.muted}/>
+                  </Tap>
+                )}
+              </View>
+
+              {/* Save */}
+              <Tap
+                onPress={saveName}
+                haptic
+                disabled={!nameInput.trim() || saving}
+                style={{
+                  backgroundColor: nameInput.trim() ? C.sage : C.surface2,
+                  borderRadius: 14, paddingVertical: 15, alignItems: 'center',
+                }}
+              >
+                <Text style={{
+                  color: nameInput.trim() ? '#0E0E0C' : C.muted,
+                  fontFamily: C.fonts.semibold, fontSize: 15,
+                }}>
+                  {saving ? 'Saving…' : 'Save name'}
+                </Text>
+              </Tap>
+            </View>
+          </KeyboardAvoidingView>
+        </BlurView>
+      </Modal>
+
+      <SectionHeader title="Appearance"/>
+      <Card style={{ padding: 16 }}>
+
+        {/* ── Theme ── */}
+        <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.06, textTransform: 'uppercase', marginBottom: 12 }}>
+          Theme
+        </Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 22 }}>
+          {PALETTE_DATA.map(p => (
+            <Tap key={p.id} onPress={() => settings.set('palette', p.id)} style={{
+              width: 88, padding: 12, borderRadius: 16,
+              backgroundColor: settings.palette === p.id ? `${C.sage}1e` : C.surface2,
+              borderWidth: 0.5, borderColor: settings.palette === p.id ? C.sage : C.hair,
+              alignItems: 'center', gap: 10,
+            }}>
+              <View style={{ flexDirection: 'row', borderRadius: 8, overflow: 'hidden', width: 54, height: 28 }}>
+                {p.swatches.map((s, i) => <View key={i} style={{ flex: 1, backgroundColor: s }}/>)}
+              </View>
+              <Text style={{
+                fontSize: 11, fontWeight: '500', textTransform: 'capitalize',
+                color: settings.palette === p.id ? C.cream : C.muted,
+              }}>
+                {p.label}
+              </Text>
+            </Tap>
+          ))}
+        </View>
+
+        {/* ── Accent ── */}
+        <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.06, textTransform: 'uppercase', marginBottom: 12 }}>
+          Accent
+        </Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 22 }}>
+          {ACCENT_DATA.map(a => {
+            const on = settings.accent === a.id;
+            return (
+              <Tap key={a.id} onPress={() => settings.set('accent', a.id)} style={{
+                width: 68, height: 68, borderRadius: 18,
+                backgroundColor: a.color,
+                borderWidth: on ? 3 : 1.5,
+                borderColor: on ? C.cream : 'transparent',
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                {on && <Icon name="check" size={22} stroke="#0E0E0C" sw={2.6}/>}
+              </Tap>
+            );
+          })}
+        </View>
+
+        {/* ── Font style ── */}
+        <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.06, textTransform: 'uppercase', marginBottom: 12 }}>
+          Font style
+        </Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 10 }}>
+          {([ 
+            { id: 'default' as FontId, label: 'Default',  previewFont: FONTS.default.regular,  agFont: FONTS.default.semibold },
+            { id: 'serif'   as FontId, label: 'Serif',    previewFont: FONTS.serif.serif,       agFont: FONTS.serif.serif },
+            { id: 'mono'    as FontId, label: 'Mono',     previewFont: FONTS.mono.regular,      agFont: FONTS.mono.regular },
+          ] as const).map(item => {
+            const on = settings.fontId === item.id;
+            return (
+              <Tap
+                key={item.id}
+                onPress={() => settings.set('fontId', item.id)}
+                style={{
+                  flex: 1, paddingVertical: 16, borderRadius: 16,
+                  backgroundColor: on ? `${C.sage}1e` : C.surface2,
+                  borderWidth: on ? 1.5 : 0.5,
+                  borderColor: on ? C.sage : C.hair,
+                  alignItems: 'center', gap: 10,
+                }}
+              >
+                <Text style={{
+                  fontFamily: item.agFont,
+                  fontSize: 28,
+                  color: on ? C.cream : C.muted,
+                  lineHeight: 34,
+                }}>
+                  Ag
+                </Text>
+                <Text style={{
+                  fontFamily: item.previewFont,
+                  fontSize: 11,
+                  color: on ? C.sage : C.muted,
+                  textTransform: 'capitalize',
+                }}>
+                  {item.label}
+                </Text>
+              </Tap>
+            );
+          })}
+        </View>
+
+      </Card>
+
+      <SectionHeader title="Preferences"/>
+      <Card style={{ padding: 4 }}>
+        <SettingsRow icon={<Icon name="wallet" size={18} stroke={C.cream}/>} label="Base currency" detail="USD" onPress={() => Alert.alert('Coming in v1.1')}/>
+        <SettingsRow icon={<Icon name="tag" size={18} stroke={C.cream}/>} label="Categories" detail={`${categories.filter(c => !c.archived).length}`} onPress={onOpenCategories}/>
+        <SettingsRow icon={<Icon name="bell" size={18} stroke={C.cream}/>} label="Notifications" detail="On" onPress={() => {}} isLast/>
+      </Card>
+
+      <SectionHeader title="AI"/>
+      <Card style={{ padding: 4 }}>
+        <SettingsRow
+          icon={<Icon name="sparkles" size={18} stroke={C.sage}/>}
+          label="Auto-categorize"
+          control={<Toggle on={settings.autoCategories} onChange={v => settings.set('autoCategories', v)}/>}
+        />
+        <SettingsRow
+          icon={<Icon name="cam" size={18} stroke={C.cream}/>}
+          label="Receipt OCR"
+          control={<Toggle on={settings.receiptOcr} onChange={v => settings.set('receiptOcr', v)}/>}
+          isLast
+        />
+      </Card>
+
+      <SectionHeader title="Data"/>
+      <Card style={{ padding: 4 }}>
+        <SettingsRow icon={<Icon name="export" size={18} stroke={C.cream}/>} label="Export all data" onPress={() => Alert.alert('Use the Reports screen to export.')}/>
+        <SettingsRow icon={<Icon name="trash" size={18} stroke={C.rose}/>} label="Delete account" onPress={() => Alert.alert('Delete account', 'This will wipe all data.', [{ text: 'Cancel' }, { text: 'Delete', style: 'destructive' }])} isLast/>
+      </Card>
+
+      <Text style={{ textAlign: 'center', marginTop: 28, color: C.subtle, fontSize: 12 }}>
+        <Text style={{ fontFamily: C.fonts.serifItalic }}>expnsify</Text> · v1.0.0
+      </Text>
+    </ScrollView>
+    </>
+  );
+}
