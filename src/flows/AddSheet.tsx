@@ -21,6 +21,18 @@ import { uid } from '../services/format';
 type Phase = 'pick' | 'scan' | 'review';
 type Method = 'photo' | 'image' | 'voice' | 'manual';
 
+// Builds a local-naive ISO string (no trailing "Z") from a Date's local
+// year/month/day, matching the storage convention used elsewhere in the app
+// (see src/store/defaults.ts). Using `d.toISOString()` would convert local
+// midnight to UTC and can roll the date backward by one day for users in
+// positive UTC-offset timezones.
+function toLocalDateISO(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}T00:00:00`;
+}
+
 interface AddSheetProps {
   open: boolean;
   onClose: () => void;
@@ -270,7 +282,7 @@ function ReviewPhase({
   const [merchant, setMerchant] = useState(scanned?.merchant ?? '');
   const [amount, setAmount] = useState(scanned?.amount?.toString() ?? '');
   const [dateISO, setDateISO] = useState(
-    scanned?.date ? new Date(scanned.date).toISOString() : new Date().toISOString()
+    scanned?.date ? new Date(scanned.date).toISOString() : toLocalDateISO(new Date())
   );
   const [dateDisplay, setDateDisplay] = useState(() => {
     const d = scanned?.date ? new Date(scanned.date) : new Date();
@@ -448,7 +460,7 @@ function ReviewPhase({
         visible={datePickerVisible}
         value={new Date(dateISO)}
         onSelect={(d) => {
-          setDateISO(d.toISOString());
+          setDateISO(toLocalDateISO(d));
           setDateDisplay(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
         }}
         onClose={() => setDatePickerVisible(false)}
