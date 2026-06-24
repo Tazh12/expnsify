@@ -281,13 +281,38 @@ function ReviewPhase({
 
   const [merchant, setMerchant] = useState(scanned?.merchant ?? '');
   const [amount, setAmount] = useState(scanned?.amount?.toString() ?? '');
-  const [dateISO, setDateISO] = useState(
-    scanned?.date ? new Date(scanned.date).toISOString() : toLocalDateISO(new Date())
+
+  // scanned.date comes from an AI scanning service and its exact shape is
+  // ambiguous: it may be a date-only string ("2026-06-24") or a full
+  // datetime/instant ("2026-06-24T14:30:00Z"). Date-only strings must be
+  // treated as their literal calendar day (not reparsed as a UTC instant,
+  // which would roll the day backward for negative-offset users). Full
+  // datetimes are real instants, so their *local* calendar day is what
+  // matters, same as the manual-entry path below via toLocalDateISO.
+  const scannedDateInfo = (() => {
+    const raw = scanned?.date;
+    if (!raw) return null;
+    const dateOnlyMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:T00:00:00)?$/);
+    if (dateOnlyMatch) {
+      const [, y, m, day] = dateOnlyMatch;
+      return {
+        iso: `${y}-${m}-${day}T00:00:00`,
+        display: new Date(Number(y), Number(m) - 1, Number(day))
+          .toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      };
+    }
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return null;
+    return {
+      iso: toLocalDateISO(d),
+      display: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    };
+  })();
+
+  const [dateISO, setDateISO] = useState(scannedDateInfo?.iso ?? toLocalDateISO(new Date()));
+  const [dateDisplay, setDateDisplay] = useState(
+    scannedDateInfo?.display ?? new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   );
-  const [dateDisplay, setDateDisplay] = useState(() => {
-    const d = scanned?.date ? new Date(scanned.date) : new Date();
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  });
   const [note, setNote] = useState(scanned?.note ?? '');
   const [selectedCatId, setSelectedCatId] = useState<string | null>(null);
   const [pendingNewCat, setPendingNewCat] = useState<{ id: string; name: string; color: string; isNew: boolean } | null>(null);
