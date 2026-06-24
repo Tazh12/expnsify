@@ -12,6 +12,7 @@ import Svg, { Path, Rect, Circle, Defs, LinearGradient as SvgGrad, Stop } from '
 import { useTheme } from '../theme';
 import { Icon, Card, Tap, CategoryChip, NewCategoryChip } from '../components';
 import { CategoryEditor } from '../components/CategoryEditor';
+import { DatePicker } from '../components/DatePicker';
 import { useCategories } from '../store/useCategories';
 import { useExpenses } from '../store/useExpenses';
 import { scanImage, scanText, transcribeAudio, type ScannedExpense } from '../services/groq';
@@ -268,12 +269,19 @@ function ReviewPhase({
 
   const [merchant, setMerchant] = useState(scanned?.merchant ?? '');
   const [amount, setAmount] = useState(scanned?.amount?.toString() ?? '');
-  const [date, setDate] = useState(scanned?.date ? new Date(scanned.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
+  const [dateISO, setDateISO] = useState(
+    scanned?.date ? new Date(scanned.date).toISOString() : new Date().toISOString()
+  );
+  const [dateDisplay, setDateDisplay] = useState(() => {
+    const d = scanned?.date ? new Date(scanned.date) : new Date();
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  });
   const [note, setNote] = useState(scanned?.note ?? '');
   const [selectedCatId, setSelectedCatId] = useState<string | null>(null);
   const [pendingNewCat, setPendingNewCat] = useState<{ id: string; name: string; color: string; isNew: boolean } | null>(null);
   const [editorVisible, setEditorVisible] = useState(false);
   const [editorInitial, setEditorInitial] = useState<{ name?: string; color?: string } | undefined>();
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
 
   useEffect(() => {
     if (scanned?.category) {
@@ -303,7 +311,7 @@ function ReviewPhase({
       category_id: selectedCatId ?? 'other',
       amount: parseFloat(amount) || 0,
       currency: scanned?.currency ?? 'USD',
-      date: new Date().toISOString(),
+      date: dateISO,
       note: note || null,
       receipt_uri: receiptUri,
       confidence: scanned?.confidence ?? null,
@@ -351,7 +359,7 @@ function ReviewPhase({
         {/* Amount */}
         <Card style={{ padding: 20, marginBottom: 12 }}>
           <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.06, textTransform: 'uppercase' }}>Amount</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginTop: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginTop: 14 }}>
             <Text style={{ fontSize: 16, color: C.muted, lineHeight: 52 }}>$</Text>
             <TextInput
               value={amount}
@@ -368,7 +376,7 @@ function ReviewPhase({
         {/* Details */}
         <Card style={{ overflow: 'hidden', marginBottom: 12 }}>
           <ReviewRow label="Merchant" value={merchant} onEdit={setMerchant}/>
-          <ReviewRow label="Date" value={date} onEdit={setDate}/>
+          <ReviewRow label="Date" value={dateDisplay} onPress={() => setDatePickerVisible(true)}/>
           <ReviewRow label="Notes" value={note} onEdit={setNote} muted last/>
         </Card>
 
@@ -435,22 +443,32 @@ function ReviewPhase({
         onSave={handleEditorSave}
         onCancel={() => setEditorVisible(false)}
       />
+
+      <DatePicker
+        visible={datePickerVisible}
+        value={new Date(dateISO)}
+        onSelect={(d) => {
+          setDateISO(d.toISOString());
+          setDateDisplay(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
+        }}
+        onClose={() => setDatePickerVisible(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
 
-function ReviewRow({ label, value, onEdit, muted, last }: { label: string; value: string; onEdit?: (v: string) => void; muted?: boolean; last?: boolean }) {
+function ReviewRow({ label, value, onEdit, onPress, muted, last }: { label: string; value: string; onEdit?: (v: string) => void; onPress?: () => void; muted?: boolean; last?: boolean }) {
   const C = useTheme();
   const [editing, setEditing] = useState(false);
 
   return (
-    <TouchableOpacity onPress={() => setEditing(true)} style={{
+    <TouchableOpacity onPress={() => (onPress ? onPress() : setEditing(true))} style={{
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
       padding: 14, paddingHorizontal: 16,
       borderBottomWidth: last ? 0 : 0.5, borderBottomColor: C.hair,
     }}>
       <Text style={{ fontSize: 13, color: C.muted }}>{label}</Text>
-      {editing && onEdit ? (
+      {editing && onEdit && !onPress ? (
         <TextInput
           value={value}
           onChangeText={onEdit}
