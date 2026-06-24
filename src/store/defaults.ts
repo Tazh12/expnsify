@@ -10,17 +10,24 @@ export const DEFAULT_CATEGORIES = [
   { id: 'other',     name: 'Other',     color: '#8F8A80', sort_order: 8 },
 ];
 
+function daysAgo(n: number, hour = 9, minute = 0): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  d.setHours(hour, minute, 0, 0);
+  return d.toISOString();
+}
+
 export const DEMO_TXNS = [
-  { id: 't1',  merchant: 'Blue Bottle Coffee', category_id: 'coffee',    amount: 6.75,   date: '2026-05-07T08:14:00', note: 'oat latte',  currency: 'USD', confidence: 0.96 },
-  { id: 't2',  merchant: 'Whole Foods Market', category_id: 'groceries', amount: 84.32,  date: '2026-05-06T18:22:00', note: null,         currency: 'USD', confidence: null },
-  { id: 't3',  merchant: 'Lyft',               category_id: 'transport', amount: 14.20,  date: '2026-05-06T11:05:00', note: null,         currency: 'USD', confidence: null },
-  { id: 't4',  merchant: 'Linear',             category_id: 'software',  amount: 16.00,  date: '2026-05-05T09:00:00', note: 'monthly',    currency: 'USD', confidence: null },
-  { id: 't5',  merchant: 'Tartine Bakery',     category_id: 'dining',    amount: 22.50,  date: '2026-05-04T13:45:00', note: null,         currency: 'USD', confidence: null },
-  { id: 't6',  merchant: 'Delta Airlines',     category_id: 'travel',    amount: 412.30, date: '2026-05-03T07:00:00', note: 'SFO → JFK', currency: 'USD', confidence: null },
-  { id: 't7',  merchant: "Trader Joe's",       category_id: 'groceries', amount: 47.18,  date: '2026-05-02T17:33:00', note: null,         currency: 'USD', confidence: null },
-  { id: 't8',  merchant: 'PG&E',               category_id: 'home',      amount: 92.40,  date: '2026-05-01T09:00:00', note: 'utilities',  currency: 'USD', confidence: null },
-  { id: 't9',  merchant: 'Sightglass Coffee',  category_id: 'coffee',    amount: 5.50,   date: '2026-04-30T08:50:00', note: null,         currency: 'USD', confidence: null },
-  { id: 't10', merchant: 'CVS Pharmacy',       category_id: 'health',    amount: 18.99,  date: '2026-04-29T19:10:00', note: null,         currency: 'USD', confidence: null },
-  { id: 't11', merchant: 'Spotify',            category_id: 'software',  amount: 11.99,  date: '2026-04-28T00:00:00', note: null,         currency: 'USD', confidence: null },
-  { id: 't12', merchant: 'Uber Eats',          category_id: 'dining',    amount: 31.40,  date: '2026-04-27T20:15:00', note: null,         currency: 'USD', confidence: null },
+  { id: 't1',  merchant: 'Blue Bottle Coffee', category_id: 'coffee',    amount: 6.75,   date: daysAgo(2,  8, 14), note: 'oat latte',  currency: 'USD', confidence: 0.96 },
+  { id: 't2',  merchant: 'Whole Foods Market', category_id: 'groceries', amount: 84.32,  date: daysAgo(3, 18, 22), note: null,         currency: 'USD', confidence: null },
+  { id: 't3',  merchant: 'Lyft',               category_id: 'transport', amount: 14.20,  date: daysAgo(3, 11,  5), note: null,         currency: 'USD', confidence: null },
+  { id: 't4',  merchant: 'Linear',             category_id: 'software',  amount: 16.00,  date: daysAgo(4,  9,  0), note: 'monthly',    currency: 'USD', confidence: null },
+  { id: 't5',  merchant: 'Tartine Bakery',     category_id: 'dining',    amount: 22.50,  date: daysAgo(5, 13, 45), note: null,         currency: 'USD', confidence: null },
+  { id: 't6',  merchant: 'Delta Airlines',     category_id: 'travel',    amount: 412.30, date: daysAgo(6,  7,  0), note: 'SFO → JFK', currency: 'USD', confidence: null },
+  { id: 't7',  merchant: "Trader Joe's",       category_id: 'groceries', amount: 47.18,  date: daysAgo(7, 17, 33), note: null,         currency: 'USD', confidence: null },
+  { id: 't8',  merchant: 'PG&E',               category_id: 'home',      amount: 92.40,  date: daysAgo(8,  9,  0), note: 'utilities',  currency: 'USD', confidence: null },
+  { id: 't9',  merchant: 'Sightglass Coffee',  category_id: 'coffee',    amount: 5.50,   date: daysAgo(9,  8, 50), note: null,         currency: 'USD', confidence: null },
+  { id: 't10', merchant: 'CVS Pharmacy',       category_id: 'health',    amount: 18.99,  date: daysAgo(10, 19, 10), note: null,        currency: 'USD', confidence: null },
+  { id: 't11', merchant: 'Spotify',            category_id: 'software',  amount: 11.99,  date: daysAgo(11,  0,  0), note: null,        currency: 'USD', confidence: null },
+  { id: 't12', merchant: 'Uber Eats',          category_id: 'dining',    amount: 31.40,  date: daysAgo(12, 20, 15), note: null,        currency: 'USD', confidence: null },
 ];

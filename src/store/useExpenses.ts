@@ -74,6 +74,28 @@ export const useExpenses = create<ExpensesState>((set, get) => ({
         await batch.commit();
         return;
       }
+
+      // Migrate stale demo entries: if all data is the original demo set with old dates,
+      // re-date them to the current month so they appear on the home screen.
+      const demoIds = new Set(DEMO_TXNS.map(t => t.id));
+      const docs = snap.docs;
+      const allAreDemo = docs.length === DEMO_TXNS.length && docs.every(d => demoIds.has(d.id));
+      if (allAreDemo) {
+        const now = new Date();
+        const anyStale = docs.some(d => {
+          const date = new Date((d.data() as Expense).date);
+          return date.getFullYear() !== now.getFullYear() || date.getMonth() !== now.getMonth();
+        });
+        if (anyStale) {
+          const batch = writeBatch(db);
+          for (const t of DEMO_TXNS) {
+            batch.update(doc(expCol(uid), t.id), { date: t.date });
+          }
+          await batch.commit();
+          return;
+        }
+      }
+
       const expenses = snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<Expense, 'id'>) }));
       set({ expenses, loaded: true });
     });

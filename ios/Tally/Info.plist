@@ -36,12 +36,6 @@
           <string>com.googleusercontent.apps.731021875778-laus2dhcqbcbc81pvqj3ddb8vepfaokm</string>
         </array>
       </dict>
-      <dict>
-        <key>CFBundleURLSchemes</key>
-        <array>
-          <string>app-1-731021875778-ios-078639cb18f15b9010abdb</string>
-        </array>
-      </dict>
     </array>
     <key>CFBundleVersion</key>
     <string>1</string>
