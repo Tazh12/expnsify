@@ -1,6 +1,8 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+// @ts-ignore — @firebase/auth's exports map types getReactNativePersistence away for non-RN builds, but Metro resolves the correct RN build at runtime.
+import { getReactNativePersistence, initializeAuth } from '@firebase/auth';
+import { initializeFirestore } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyAoWSmnr7S-dkGR2JcKYaimgYbzzt53k_A',
@@ -13,7 +15,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-// Metro resolves the 'react-native' export condition automatically,
-// which includes AsyncStorage-backed persistence out of the box.
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+export const auth = initializeAuth(app, {
+  persistence: getReactNativePersistence(AsyncStorage),
+});
+export const db = initializeFirestore(app, {});

@@ -396,13 +396,13 @@ function ReviewPhase({
         {/* Amount */}
         <Card style={{ padding: 20, marginBottom: 12 }}>
           <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.06, textTransform: 'uppercase' }}>Amount</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginTop: 14 }}>
-            <Text style={{ fontSize: 16, color: C.muted, lineHeight: 52 }}>$</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginTop: 20 }}>
+            <Text style={{ fontSize: 16, color: C.muted, lineHeight: 64 }}>$</Text>
             <TextInput
               value={amount}
               onChangeText={setAmount}
               keyboardType="decimal-pad"
-              style={{ fontFamily: C.fonts.serif, fontSize: 52, lineHeight: 52, color: C.cream, flex: 1 }}
+              style={{ fontFamily: C.fonts.serif, fontSize: 52, lineHeight: 64, color: C.cream, flex: 1 }}
               placeholderTextColor={C.muted}
               placeholder="0.00"
             />
