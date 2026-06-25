@@ -1,7 +1,6 @@
-import Constants from 'expo-constants';
 import type { Category } from '../store/useCategories';
 
-const proxyUrl = (Constants.expoConfig?.extra?.proxyUrl as string | undefined) ?? '';
+const proxyUrl = process.env.EXPO_PUBLIC_PROXY_URL ?? '';
 
 export interface ScannedExpense {
   merchant: string;
@@ -20,7 +19,8 @@ export interface ScannedExpense {
 
 export async function scanImage(
   imageBase64: string,
-  categories: Category[]
+  categories: Category[],
+  mimeType = 'image/jpeg'
 ): Promise<ScannedExpense | null> {
   try {
     const res = await fetch(`${proxyUrl}/scan`, {
@@ -28,13 +28,18 @@ export async function scanImage(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         imageBase64,
+        mimeType,
         categories: categories.map(c => ({ id: c.id, name: c.name })),
       }),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error('scanImage failed', res.status, await res.text());
+      return null;
+    }
     const json = await res.json() as ScannedExpense;
     return json;
-  } catch {
+  } catch (e) {
+    console.error('scanImage error', e);
     return null;
   }
 }

@@ -137,15 +137,23 @@ function DonutCard({ slices, total }: { slices: { id: string; value: number; col
     // Compute angle; SVG is rotated -90deg so offset by +90deg
     let angle = (Math.atan2(dy, dx) + Math.PI / 2 + 2 * Math.PI) % (2 * Math.PI);
     const fraction = angle / (2 * Math.PI);
-    let cumulative = 0;
+    // Dead zone at every slice boundary (including the 12 o'clock seam,
+    // where the first slice's start meets the last slice's end): a tap
+    // within this margin of an edge is genuinely ambiguous between two
+    // neighbors, so treat it as a miss rather than guessing wrong. Capped
+    // at 25% of a slice's own width so thin slices stay tappable.
+    const MARGIN = 0.01;
+    let prev = 0;
     for (let i = 0; i < slices.length; i++) {
-      cumulative += slices[i].value / total;
-      if (fraction <= cumulative) {
+      const width = slices[i].value / total;
+      const cumulative = prev + width;
+      const halfMargin = Math.min(MARGIN / 2, width * 0.25);
+      if (fraction >= prev + halfMargin && fraction <= cumulative - halfMargin) {
         setActive(active === i ? null : i);
         return;
       }
+      prev = cumulative;
     }
-    setActive(null);
   }
 
   return (
@@ -246,42 +254,51 @@ function RecapTeaser() {
 }
 
 const REVEAL_W = 68;
+const REVEAL_L = 120;
 
 export function TxnRow({
-  t, catMap, isLast = false, onViewDetail,
+  t, catMap, isLast = false, onViewDetail, onEdit, onDelete,
 }: {
   t: { id: string; merchant: string; category_id: string; amount: number; date: string; note: string | null; receipt_uri?: string | null; confidence?: number | null; currency?: string };
   catMap: Record<string, { name: string; color: string }>;
   isLast?: boolean;
   onViewDetail?: (t: any) => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const C = useTheme();
   const cat = catMap[t.category_id] ?? { name: t.category_id, color: C.muted };
   const initial = cat.name[0]?.toUpperCase() ?? '?';
 
   const translateX = useRef(new Animated.Value(0)).current;
-  const isOpen = useRef(false);
+  const isOpen = useRef<'none' | 'right' | 'left'>('none');
+  const hasRight = onViewDetail != null;
+  const hasLeft = onEdit != null || onDelete != null;
 
   const pan = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, g) =>
-        onViewDetail != null && Math.abs(g.dx) > 6 && Math.abs(g.dx) > Math.abs(g.dy),
+        (hasRight || hasLeft) && Math.abs(g.dx) > 6 && Math.abs(g.dx) > Math.abs(g.dy),
       onPanResponderMove: (_, g) => {
-        if (!onViewDetail) return;
-        const base = isOpen.current ? REVEAL_W : 0;
-        const next = Math.max(0, Math.min(REVEAL_W + 12, base + g.dx));
+        const base = isOpen.current === 'right' ? REVEAL_W : isOpen.current === 'left' ? -REVEAL_L : 0;
+        const next = Math.max(
+          hasLeft ? -(REVEAL_L + 12) : 0,
+          Math.min(hasRight ? (REVEAL_W + 12) : 0, base + g.dx),
+        );
         translateX.setValue(next);
       },
       onPanResponderRelease: (_, g) => {
-        if (!onViewDetail) return;
-        const base = isOpen.current ? REVEAL_W : 0;
+        const base = isOpen.current === 'right' ? REVEAL_W : isOpen.current === 'left' ? -REVEAL_L : 0;
         const end = base + g.dx;
-        if (end > REVEAL_W * 0.45) {
+        if (hasRight && end > REVEAL_W * 0.45) {
           Animated.spring(translateX, { toValue: REVEAL_W, useNativeDriver: true, speed: 30, bounciness: 4 }).start();
-          isOpen.current = true;
+          isOpen.current = 'right';
+        } else if (hasLeft && end < -(REVEAL_L * 0.45)) {
+          Animated.spring(translateX, { toValue: -REVEAL_L, useNativeDriver: true, speed: 30, bounciness: 4 }).start();
+          isOpen.current = 'left';
         } else {
           Animated.spring(translateX, { toValue: 0, useNativeDriver: true, speed: 30, bounciness: 4 }).start();
-          isOpen.current = false;
+          isOpen.current = 'none';
         }
       },
     })
@@ -289,7 +306,7 @@ export function TxnRow({
 
   function close() {
     Animated.spring(translateX, { toValue: 0, useNativeDriver: true, speed: 30 }).start();
-    isOpen.current = false;
+    isOpen.current = 'none';
   }
 
   return (
@@ -298,8 +315,8 @@ export function TxnRow({
       borderBottomWidth: isLast ? 0 : 0.5,
       borderBottomColor: C.hair,
     }}>
-      {/* Eye action revealed behind the row */}
-      {onViewDetail && (
+      {/* Eye action revealed on swipe right */}
+      {hasRight && (
         <View style={{
           position: 'absolute', left: 0, top: 0, bottom: 0,
           width: REVEAL_W,
@@ -307,7 +324,7 @@ export function TxnRow({
           alignItems: 'center', justifyContent: 'center',
         }}>
           <TouchableOpacity
-            onPress={() => { close(); onViewDetail(t); }}
+            onPress={() => { close(); onViewDetail!(t); }}
             style={{
               width: 42, height: 42, borderRadius: 21,
               backgroundColor: C.sage,
@@ -320,17 +337,54 @@ export function TxnRow({
         </View>
       )}
 
-      {/* Row content — slides right on swipe */}
+      {/* Edit / delete actions revealed on swipe left */}
+      {hasLeft && (
+        <View style={{
+          position: 'absolute', right: 0, top: 0, bottom: 0,
+          width: REVEAL_L,
+          flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+          backgroundColor: C.bgElev,
+        }}>
+          {onEdit && (
+            <TouchableOpacity
+              onPress={() => { close(); onEdit(); }}
+              style={{
+                width: 48, height: 48, borderRadius: 24,
+                backgroundColor: C.sageGlow, borderWidth: 0.5, borderColor: C.sage,
+                alignItems: 'center', justifyContent: 'center',
+              }}
+              activeOpacity={0.8}
+            >
+              <Icon name="edit" size={17} stroke={C.sage} sw={1.8}/>
+            </TouchableOpacity>
+          )}
+          {onDelete && (
+            <TouchableOpacity
+              onPress={() => { close(); onDelete(); }}
+              style={{
+                width: 48, height: 48, borderRadius: 24,
+                backgroundColor: `${C.rose}1a`, borderWidth: 0.5, borderColor: C.rose,
+                alignItems: 'center', justifyContent: 'center',
+              }}
+              activeOpacity={0.8}
+            >
+              <Icon name="trash" size={17} stroke={C.rose} sw={1.8}/>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {/* Row content — slides on swipe */}
       <Animated.View
-        {...(onViewDetail ? pan.panHandlers : {})}
+        {...((hasRight || hasLeft) ? pan.panHandlers : {})}
         style={[
           { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14, paddingHorizontal: 18, backgroundColor: C.bgElev },
-          onViewDetail ? { transform: [{ translateX }] } : undefined,
+          (hasRight || hasLeft) ? { transform: [{ translateX }] } : undefined,
         ]}
       >
         <TouchableOpacity
           activeOpacity={1}
-          onPress={isOpen.current ? close : undefined}
+          onPress={isOpen.current !== 'none' ? close : undefined}
           style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 14 }}
         >
           <View style={{

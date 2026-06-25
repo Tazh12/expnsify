@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   View, Text, ScrollView, TextInput, Modal, Pressable,
-  TouchableOpacity, StyleSheet,
+  TouchableOpacity, StyleSheet, Alert,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useTheme } from '../theme';
@@ -11,6 +11,7 @@ import { useCategories } from '../store/useCategories';
 import { fmt, dayLabel } from '../services/format';
 import { TxnRow } from './HomeScreen';
 import { TxnDetailModal } from './TxnDetailModal';
+import { AddSheet } from '../flows/AddSheet';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,7 +41,7 @@ function filtersActive(f: Filters) {
 
 export function ActivityScreen() {
   const C = useTheme();
-  const { expenses, byDay } = useExpenses();
+  const { expenses, byDay, remove } = useExpenses();
   const { categories } = useCategories();
   const catMap = Object.fromEntries(categories.map(c => [c.id, c]));
 
@@ -48,6 +49,7 @@ export function ActivityScreen() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [detailExpense, setDetailExpense] = useState<Expense | null>(null);
+  const [editTarget, setEditTarget] = useState<Expense | null>(null);
   const detailCategory = detailExpense ? (categories.find(c => c.id === detailExpense.category_id) ?? null) : null;
 
   const filtered = useMemo(() => {
@@ -179,6 +181,15 @@ export function ActivityScreen() {
                       catMap={catMap}
                       isLast={i === items.length - 1}
                       onViewDetail={(exp) => setDetailExpense(exp as Expense)}
+                      onEdit={() => setEditTarget(t)}
+                      onDelete={() => Alert.alert(
+                        'Delete expense?',
+                        `Remove "${t.merchant}" from your tally?`,
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Delete', style: 'destructive', onPress: () => remove(t.id) },
+                        ],
+                      )}
                     />
                   ))}
                 </Card>
@@ -206,6 +217,12 @@ export function ActivityScreen() {
         expense={detailExpense}
         category={detailCategory}
         onClose={() => setDetailExpense(null)}
+      />
+
+      <AddSheet
+        open={!!editTarget}
+        onClose={() => setEditTarget(null)}
+        editExpense={editTarget ?? undefined}
       />
     </>
   );
