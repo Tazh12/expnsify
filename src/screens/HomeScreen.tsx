@@ -278,7 +278,7 @@ export function TxnRow({
   const pan = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, g) =>
-        (hasRight || hasLeft) && Math.abs(g.dx) > 6 && Math.abs(g.dx) > Math.abs(g.dy),
+        (hasRight || hasLeft) && Math.abs(g.dx) > 3 && Math.abs(g.dx) > Math.abs(g.dy),
       onPanResponderMove: (_, g) => {
         const base = isOpen.current === 'right' ? REVEAL_W : isOpen.current === 'left' ? -REVEAL_L : 0;
         const next = Math.max(
@@ -290,14 +290,14 @@ export function TxnRow({
       onPanResponderRelease: (_, g) => {
         const base = isOpen.current === 'right' ? REVEAL_W : isOpen.current === 'left' ? -REVEAL_L : 0;
         const end = base + g.dx;
-        if (hasRight && end > REVEAL_W * 0.45) {
-          Animated.spring(translateX, { toValue: REVEAL_W, useNativeDriver: true, speed: 30, bounciness: 4 }).start();
+        if (hasRight && (end > REVEAL_W * 0.45 || g.vx > 0.5)) {
+          Animated.spring(translateX, { toValue: REVEAL_W, useNativeDriver: true, speed: 20, bounciness: 0 }).start();
           isOpen.current = 'right';
-        } else if (hasLeft && end < -(REVEAL_L * 0.45)) {
-          Animated.spring(translateX, { toValue: -REVEAL_L, useNativeDriver: true, speed: 30, bounciness: 4 }).start();
+        } else if (hasLeft && (end < -(REVEAL_L * 0.45) || g.vx < -0.5)) {
+          Animated.spring(translateX, { toValue: -REVEAL_L, useNativeDriver: true, speed: 20, bounciness: 0 }).start();
           isOpen.current = 'left';
         } else {
-          Animated.spring(translateX, { toValue: 0, useNativeDriver: true, speed: 30, bounciness: 4 }).start();
+          Animated.spring(translateX, { toValue: 0, useNativeDriver: true, speed: 20, bounciness: 0 }).start();
           isOpen.current = 'none';
         }
       },
@@ -305,7 +305,7 @@ export function TxnRow({
   ).current;
 
   function close() {
-    Animated.spring(translateX, { toValue: 0, useNativeDriver: true, speed: 30 }).start();
+    Animated.spring(translateX, { toValue: 0, useNativeDriver: true, speed: 20, bounciness: 0 }).start();
     isOpen.current = 'none';
   }
 
