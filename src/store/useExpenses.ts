@@ -5,6 +5,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { DEMO_TXNS } from './defaults';
+import { useRates } from './useRates';
 
 export interface Expense {
   id: string;
@@ -131,14 +132,16 @@ export const useExpenses = create<ExpensesState>((set, get) => ({
   byDay: (expenses) => groupByDay(expenses ?? get().expenses),
 
   byCategory: (expenses) => {
+    const { convert } = useRates.getState();
     const totals: Record<string, number> = {};
     for (const t of (expenses ?? get().expenses)) {
-      totals[t.category_id] = (totals[t.category_id] ?? 0) + t.amount;
+      totals[t.category_id] = (totals[t.category_id] ?? 0) + convert(t.amount, t.currency);
     }
     return totals;
   },
 
   byWeek: (expenses) => {
+    const { convert } = useRates.getState();
     const txns = expenses ?? get().expenses;
     const weeks: Record<number, number> = {};
     for (const t of txns) {
@@ -148,14 +151,16 @@ export const useExpenses = create<ExpensesState>((set, get) => ({
       monday.setDate(d.getDate() - ((day + 6) % 7));
       const key = monday.toISOString().slice(0, 10);
       const n = parseInt(key.replace(/-/g, ''), 10);
-      weeks[n] = (weeks[n] ?? 0) + t.amount;
+      weeks[n] = (weeks[n] ?? 0) + convert(t.amount, t.currency);
     }
     const sorted = Object.entries(weeks).sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
     return sorted.map(([, amount], i) => ({ label: `W${i + 1}`, amount }));
   },
 
-  total: (expenses) =>
-    (expenses ?? get().expenses).reduce((s, t) => s + t.amount, 0),
+  total: (expenses) => {
+    const { convert } = useRates.getState();
+    return (expenses ?? get().expenses).reduce((s, t) => s + convert(t.amount, t.currency), 0);
+  },
 
   forMonth: (year, month) =>
     get().expenses.filter(t => {
