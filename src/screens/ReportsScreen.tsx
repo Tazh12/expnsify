@@ -229,7 +229,7 @@ export function ReportsScreen({ onOpenRecap }: Props) {
 
   const { bars: compBars, title: chartTitle } = useMemo(
     () => buildComparisonBars(expenses, dateFilter, activeCats),
-    [expenses, dateFilter, activeCats],
+    [expenses, dateFilter, activeCats, rates],
   );
   const maxBar = Math.max(...compBars.map(b => b.amount), 1);
 
