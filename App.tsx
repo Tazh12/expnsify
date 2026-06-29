@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, StatusBar, Modal, SafeAreaView, ActivityIndicator,
-  Image, AppState, TouchableOpacity,
+  Image, AppState,
 } from 'react-native';
 import { useFonts, InstrumentSerif_400Regular, InstrumentSerif_400Regular_Italic } from '@expo-google-fonts/instrument-serif';
 import { Geist_400Regular, Geist_500Medium, Geist_600SemiBold, Geist_700Bold } from '@expo-google-fonts/geist';
@@ -39,7 +39,6 @@ export default function App() {
   });
 
   const settings = useSettings();
-  const rates = useRates();
   const { setUser, setInitializing, initializing, user } = useAuth();
   const { subscribe: subCats, reset: resetCats } = useCategories();
   const { subscribe: subExp, reset: resetExp } = useExpenses();
@@ -234,7 +233,7 @@ export default function App() {
                   Yes, use {localeCurrency}
                 </Text>
               </Tap>
-              <TouchableOpacity
+              <Tap
                 onPress={() => {
                   settings.set('currencyPrompted', true);
                   setLocaleCurrency(null);
@@ -242,7 +241,7 @@ export default function App() {
                 style={{ paddingVertical: 10, alignItems: 'center' }}
               >
                 <Text style={{ color: theme.muted, fontSize: 14 }}>Not now, keep USD</Text>
-              </TouchableOpacity>
+              </Tap>
             </View>
           </BlurView>
         </Modal>
