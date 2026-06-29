@@ -16,8 +16,11 @@ import { CategoryEditor } from '../components/CategoryEditor';
 import { DatePicker } from '../components/DatePicker';
 import { useCategories } from '../store/useCategories';
 import { useExpenses, type Expense } from '../store/useExpenses';
+import { useSettings } from '../store/useSettings';
+import { useRates, FRANKFURTER_CURRENCIES } from '../store/useRates';
 import { scanImage, scanText, transcribeAudio, type ScannedExpense } from '../services/groq';
-import { uid } from '../services/format';
+import { uid, fmt, currencySymbol } from '../services/format';
+import { CurrencyPickerSheet } from '../components/CurrencyPicker';
 
 type Phase = 'pick' | 'scan' | 'review';
 type Method = 'photo' | 'image' | 'voice' | 'manual';
@@ -352,6 +355,18 @@ function ReviewPhase({
   const { categories, add: addCat, nextColor } = useCategories();
   const { add: addExpense, update: updateExpense } = useExpenses();
 
+  const { preferredCurrency } = useSettings.getState();
+  const { convert } = useRates.getState();
+
+  const [currencyCode, setCurrencyCode] = useState(() => {
+    const scannedCurrency = scanned?.currency;
+    if (scannedCurrency && (FRANKFURTER_CURRENCIES as readonly string[]).includes(scannedCurrency)) {
+      return scannedCurrency;
+    }
+    return editExpense?.currency ?? preferredCurrency;
+  });
+  const [currencyPickerOpen, setCurrencyPickerOpen] = useState(false);
+
   const [merchant, setMerchant] = useState(scanned?.merchant ?? editExpense?.merchant ?? '');
   const [amount, setAmount] = useState(scanned?.amount?.toString() ?? editExpense?.amount?.toString() ?? '');
 
@@ -423,6 +438,7 @@ function ReviewPhase({
         merchant: merchant || 'Unknown',
         category_id: selectedCatId ?? 'other',
         amount: parseFloat(amount) || 0,
+        currency: currencyCode,
         date: dateISO,
         note: note || null,
       });
@@ -432,7 +448,7 @@ function ReviewPhase({
         merchant: merchant || 'Unknown',
         category_id: selectedCatId ?? 'other',
         amount: parseFloat(amount) || 0,
-        currency: scanned?.currency ?? 'USD',
+        currency: currencyCode,
         date: dateISO,
         note: note || null,
         receipt_uri: receiptUri,
@@ -484,7 +500,9 @@ function ReviewPhase({
         <Card style={{ padding: 20, marginBottom: 12 }}>
           <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.06, textTransform: 'uppercase' }}>Amount</Text>
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginTop: 20 }}>
-            <Text style={{ fontSize: 16, color: C.muted, lineHeight: 64 }}>$</Text>
+            <Text style={{ fontSize: 16, color: C.muted, lineHeight: 64 }}>
+              {currencySymbol(currencyCode)}
+            </Text>
             <TextInput
               value={amount}
               onChangeText={setAmount}
@@ -493,8 +511,17 @@ function ReviewPhase({
               placeholderTextColor={C.muted}
               placeholder="0.00"
             />
-            <Text style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>USD</Text>
+            <Tap onPress={() => setCurrencyPickerOpen(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 8 }}>
+              <Text style={{ fontSize: 13, color: C.muted }}>{currencyCode}</Text>
+              <Icon name="chev-r" size={11} stroke={C.muted}/>
+            </Tap>
           </View>
+          {/* Conversion hint */}
+          {currencyCode !== preferredCurrency && !!amount && parseFloat(amount) > 0 && (
+            <Text style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>
+              ≈ {fmt(convert(parseFloat(amount) || 0, currencyCode), preferredCurrency)}
+            </Text>
+          )}
         </Card>
 
         {/* Details */}
@@ -576,6 +603,13 @@ function ReviewPhase({
           setDateDisplay(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
         }}
         onClose={() => setDatePickerVisible(false)}
+      />
+
+      <CurrencyPickerSheet
+        visible={currencyPickerOpen}
+        current={currencyCode}
+        onSelect={setCurrencyCode}
+        onClose={() => setCurrencyPickerOpen(false)}
       />
     </KeyboardAvoidingView>
   );
