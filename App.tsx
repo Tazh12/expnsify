@@ -1,13 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StatusBar, Modal, SafeAreaView, ActivityIndicator, Image } from 'react-native';
+import {
+  View, Text, StatusBar, Modal, SafeAreaView, ActivityIndicator,
+  Image, AppState, TouchableOpacity,
+} from 'react-native';
 import { useFonts, InstrumentSerif_400Regular, InstrumentSerif_400Regular_Italic } from '@expo-google-fonts/instrument-serif';
 import { Geist_400Regular, Geist_500Medium, Geist_600SemiBold, Geist_700Bold } from '@expo-google-fonts/geist';
 import { GeistMono_400Regular, GeistMono_500Medium } from '@expo-google-fonts/geist-mono';
+import * as Localization from 'expo-localization';
+import { BlurView } from 'expo-blur';
 import { ThemeContext, buildTheme } from './src/theme';
 import { useSettings } from './src/store/useSettings';
+import { useRates, FRANKFURTER_CURRENCIES } from './src/store/useRates';
 import { useCategories } from './src/store/useCategories';
 import { useExpenses } from './src/store/useExpenses';
 import { useAuth, onAuthStateChanged, firebaseAuth } from './src/store/useAuth';
+import { Tap } from './src/components';
 
 import { TabBar, type TabId } from './src/components/TabBar';
 import { HomeScreen } from './src/screens/HomeScreen';
@@ -32,6 +39,7 @@ export default function App() {
   });
 
   const settings = useSettings();
+  const rates = useRates();
   const { setUser, setInitializing, initializing, user } = useAuth();
   const { subscribe: subCats, reset: resetCats } = useCategories();
   const { subscribe: subExp, reset: resetExp } = useExpenses();
@@ -44,10 +52,45 @@ export default function App() {
   const [recapOpen, setRecapOpen] = useState(false);
   const [catsOpen, setCatsOpen] = useState(false);
   const [month, setMonth] = useState(new Date());
+  const [localeCurrency, setLocaleCurrency] = useState<string | null>(null);
 
+  // Boot: load settings → hydrate rate cache → fetch if stale
   useEffect(() => {
-    settings.load();
+    (async () => {
+      await settings.load();
+      const { preferredCurrency } = useSettings.getState();
+      await useRates.getState().loadCache();
+      if (useRates.getState().isStale()) {
+        useRates.getState().fetch(preferredCurrency);
+      }
+    })();
   }, []);
+
+  // AppState: re-fetch rates when app comes to foreground
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && useRates.getState().isStale()) {
+        useRates.getState().fetch(useSettings.getState().preferredCurrency);
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  // First-launch currency detection
+  useEffect(() => {
+    if (!settings.loaded || settings.currencyPrompted || !user) return;
+    try {
+      const locales = Localization.getLocales();
+      const code = locales[0]?.currencyCode;
+      if (code && code !== 'USD' && (FRANKFURTER_CURRENCIES as readonly string[]).includes(code)) {
+        setLocaleCurrency(code);
+      } else {
+        settings.set('currencyPrompted', true);
+      }
+    } catch {
+      settings.set('currencyPrompted', true);
+    }
+  }, [settings.loaded, user]);
 
   // Firebase auth listener
   useEffect(() => {
@@ -56,11 +99,9 @@ export default function App() {
       setInitializing(false);
 
       if (firebaseUser) {
-        // Subscribe to Firestore data
         unsubCats.current = subCats(firebaseUser.uid);
         unsubExp.current = subExp(firebaseUser.uid);
       } else {
-        // Clean up subscriptions and reset data
         unsubCats.current?.();
         unsubExp.current?.();
         unsubCats.current = null;
@@ -83,7 +124,6 @@ export default function App() {
     );
   }
 
-  // Not logged in → auth screen
   if (!user) {
     return (
       <ThemeContext.Provider value={theme}>
@@ -158,6 +198,53 @@ export default function App() {
           <ThemeContext.Provider value={theme}>
             <CategoriesScreen onClose={() => setCatsOpen(false)} />
           </ThemeContext.Provider>
+        </Modal>
+
+        {/* First-launch currency prompt */}
+        <Modal visible={!!localeCurrency} transparent animationType="fade">
+          <BlurView intensity={60} tint={isLight ? 'light' : 'dark'} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+            <View style={{
+              backgroundColor: theme.bgElev,
+              borderRadius: 24, padding: 24, width: '100%',
+              borderWidth: 0.5, borderColor: theme.hairStrong,
+              gap: 12,
+            }}>
+              <Text style={{ fontFamily: theme.fonts.serif, fontSize: 26, color: theme.cream, lineHeight: 30 }}>
+                Welcome to{' '}
+                <Text style={{ fontStyle: 'italic' }}>expnsify</Text>
+              </Text>
+              <Text style={{ fontSize: 14, color: theme.muted, lineHeight: 20 }}>
+                Your device is set to{' '}
+                <Text style={{ color: theme.cream }}>{localeCurrency}</Text>.
+                {' '}Use it as your preferred currency?
+              </Text>
+              <Tap
+                haptic
+                onPress={() => {
+                  settings.set('preferredCurrency', localeCurrency!);
+                  settings.set('currencyPrompted', true);
+                  setLocaleCurrency(null);
+                }}
+                style={{
+                  backgroundColor: theme.sage, borderRadius: 14,
+                  paddingVertical: 14, alignItems: 'center', marginTop: 4,
+                }}
+              >
+                <Text style={{ color: '#0E0E0C', fontWeight: '600', fontSize: 15 }}>
+                  Yes, use {localeCurrency}
+                </Text>
+              </Tap>
+              <TouchableOpacity
+                onPress={() => {
+                  settings.set('currencyPrompted', true);
+                  setLocaleCurrency(null);
+                }}
+                style={{ paddingVertical: 10, alignItems: 'center' }}
+              >
+                <Text style={{ color: theme.muted, fontSize: 14 }}>Not now, keep USD</Text>
+              </TouchableOpacity>
+            </View>
+          </BlurView>
         </Modal>
       </View>
     </ThemeContext.Provider>
