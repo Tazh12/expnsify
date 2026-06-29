@@ -1,10 +1,18 @@
-export function fmt(n: number): string {
-  const sign = n < 0 ? '\u2212' : '';
-  const v = Math.abs(n).toLocaleString('en-US', {
+export function fmt(n: number, currency = 'USD'): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  });
-  return `${sign}$${v}`;
+  }).format(n);
+}
+
+export function currencySymbol(code: string): string {
+  return (
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: code, minimumFractionDigits: 0 })
+      .formatToParts(0)
+      .find(p => p.type === 'currency')?.value ?? code
+  );
 }
 
 export function dayLabel(iso: string): string {

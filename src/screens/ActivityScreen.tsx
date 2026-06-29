@@ -245,7 +245,7 @@ function FilterSheet({
   onClose: () => void;
   filters: Filters;
   onChange: (f: Filters) => void;
-  categories: { id: string; name: string; color: string }[];
+  categories: { id: string; name: string; color: string; archived?: number }[];
   allMerchants: string[];
 }) {
   const C = useTheme();

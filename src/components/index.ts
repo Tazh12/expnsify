@@ -5,3 +5,4 @@ export { AnimatedNumber } from './AnimatedNumber';
 export { Toggle } from './Toggle';
 export { CategoryChip, NewCategoryChip } from './CategoryChip';
 export { CategoryEditor } from './CategoryEditor';
+export { CurrencyPickerSheet } from './CurrencyPicker';
