@@ -43,7 +43,7 @@ export default {
 
 // ── /scan ─────────────────────────────────────────────────────
 async function handleScan(req: Request, env: Env): Promise<Response> {
-  let body: { imageBase64?: string; text?: string; categories?: { id: string; name: string }[] };
+  let body: { imageBase64?: string; mimeType?: string; text?: string; categories?: { id: string; name: string }[] };
   try {
     body = await req.json() as typeof body;
   } catch {
@@ -86,12 +86,13 @@ Rules:
   ];
 
   if (body.imageBase64) {
+    const imageMime = body.mimeType ?? 'image/jpeg';
     messages.push({
       role: 'user',
       content: [
         {
           type: 'image_url',
-          image_url: { url: `data:image/jpeg;base64,${body.imageBase64}` },
+          image_url: { url: `data:${imageMime};base64,${body.imageBase64}` },
         },
         { type: 'text', text: 'Extract the expense from this image.' },
       ],
