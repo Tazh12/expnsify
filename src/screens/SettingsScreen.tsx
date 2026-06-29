@@ -8,6 +8,15 @@ import { FONTS, type FontId } from '../theme';
 import { useCategories } from '../store/useCategories';
 import { useAuth } from '../store/useAuth';
 import { SectionHeader, SettingsRow } from './ReportsScreen';
+import { useRates } from '../store/useRates';
+import { CurrencyPickerSheet } from '../components/CurrencyPicker';
+
+function ratesAge(fetchedAt: number): string {
+  const mins = Math.round((Date.now() - fetchedAt) / 60000);
+  if (mins < 2) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  return `${Math.round(mins / 60)}h ago`;
+}
 
 interface Props {
   onOpenCategories: () => void;
@@ -32,6 +41,8 @@ export function SettingsScreen({ onOpenCategories }: Props) {
   const { categories } = useCategories();
   const { user, signOut, updateDisplayName } = useAuth();
 
+  const rates = useRates();
+  const [currencyPickerOpen, setCurrencyPickerOpen] = useState(false);
   const [editNameOpen, setEditNameOpen] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [saving, setSaving] = useState(false);
@@ -296,7 +307,14 @@ export function SettingsScreen({ onOpenCategories }: Props) {
 
       <SectionHeader title="Preferences"/>
       <Card style={{ padding: 4 }}>
-        <SettingsRow icon={<Icon name="wallet" size={18} stroke={C.cream}/>} label="Base currency" detail="USD" onPress={() => Alert.alert('Coming in v1.1')}/>
+        <SettingsRow icon={<Icon name="wallet" size={18} stroke={C.cream}/>} label="Base currency" detail={settings.preferredCurrency} onPress={() => setCurrencyPickerOpen(true)}/>
+        {rates.fetchedAt && (
+          <View style={{ paddingHorizontal: 16, paddingBottom: 10 }}>
+            <Text style={{ fontSize: 11, color: C.subtle }}>
+              Rates updated {ratesAge(rates.fetchedAt)}
+            </Text>
+          </View>
+        )}
         <SettingsRow icon={<Icon name="tag" size={18} stroke={C.cream}/>} label="Categories" detail={`${categories.filter(c => !c.archived).length}`} onPress={onOpenCategories}/>
         <SettingsRow icon={<Icon name="bell" size={18} stroke={C.cream}/>} label="Notifications" detail="On" onPress={() => {}} isLast/>
       </Card>
@@ -326,6 +344,12 @@ export function SettingsScreen({ onOpenCategories }: Props) {
         <Text style={{ fontFamily: C.fonts.serifItalic }}>expnsify</Text> · v1.0.0
       </Text>
     </ScrollView>
+    <CurrencyPickerSheet
+      visible={currencyPickerOpen}
+      current={settings.preferredCurrency}
+      onSelect={(code) => settings.set('preferredCurrency', code)}
+      onClose={() => setCurrencyPickerOpen(false)}
+    />
     </>
   );
 }
