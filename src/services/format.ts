@@ -1,18 +1,27 @@
 export function fmt(n: number, currency = 'USD'): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(n);
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(n);
+  } catch {
+    const sign = n < 0 ? '-' : '';
+    return `${sign}${currency}${Math.abs(n).toFixed(2)}`;
+  }
 }
 
 export function currencySymbol(code: string): string {
-  return (
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: code, minimumFractionDigits: 0 })
-      .formatToParts(0)
-      .find(p => p.type === 'currency')?.value ?? code
-  );
+  try {
+    return (
+      new Intl.NumberFormat('en-US', { style: 'currency', currency: code, minimumFractionDigits: 0 })
+        .formatToParts(0)
+        .find(p => p.type === 'currency')?.value ?? code
+    );
+  } catch {
+    return code;
+  }
 }
 
 export function dayLabel(iso: string): string {
