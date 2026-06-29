@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { PaletteId, AccentId, FontId } from '../theme';
+import { useRates } from './useRates';
 
 export type { FontId };
 
@@ -11,6 +12,8 @@ export interface Settings {
   showRecap: boolean;
   autoCategories: boolean;
   receiptOcr: boolean;
+  preferredCurrency: string;
+  currencyPrompted: boolean;
 }
 
 const DEFAULTS: Settings = {
@@ -20,6 +23,8 @@ const DEFAULTS: Settings = {
   showRecap: true,
   autoCategories: true,
   receiptOcr: true,
+  preferredCurrency: 'USD',
+  currencyPrompted: false,
 };
 
 const KEY = '@tally:settings';
@@ -50,6 +55,9 @@ export const useSettings = create<SettingsState>((setState, get) => ({
 
   set: async (key, value) => {
     setState({ [key]: value } as Partial<SettingsState>);
+    if (key === 'preferredCurrency') {
+      useRates.getState().fetch(value as string);
+    }
     try {
       const current = get();
       const toSave: Settings = {
@@ -59,6 +67,8 @@ export const useSettings = create<SettingsState>((setState, get) => ({
         showRecap: current.showRecap,
         autoCategories: current.autoCategories,
         receiptOcr: current.receiptOcr,
+        preferredCurrency: current.preferredCurrency,
+        currencyPrompted: current.currencyPrompted,
         [key]: value,
       };
       await AsyncStorage.setItem(KEY, JSON.stringify(toSave));
