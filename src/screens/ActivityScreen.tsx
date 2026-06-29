@@ -8,6 +8,8 @@ import { useTheme } from '../theme';
 import { Card, Icon, Tap } from '../components';
 import { useExpenses, type Expense } from '../store/useExpenses';
 import { useCategories } from '../store/useCategories';
+import { useRates } from '../store/useRates';
+import { useSettings } from '../store/useSettings';
 import { fmt, dayLabel } from '../services/format';
 import { TxnRow } from './HomeScreen';
 import { TxnDetailModal } from './TxnDetailModal';
@@ -43,6 +45,8 @@ export function ActivityScreen() {
   const C = useTheme();
   const { expenses, byDay, remove } = useExpenses();
   const { categories } = useCategories();
+  const { convert } = useRates();           // subscribe so screen re-renders when rates update
+  const { preferredCurrency } = useSettings();
   const catMap = Object.fromEntries(categories.map(c => [c.id, c]));
 
   const [q, setQ] = useState('');
@@ -166,12 +170,12 @@ export function ActivityScreen() {
         {/* Grouped transactions */}
         <View style={{ marginTop: 20 }}>
           {grouped.map(([day, items]) => {
-            const dayTotal = items.reduce((a, b) => a + b.amount, 0);
+            const dayTotal = items.reduce((a, b) => a + convert(b.amount, b.currency ?? 'USD'), 0);
             return (
               <View key={day} style={{ marginBottom: 18 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingBottom: 8, paddingHorizontal: 4 }}>
                   <Text style={{ fontFamily: C.fonts.serifItalic, fontSize: 15, color: C.muted }}>{dayLabel(day)}</Text>
-                  <Text style={{ fontSize: 12, color: C.subtle }}>{fmt(dayTotal)}</Text>
+                  <Text style={{ fontSize: 12, color: C.subtle }}>{fmt(dayTotal, preferredCurrency)}</Text>
                 </View>
                 <Card style={{ overflow: 'hidden' }}>
                   {items.map((t, i) => (

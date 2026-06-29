@@ -8,7 +8,9 @@ import { useTheme } from '../theme';
 import { Card, Icon, Tap, AnimatedNumber } from '../components';
 import { useExpenses } from '../store/useExpenses';
 import { useCategories } from '../store/useCategories';
-import { fmt, dayLabel, fmtTime } from '../services/format';
+import { useRates } from '../store/useRates';
+import { useSettings } from '../store/useSettings';
+import { fmt, dayLabel, fmtTime, currencySymbol } from '../services/format';
 
 interface Props {
   month: Date;
@@ -23,8 +25,11 @@ export function HomeScreen({ month, onChangeMonth, onOpenAdd, onOpenRecap, onSee
   const { forMonth, byCategory } = useExpenses();
   const { categories } = useCategories();
 
+  const { convert } = useRates();
+  const { preferredCurrency } = useSettings();
+
   const txns = forMonth(month.getFullYear(), month.getMonth());
-  const total = txns.reduce((s, t) => s + t.amount, 0);
+  const total = txns.reduce((s, t) => s + convert(t.amount, t.currency), 0);
   const recent = txns.slice(0, 5);
   const catTotals = byCategory(txns);
 
@@ -73,7 +78,9 @@ export function HomeScreen({ month, onChangeMonth, onOpenAdd, onOpenRecap, onSee
       <View style={{ paddingBottom: 24 }}>
         <Text style={{ color: C.muted, fontSize: 13, marginBottom: 6 }}>You spent</Text>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingTop: 8 }}>
-          <Text style={{ fontFamily: C.fonts.serif, fontSize: 18, color: C.muted, lineHeight: 72 }}>$</Text>
+          <Text style={{ fontFamily: C.fonts.serif, fontSize: 18, color: C.muted, lineHeight: 72 }}>
+            {currencySymbol(preferredCurrency)}
+          </Text>
           <AnimatedNumber
             value={total}
             duration={1100}
@@ -89,7 +96,7 @@ export function HomeScreen({ month, onChangeMonth, onOpenAdd, onOpenRecap, onSee
       </View>
 
       {/* Donut */}
-      {slices.length > 0 && <DonutCard slices={slices} total={total}/>}
+      {slices.length > 0 && <DonutCard slices={slices} total={total} preferredCurrency={preferredCurrency}/>}
 
       {/* Recap teaser */}
       <Tap onPress={onOpenRecap} style={{ marginTop: 16 }}>
@@ -116,7 +123,7 @@ export function HomeScreen({ month, onChangeMonth, onOpenAdd, onOpenRecap, onSee
   );
 }
 
-function DonutCard({ slices, total }: { slices: { id: string; value: number; color: string; name: string }[]; total: number }) {
+function DonutCard({ slices, total, preferredCurrency }: { slices: { id: string; value: number; color: string; name: string }[]; total: number; preferredCurrency: string }) {
   const C = useTheme();
   const [active, setActive] = React.useState<number | null>(null);
   const size = 180;
@@ -193,7 +200,7 @@ function DonutCard({ slices, total }: { slices: { id: string; value: number; col
               {focus ? focus.name : 'Top'}
             </Text>
             <Text style={{ fontFamily: C.fonts.serif, fontSize: 26, color: C.cream, lineHeight: 30, marginTop: 2 }}>
-              {fmt(focus ? focus.value : top?.value ?? 0)}
+              {fmt(focus ? focus.value : top?.value ?? 0, preferredCurrency)}
             </Text>
             <Text style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
               {focus
@@ -267,6 +274,10 @@ export function TxnRow({
   onDelete?: () => void;
 }) {
   const C = useTheme();
+  const { convert } = useRates.getState();
+  const { preferredCurrency } = useSettings.getState();
+  const convertedAmount = convert(t.amount, t.currency ?? 'USD');
+  const showOriginal = !!t.currency && t.currency !== preferredCurrency;
   const cat = catMap[t.category_id] ?? { name: t.category_id, color: C.muted };
   const initial = cat.name[0]?.toUpperCase() ?? '?';
 
@@ -407,9 +418,14 @@ export function TxnRow({
         </TouchableOpacity>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={{ fontSize: 15, color: C.cream, fontWeight: '500', fontVariant: ['tabular-nums'] }}>
-            {fmt(t.amount)}
+            {fmt(convertedAmount, preferredCurrency)}
           </Text>
-          <Text style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{fmtTime(t.date)}</Text>
+          {showOriginal && (
+            <Text style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
+              {t.currency} {t.amount.toFixed(2)}
+            </Text>
+          )}
+          <Text style={{ fontSize: 11, color: C.muted, marginTop: showOriginal ? 0 : 2 }}>{fmtTime(t.date)}</Text>
         </View>
       </Animated.View>
     </View>

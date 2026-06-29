@@ -10,6 +10,8 @@ import { useTheme } from '../theme';
 import { Card, Icon, Tap } from '../components';
 import { useExpenses } from '../store/useExpenses';
 import { useCategories } from '../store/useCategories';
+import { useRates } from '../store/useRates';
+import { useSettings } from '../store/useSettings';
 import { fmt } from '../services/format';
 import { RecapModal } from '../flows/RecapModal';
 
@@ -81,12 +83,13 @@ function sumInRange(
   end: Date,
   cats: string[],
 ): number {
+  const { convert } = useRates.getState();
   return expenses
     .filter(t => {
       const d = new Date(t.date);
       return d >= start && d <= end && (cats.length === 0 || cats.includes(t.category_id));
     })
-    .reduce((s, t) => s + t.amount, 0);
+    .reduce((s, t) => s + convert(t.amount, t.currency), 0);
 }
 
 function buildComparisonBars(
@@ -178,6 +181,8 @@ export function ReportsScreen({ onOpenRecap }: Props) {
   const C = useTheme();
   const { expenses } = useExpenses();
   const { categories } = useCategories();
+  const { convert, rates } = useRates();
+  const { preferredCurrency } = useSettings();
   const catMap = Object.fromEntries(categories.map(c => [c.id, c]));
 
   const [dateFilter, setDateFilter] = useState<DateFilter>({ rangeId: 'month', customFrom: '', customTo: '' });
@@ -201,9 +206,9 @@ export function ReportsScreen({ onOpenRecap }: Props) {
 
   const catTotals = useMemo(() =>
     filtered.reduce<Record<string, number>>((acc, t) => {
-      acc[t.category_id] = (acc[t.category_id] ?? 0) + t.amount; return acc;
+      acc[t.category_id] = (acc[t.category_id] ?? 0) + convert(t.amount, t.currency); return acc;
     }, {}),
-    [filtered],
+    [filtered, convert, rates],
   );
 
   const sortedCats = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
@@ -213,13 +218,13 @@ export function ReportsScreen({ onOpenRecap }: Props) {
   const topCatIds = useMemo(() =>
     Object.entries(
       dateFiltered.reduce<Record<string, number>>((acc, t) => {
-        acc[t.category_id] = (acc[t.category_id] ?? 0) + t.amount; return acc;
+        acc[t.category_id] = (acc[t.category_id] ?? 0) + convert(t.amount, t.currency); return acc;
       }, {}),
     )
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3)
     .map(([id]) => id),
-    [dateFiltered],
+    [dateFiltered, convert, rates],
   );
 
   const { bars: compBars, title: chartTitle } = useMemo(
@@ -238,7 +243,7 @@ export function ReportsScreen({ onOpenRecap }: Props) {
     await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: 'Export expenses' });
   };
 
-  const total = filtered.reduce((s, t) => s + t.amount, 0);
+  const total = filtered.reduce((s, t) => s + convert(t.amount, t.currency), 0);
 
   return (
     <>
@@ -355,7 +360,7 @@ export function ReportsScreen({ onOpenRecap }: Props) {
                 Total spent
               </Text>
               <Text style={{ fontFamily: C.fonts.serif, fontSize: 30, color: C.cream, marginTop: 4 }}>
-                {fmt(total)}
+                {fmt(total, preferredCurrency)}
               </Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
@@ -421,7 +426,7 @@ export function ReportsScreen({ onOpenRecap }: Props) {
                     marginBottom: 6,
                     marginTop: 'auto' as any,
                   }}>
-                    {bar.amount > 0 ? fmt(bar.amount).replace('$', '$').replace(/\.00$/, '') : '—'}
+                    {bar.amount > 0 ? fmt(bar.amount, preferredCurrency).replace(/\.00$/, '') : '—'}
                   </Text>
                   {/* Bar */}
                   <View style={{
@@ -469,7 +474,7 @@ export function ReportsScreen({ onOpenRecap }: Props) {
                     <Text style={{ fontSize: 14, color: C.cream }}>{meta.name}</Text>
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ fontSize: 13, color: C.cream }}>{fmt(val)}</Text>
+                    <Text style={{ fontSize: 13, color: C.cream }}>{fmt(val, preferredCurrency)}</Text>
                     <Text style={{ fontSize: 11, color: C.muted }}>{Math.round(val / (total || 1) * 100)}%</Text>
                   </View>
                 </View>
@@ -508,7 +513,7 @@ export function ReportsScreen({ onOpenRecap }: Props) {
         selected={activeCats}
         categories={categories.filter(c => !c.archived)}
         catTotalsAll={dateFiltered.reduce<Record<string, number>>((acc, t) => {
-          acc[t.category_id] = (acc[t.category_id] ?? 0) + t.amount; return acc;
+          acc[t.category_id] = (acc[t.category_id] ?? 0) + convert(t.amount, t.currency); return acc;
         }, {})}
         onApply={(cats) => { setActiveCats(cats); setCatSheetOpen(false); }}
         onClose={() => setCatSheetOpen(false)}
@@ -675,6 +680,7 @@ function CategorySheet({
   onClose: () => void;
 }) {
   const C = useTheme();
+  const { preferredCurrency } = useSettings();
   const [local, setLocal] = useState<string[]>(selected);
   React.useEffect(() => { if (open) setLocal(selected); }, [open]);
 
@@ -729,7 +735,7 @@ function CategorySheet({
                     {cat.name}
                   </Text>
                   {amt > 0 && (
-                    <Text style={{ fontSize: 13, color: on ? C.cream : C.subtle }}>{fmt(amt)}</Text>
+                    <Text style={{ fontSize: 13, color: on ? C.cream : C.subtle }}>{fmt(amt, preferredCurrency)}</Text>
                   )}
                 </View>
                 {amt > 0 && (

@@ -8,6 +8,8 @@ import { useTheme } from '../theme';
 import { Icon, Tap } from '../components';
 import type { Expense } from '../store/useExpenses';
 import type { Category } from '../store/useCategories';
+import { useRates } from '../store/useRates';
+import { useSettings } from '../store/useSettings';
 import { fmt } from '../services/format';
 
 interface Props {
@@ -28,6 +30,11 @@ export function TxnDetailModal({ expense: t, category, onClose }: Props) {
   const [imgError, setImgError] = React.useState(false);
 
   if (!t) return null;
+
+  const { convert } = useRates.getState();
+  const { preferredCurrency } = useSettings.getState();
+  const convertedAmount = convert(t.amount, t.currency ?? 'USD');
+  const showOriginal = !!t.currency && t.currency !== preferredCurrency;
 
   const cat = category ?? { name: t.category_id, color: C.muted } as any;
   const hasReceipt = !!t.receipt_uri && !imgError;
@@ -91,9 +98,14 @@ export function TxnDetailModal({ expense: t, category, onClose }: Props) {
                 {t.merchant}
               </Text>
               <Text style={{ fontFamily: C.fonts.serif, fontSize: 40, color: C.cream, marginTop: 6, letterSpacing: -1 }}>
-                {fmt(t.amount)}
-                <Text style={{ fontSize: 18, color: C.muted }}> {t.currency || 'USD'}</Text>
+                {fmt(convertedAmount, preferredCurrency)}
+                <Text style={{ fontSize: 18, color: C.muted }}> {preferredCurrency}</Text>
               </Text>
+              {showOriginal && (
+                <Text style={{ fontSize: 14, color: C.muted, marginTop: 4 }}>
+                  Originally {t.currency} {t.amount.toFixed(2)}
+                </Text>
+              )}
 
               {/* Date */}
               <Text style={{ fontSize: 13, color: C.muted, marginTop: 12 }}>{fmtFull(t.date)}</Text>
