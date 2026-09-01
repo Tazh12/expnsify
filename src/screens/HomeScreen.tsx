@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import { useTheme } from '../theme';
-import { Card, Icon, Tap } from '../components';
+import { Card, Icon, Tap, CarryIncomeCard } from '../components';
 import { AddMenu } from '../components/AddMenu';
 import { BudgetRing } from '../components/BudgetRing';
 import { BudgetSection } from '../components/BudgetSection';
@@ -13,8 +13,8 @@ import { useRates } from '../store/useRates';
 import { useSettings } from '../store/useSettings';
 import { useBudgetGroups } from '../store/useBudgetGroups';
 import { fmt } from '../services/format';
-import { monthKey } from '../services/month';
-import { lineActual, summarizeMonth } from '../services/budget';
+import { monthKey, occurrenceDaysInMonth, repeatStepDays } from '../services/month';
+import { incomeCarryOffers, lineActual, summarizeMonth } from '../services/budget';
 import { syncNotifications } from '../services/notifications';
 import { type BudgetLine, type BudgetSection as BudgetSectionId } from '../store/budgetTypes';
 import { useLayout } from '../hooks/useLayout';
@@ -28,7 +28,7 @@ export function HomeScreen({ month, onChangeMonth }: Props) {
   const C = useTheme();
   const { isWide } = useLayout();
   const key = monthKey(month);
-  const { forMonth, ensureMonth, add, update, remove, loaded } = useBudget();
+  const { forMonth, ensureMonth, addMany, update, remove, loaded, dedupeRepeats, carryIncome, lines: allLines } = useBudget();
   const allMeta = useBudgetGroups(s => s.all);
   const lines = forMonth(key);
   const { expenses } = useExpenses();
@@ -37,9 +37,13 @@ export function HomeScreen({ month, onChangeMonth }: Props) {
   const { preferredCurrency } = settings;
 
   const [editor, setEditor] = useState<{ section: BudgetSectionId; line: BudgetLine | null } | null>(null);
+  const [skipCarry, setSkipCarry] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    if (loaded) ensureMonth(key).catch(() => {});
+    if (!loaded) return;
+    ensureMonth(key)
+      .then(() => dedupeRepeats(key))
+      .catch(() => {});
   }, [key, loaded]);
 
   useEffect(() => {
@@ -70,6 +74,10 @@ export function HomeScreen({ month, onChangeMonth }: Props) {
     () => summarizeMonth(lines, monthExpenses, convert),
     [lines, monthExpenses, convert],
   );
+  const carryOffers = useMemo(
+    () => skipCarry[key] ? [] : incomeCarryOffers(allLines, key),
+    [allLines, key, skipCarry],
+  );
 
   const monthLabel = month.toLocaleString('en-US', { month: 'long', year: 'numeric' });
   const [mName, mYear] = monthLabel.split(' ');
@@ -78,12 +86,43 @@ export function HomeScreen({ month, onChangeMonth }: Props) {
   const noPlan = summary.assigned <= 0;
 
   const saveLine = async (payload: Omit<BudgetLine, 'id'> & { id?: string }) => {
+    const step = payload.recurring ? repeatStepDays(payload.repeatEvery) : 0;
+    const days = step > 0 && payload.dueDay != null
+      ? occurrenceDaysInMonth(payload.month, payload.dueDay, payload.repeatEvery)
+      : [payload.dueDay];
+
+    const series = allLines.filter(l =>
+      l.month === payload.month
+      && l.section === payload.section
+      && l.templateKey === (payload.templateKey)
+    );
+
     if (payload.id) {
       const { id, ...patch } = payload;
       await update(id, patch);
-    } else {
-      await add(payload);
+      for (const sib of series) {
+        if (sib.id === id || sib.paid) continue;
+        await update(sib.id, {
+          name: payload.name,
+          expected: payload.expected,
+          observation: payload.observation,
+          recurring: payload.recurring,
+          repeatEvery: payload.repeatEvery,
+          currency: payload.currency,
+        });
+      }
+      return;
     }
+
+    const taken = new Set(series.map(l => l.dueDay));
+    const fresh = days.filter(day => !taken.has(day ?? null));
+    if (fresh.length === 0) return;
+    await addMany(fresh.map((day, i) => ({
+      ...payload,
+      dueDay: day ?? null,
+      actualOverride: i === 0 ? payload.actualOverride : null,
+      sortOrder: (payload.sortOrder ?? 0) + i,
+    })));
   };
 
   const togglePaid = async (line: BudgetLine) => {
@@ -193,6 +232,16 @@ export function HomeScreen({ month, onChangeMonth }: Props) {
                 : 'Income that still needs a job.'}
           </Text>
         </Card>
+
+        <CarryIncomeCard
+          month={key}
+          offers={carryOffers}
+          preferredCurrency={preferredCurrency}
+          onAdd={() => {
+            carryIncome(key, carryOffers.map(o => o.templateKey)).catch(() => {});
+          }}
+          onSkip={() => setSkipCarry(s => ({ ...s, [key]: true }))}
+        />
 
         <UpcomingPayments
           lines={lines}

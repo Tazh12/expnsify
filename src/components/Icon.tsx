@@ -65,6 +65,8 @@ export function Icon({ name, size = 20, stroke = 'currentColor', fill = 'none', 
       return <Svg {...props}><Path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><Circle cx="12" cy="12" r="3"/></Svg>;
     case 'receipt':
       return <Svg {...props}><Path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z"/><Path d="M9 8h6M9 12h6M9 16h4"/></Svg>;
+    case 'cal':
+      return <Svg {...props}><Rect x="3" y="5" width="18" height="16" rx="2"/><Path d="M8 3v4M16 3v4M3 10h18"/></Svg>;
     default:
       return null;
   }

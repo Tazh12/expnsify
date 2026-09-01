@@ -5,7 +5,7 @@ import { Tap } from './Tap';
 import { Icon } from './Icon';
 import { fmt } from '../services/format';
 import { ordinalDay } from '../services/notifications';
-import type { BudgetLine } from '../store/budgetTypes';
+import { repeatHint, type BudgetLine } from '../store/budgetTypes';
 
 export function BudgetRow({
   line, actual, remaining, overspend, preferredCurrency, onPress, onTogglePaid, wide,
@@ -23,6 +23,7 @@ export function BudgetRow({
   const isIncome = line.section === 'income';
   const leftColor = overspend ? C.rose : remaining === 0 && !isIncome ? C.muted : C.cream;
   const due = line.dueDay != null ? ordinalDay(line.dueDay) : null;
+  const cadence = line.recurring ? repeatHint(line.repeatEvery ?? 'month') : null;
 
   if (wide) {
     return (
@@ -57,7 +58,7 @@ export function BudgetRow({
           {due ?? '—'}
         </Text>
         <Text style={{ width: 72, textAlign: 'right', fontSize: 12, color: line.paid ? C.sage : overspend ? C.rose : C.muted }}>
-          {line.paid ? 'Paid' : overspend ? 'Over' : line.automated ? 'Auto-pay' : 'Open'}
+          {line.paid ? 'Paid' : overspend ? 'Over' : line.automated && !isIncome ? 'Auto-pay' : 'Open'}
         </Text>
       </Tap>
     );
@@ -79,7 +80,8 @@ export function BudgetRow({
         </View>
         <Text style={{ fontSize: 11, color: C.muted, marginTop: 3, marginLeft: 16 }}>
           {due ? `Due ${due}` : 'No due date'}
-          {line.automated ? ' · auto-pay' : ''}
+          {cadence ? ` · ${cadence}` : ''}
+          {line.automated && !isIncome ? ' · auto-pay' : ''}
           {line.observation ? ` · ${line.observation}` : ''}
         </Text>
       </View>

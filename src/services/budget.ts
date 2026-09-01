@@ -1,6 +1,6 @@
 import type { BudgetLine, BudgetSection } from '../store/budgetTypes';
 import type { Expense } from '../store/useExpenses';
-import { expenseMonthKey } from './month';
+import { expenseMonthKey, occurrenceDaysFromAnchor, repeatGroupKey, repeatStepDays } from './month';
 
 export function expenseMatchesLine(e: Expense, line: BudgetLine): boolean {
   if (e.line_id === line.id) return true;
@@ -181,4 +181,61 @@ export function upcomingLines(lines: BudgetLine[], limit = 3): BudgetLine[] {
     .filter(l => l.section !== 'income' && l.dueDay != null && !l.paid)
     .sort((a, b) => (a.dueDay ?? 99) - (b.dueDay ?? 99))
     .slice(0, limit);
+}
+
+export interface IncomeCarryOffer {
+  templateKey: string;
+  name: string;
+  expected: number;
+  currency: string;
+  count: number;
+  sourceMonth: string;
+  proto: BudgetLine;
+}
+
+export function incomeCarryOffers(allLines: BudgetLine[], month: string): IncomeCarryOffer[] {
+  const sourceMonth = [...new Set(allLines.filter(l => l.section === 'income' && l.recurring).map(l => l.month))]
+    .filter(m => m < month)
+    .sort()
+    .reverse()[0];
+  if (!sourceMonth) return [];
+
+  const present = new Set(
+    allLines.filter(l => l.month === month && l.section === 'income').map(l => l.templateKey),
+  );
+  const source = allLines.filter(l => l.month === sourceMonth && l.section === 'income' && l.recurring);
+  const groups = new Map<string, BudgetLine[]>();
+  for (const line of source) {
+    const key = repeatGroupKey(line);
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(line);
+    else groups.set(key, [line]);
+  }
+
+  const offers: IncomeCarryOffer[] = [];
+  for (const members of groups.values()) {
+    const proto = members.slice().sort((a, b) => (a.dueDay ?? 99) - (b.dueDay ?? 99))[0];
+    if (present.has(proto.templateKey)) continue;
+    const step = repeatStepDays(proto.repeatEvery);
+    const count = proto.dueDay != null && step > 0
+      ? occurrenceDaysFromAnchor(sourceMonth, proto.dueDay, step, month).length
+      : 1;
+    offers.push({
+      templateKey: proto.templateKey,
+      name: proto.name,
+      expected: proto.expected,
+      currency: proto.currency,
+      count: Math.max(1, count),
+      sourceMonth,
+      proto,
+    });
+  }
+  return offers;
+}
+
+export function repeatCadenceLabel(line: BudgetLine): string {
+  if (!line.recurring) return 'once';
+  if (line.repeatEvery === 'week') return 'weekly';
+  if (line.repeatEvery === 'twoWeeks') return 'every 2 weeks';
+  return 'monthly';
 }

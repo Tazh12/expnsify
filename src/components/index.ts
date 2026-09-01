@@ -14,5 +14,6 @@ export { AppShell } from './AppShell';
 export { AddMenu } from './AddMenu';
 export { BudgetRing } from './BudgetRing';
 export { GoesToPicker } from './GoesToPicker';
+export { CarryIncomeCard } from './CarryIncome';
 export { AppHeader } from './AppHeader';
 export { TabBar, type TabId } from './TabBar';

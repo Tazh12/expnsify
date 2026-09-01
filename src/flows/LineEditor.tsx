@@ -10,8 +10,12 @@ import { Tap } from '../components/Tap';
 import { Icon } from '../components/Icon';
 import { Card } from '../components/Card';
 import { Toggle } from '../components/Toggle';
-import { sectionColor, type BudgetLine, type BudgetSection } from '../store/budgetTypes';
-import { slugKey } from '../services/month';
+import { DatePicker } from '../components/DatePicker';
+import {
+  REPEAT_OPTIONS, parseRepeatEvery, sectionColor,
+  type BudgetLine, type BudgetSection, type RepeatEvery,
+} from '../store/budgetTypes';
+import { dueDateFor, formatDueDate, occurrenceDaysInMonth, parseMonthKey, repeatStepDays, slugKey } from '../services/month';
 import { findLineByName, inferDestination } from '../services/budget';
 import { GoesToPicker } from '../components/GoesToPicker';
 import { useBudgetGroups } from '../store/useBudgetGroups';
@@ -38,12 +42,15 @@ export function LineEditor({
   const customGroups = useBudgetGroups(s => s.groups);
   const allMeta = useBudgetGroups(s => s.all);
   const addingIncome = !initial && sectionProp === 'income';
+  const incomeFlow = sectionProp === 'income' || initial?.section === 'income';
   const [name, setName] = useState('');
   const [expected, setExpected] = useState('');
   const [actual, setActual] = useState('');
-  const [dueDay, setDueDay] = useState('');
+  const [dueDay, setDueDay] = useState<number | null>(null);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [automated, setAutomated] = useState(false);
   const [recurring, setRecurring] = useState(true);
+  const [repeatEvery, setRepeatEvery] = useState<RepeatEvery>('month');
   const [observation, setObservation] = useState('');
   const [section, setSection] = useState<BudgetSection>(sectionProp);
   const [sectionLocked, setSectionLocked] = useState(false);
@@ -54,11 +61,13 @@ export function LineEditor({
     setName(initial?.name ?? '');
     setExpected(initial?.expected ? String(initial.expected) : '');
     setActual(initial?.actualOverride != null ? String(initial.actualOverride) : '');
-    setDueDay(initial?.dueDay != null ? String(initial.dueDay) : '');
+    setDueDay(initial?.dueDay ?? null);
+    setDatePickerOpen(false);
     setAutomated(initial?.automated ?? false);
     setRecurring(initial?.recurring ?? true);
+    setRepeatEvery(parseRepeatEvery(initial?.repeatEvery));
     setObservation(initial?.observation ?? '');
-    setSection(initial?.section ?? sectionProp);
+    setSection(initial?.section === 'income' || sectionProp === 'income' ? 'income' : (initial?.section ?? sectionProp));
     setSectionLocked(!!initial || sectionProp === 'income');
     setSaving(false);
     // Only re-hydrate when opening or switching lines — not when the store
@@ -83,25 +92,38 @@ export function LineEditor({
   }, [name, open, initial, sectionLocked, addingIncome, match, customGroups]);
 
   const dest = allMeta.find(s => s.id === section);
+  const isIncome = incomeFlow || section === 'income';
+  const canCopyActual = isIncome && parseMoney(expected) > 0 && parseMoney(actual) !== parseMoney(expected);
+  const occurCount = recurring && dueDay != null && repeatStepDays(repeatEvery) > 0
+    ? occurrenceDaysInMonth(month, dueDay, repeatEvery).length
+    : 0;
+  const pickerDate = dueDay != null
+    ? dueDateFor(month, dueDay)
+    : (() => {
+        const { year, monthIndex } = parseMonthKey(month);
+        const today = new Date();
+        if (today.getFullYear() === year && today.getMonth() === monthIndex) return today;
+        return new Date(year, monthIndex, 1);
+      })();
 
   const handleSave = async () => {
     if (!name.trim()) return;
     setSaving(true);
-    const day = dueDay ? Math.min(31, Math.max(1, parseInt(dueDay, 10) || 0)) : null;
     const target = initial ?? match;
     await onSave({
       id: target?.id,
       month,
-      section,
+      section: incomeFlow ? 'income' : section,
       name: name.trim(),
       expected: parseMoney(expected),
-      actualOverride: section === 'income' && actual !== '' ? parseMoney(actual) : target?.actualOverride ?? null,
+      actualOverride: isIncome && actual !== '' ? parseMoney(actual) : target?.actualOverride ?? null,
       currency: target?.currency ?? currency,
-      dueDay: day,
-      automated,
-      notifyDaysBefore: automated ? (target?.notifyDaysBefore ?? 1) : null,
+      dueDay,
+      automated: isIncome ? false : automated,
+      notifyDaysBefore: isIncome ? null : (automated ? (target?.notifyDaysBefore ?? 1) : null),
       observation: observation.trim() || null,
       recurring,
+      repeatEvery: recurring ? repeatEvery : 'month',
       sortOrder: target?.sortOrder ?? 0,
       templateKey: target?.templateKey || slugKey(name),
       paid: target?.paid ?? false,
@@ -159,20 +181,36 @@ export function LineEditor({
                 C={C}
               />
               <Field
-                label={addingIncome ? 'Expected' : 'Amount'}
+                label="Amount"
                 value={expected}
                 onChange={setExpected}
                 placeholder="0.00"
                 keyboard="decimal-pad"
                 C={C}
               />
-              {section === 'income' && (
-                <Field label="Actual" value={actual} onChange={setActual} placeholder="when it lands" keyboard="decimal-pad" C={C}/>
+              {isIncome && (
+                <Field
+                  label="Actual"
+                  value={actual}
+                  onChange={setActual}
+                  placeholder="when it lands"
+                  keyboard="decimal-pad"
+                  C={C}
+                  action={canCopyActual ? {
+                    label: 'Use amount',
+                    onPress: () => setActual(expected),
+                  } : undefined}
+                />
               )}
-              <Field label="Due day" value={dueDay} onChange={setDueDay} placeholder="optional, 1–31" keyboard="number-pad" C={C}/>
+              <DueField
+                month={month}
+                dueDay={dueDay}
+                onPress={() => setDatePickerOpen(true)}
+                C={C}
+              />
               <Field label="Note" value={observation} onChange={setObservation} placeholder="optional" C={C}/>
 
-              {!addingIncome && (
+              {!incomeFlow && (
                 <>
                   <GoesToPicker
                     section={section}
@@ -189,8 +227,28 @@ export function LineEditor({
               )}
 
               <Card style={{ padding: 4, marginTop: 4, marginBottom: 16 }}>
-                <Row label="Repeats next month" control={<Toggle on={recurring} onChange={setRecurring}/>} C={C}/>
-                <Row label="Auto-pay" control={<Toggle on={automated} onChange={setAutomated}/>} C={C} last/>
+                <Row
+                  label="Repeat"
+                  control={<Toggle on={recurring} onChange={setRecurring}/>}
+                  C={C}
+                  last={!recurring && isIncome}
+                />
+                {recurring && (
+                  <View style={{
+                    paddingHorizontal: 12, paddingTop: 4, paddingBottom: isIncome ? 12 : 14,
+                    borderBottomWidth: isIncome ? 0 : 0.5, borderBottomColor: C.hair,
+                  }}>
+                    <FrequencySeg value={repeatEvery} onChange={setRepeatEvery} C={C}/>
+                    {occurCount > 1 && (
+                      <Text style={{ fontSize: 12, color: C.muted, marginTop: 10, textAlign: 'center' }}>
+                        Lands {occurCount} times this month
+                      </Text>
+                    )}
+                  </View>
+                )}
+                {!isIncome && (
+                  <Row label="Auto-pay" control={<Toggle on={automated} onChange={setAutomated}/>} C={C} last/>
+                )}
               </Card>
 
               <Tap onPress={handleSave} haptic disabled={saving || !name.trim()}>
@@ -212,12 +270,22 @@ export function LineEditor({
           </View>
         </KeyboardAvoidingView>
       </BlurView>
+
+      <DatePicker
+        visible={datePickerOpen}
+        value={pickerDate}
+        presentation="popover"
+        allowClear
+        onSelect={(d) => setDueDay(d.getDate())}
+        onClear={() => setDueDay(null)}
+        onClose={() => setDatePickerOpen(false)}
+      />
     </Modal>
   );
 }
 
 function Field({
-  label, value, onChange, placeholder, keyboard, C,
+  label, value, onChange, placeholder, keyboard, C, action,
 }: {
   label: string;
   value: string;
@@ -225,24 +293,124 @@ function Field({
   placeholder?: string;
   keyboard?: 'decimal-pad' | 'number-pad';
   C: ReturnType<typeof useTheme>;
+  action?: { label: string; onPress: () => void };
 }) {
   return (
     <View style={{ marginBottom: 12 }}>
       <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.06, textTransform: 'uppercase', marginBottom: 8 }}>
         {label}
       </Text>
-      <TextInput
-        value={value}
-        onChangeText={onChange}
-        placeholder={placeholder}
-        placeholderTextColor={C.subtle}
-        keyboardType={keyboard}
+      <View style={{
+        flexDirection: 'row', alignItems: 'center',
+        backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
+        borderRadius: 14, paddingLeft: 16, paddingRight: action ? 6 : 16,
+      }}>
+        <TextInput
+          value={value}
+          onChangeText={onChange}
+          placeholder={placeholder}
+          placeholderTextColor={C.subtle}
+          keyboardType={keyboard}
+          style={{
+            flex: 1, paddingVertical: 14, paddingRight: 12,
+            fontSize: 16, color: C.cream,
+          }}
+        />
+        {action ? (
+          <Tap
+            onPress={action.onPress}
+            haptic
+            accessibilityLabel={action.label}
+            style={{
+              minHeight: 36, paddingHorizontal: 12, paddingVertical: 8,
+              borderRadius: 10, backgroundColor: C.sageGlow,
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ fontSize: 12, color: C.sage, fontWeight: '600' }}>{action.label}</Text>
+          </Tap>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function DueField({
+  month, dueDay, onPress, C,
+}: {
+  month: string;
+  dueDay: number | null;
+  onPress: () => void;
+  C: ReturnType<typeof useTheme>;
+}) {
+  const cadence = dueDay != null ? formatDueDate(month, dueDay) : 'Pick a date';
+  return (
+    <View style={{ marginBottom: 12 }}>
+      <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.06, textTransform: 'uppercase', marginBottom: 8 }}>
+        Due date
+      </Text>
+      <Tap
+        onPress={onPress}
+        accessibilityLabel="Due date"
+        accessibilityValue={{ text: cadence }}
         style={{
+          minHeight: 48,
           backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
           borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14,
-          fontSize: 16, color: C.cream,
+          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
         }}
-      />
+      >
+        <Text style={{ fontSize: 16, color: dueDay != null ? C.cream : C.subtle }}>
+          {cadence}
+        </Text>
+        <Icon name="cal" size={18} stroke={C.muted}/>
+      </Tap>
+    </View>
+  );
+}
+
+function FrequencySeg({
+  value, onChange, C,
+}: {
+  value: RepeatEvery;
+  onChange: (v: RepeatEvery) => void;
+  C: ReturnType<typeof useTheme>;
+}) {
+  return (
+    <View style={{
+      flexDirection: 'row',
+      backgroundColor: C.surface2,
+      borderRadius: 12,
+      padding: 3,
+      gap: 2,
+    }}>
+      {REPEAT_OPTIONS.map(opt => {
+        const on = value === opt.id;
+        return (
+          <View key={opt.id} style={{ flex: 1 }}>
+            <Tap
+              onPress={() => onChange(opt.id)}
+              haptic
+              accessibilityLabel={opt.label}
+              accessibilityState={{ selected: on }}
+              style={{
+                minHeight: 36, borderRadius: 10,
+                alignItems: 'center', justifyContent: 'center',
+                backgroundColor: on ? C.sage : 'transparent',
+                paddingHorizontal: 4,
+              }}
+            >
+              <Text style={{
+                fontSize: 12, fontWeight: '600',
+                color: on ? '#0E0E0C' : C.muted,
+                textAlign: 'center',
+              }}>
+                {opt.label}
+              </Text>
+            </Tap>
+          </View>
+        );
+      })}
     </View>
   );
 }

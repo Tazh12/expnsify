@@ -3,6 +3,25 @@ export type BudgetSection = string;
 
 export type PaidSource = 'manual' | 'receipt' | 'share' | null;
 
+export type RepeatEvery = 'week' | 'twoWeeks' | 'month';
+
+export const REPEAT_OPTIONS: { id: RepeatEvery; label: string }[] = [
+  { id: 'week', label: 'Weekly' },
+  { id: 'twoWeeks', label: '2 weeks' },
+  { id: 'month', label: 'Monthly' },
+];
+
+export function parseRepeatEvery(value: unknown): RepeatEvery {
+  if (value === 'week' || value === 'twoWeeks' || value === 'month') return value;
+  return 'month';
+}
+
+export function repeatHint(every: RepeatEvery): string | null {
+  if (every === 'week') return 'weekly';
+  if (every === 'twoWeeks') return 'every 2 weeks';
+  return null;
+}
+
 export interface BudgetLine {
   id: string;
   month: string;
@@ -16,6 +35,7 @@ export interface BudgetLine {
   notifyDaysBefore: number | null;
   observation: string | null;
   recurring: boolean;
+  repeatEvery: RepeatEvery;
   sortOrder: number;
   templateKey: string;
   paid: boolean;

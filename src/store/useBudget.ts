@@ -5,8 +5,8 @@ import {
 } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { uid as makeId } from '../services/format';
-import { slugKey } from '../services/month';
-import { SECTION_COLORS, type BudgetLine, type BudgetSection } from './budgetTypes';
+import { dueDayInMonth, occurrenceDaysFromAnchor, repeatGroupKey, repeatStepDays, slugKey } from '../services/month';
+import { parseRepeatEvery, SECTION_COLORS, type BudgetLine, type BudgetSection } from './budgetTypes';
 
 interface BudgetState {
   lines: BudgetLine[];
@@ -20,7 +20,10 @@ interface BudgetState {
   update: (id: string, patch: Partial<Omit<BudgetLine, 'id'>>) => Promise<void>;
   remove: (id: string) => Promise<void>;
   removeMany: (ids: string[]) => Promise<void>;
+  addMany: (lines: Array<Omit<BudgetLine, 'id'> & { id?: string }>) => Promise<BudgetLine[]>;
   forMonth: (month: string) => BudgetLine[];
+  dedupeRepeats: (month: string) => Promise<void>;
+  carryIncome: (month: string, templateKeys: string[]) => Promise<void>;
 }
 
 function linesCol(uid: string) {
@@ -42,6 +45,7 @@ function fromDoc(id: string, raw: Record<string, unknown>): BudgetLine {
     notifyDaysBefore: raw.notifyDaysBefore == null ? null : Number(raw.notifyDaysBefore),
     observation: raw.observation == null ? null : String(raw.observation),
     recurring: raw.recurring !== false,
+    repeatEvery: parseRepeatEvery(raw.repeatEvery),
     sortOrder: Number(raw.sortOrder ?? 0),
     templateKey: String(raw.templateKey ?? slugKey(String(raw.name ?? id))),
     paid: Boolean(raw.paid),
@@ -65,6 +69,7 @@ function toDoc(line: Omit<BudgetLine, 'id'>): Record<string, unknown> {
     notifyDaysBefore: line.notifyDaysBefore,
     observation: line.observation,
     recurring: line.recurring,
+    repeatEvery: line.repeatEvery,
     sortOrder: line.sortOrder,
     templateKey: line.templateKey,
     paid: line.paid,
@@ -74,7 +79,7 @@ function toDoc(line: Omit<BudgetLine, 'id'>): Record<string, unknown> {
   };
 }
 
-function copyLine(src: BudgetLine, month: string, sortOrder: number): Omit<BudgetLine, 'id'> {
+function copyLine(src: BudgetLine, month: string, sortOrder: number, dueDay = src.dueDay): Omit<BudgetLine, 'id'> {
   return {
     month,
     section: src.section,
@@ -82,11 +87,12 @@ function copyLine(src: BudgetLine, month: string, sortOrder: number): Omit<Budge
     expected: src.expected,
     actualOverride: null,
     currency: src.currency,
-    dueDay: src.dueDay,
-    automated: src.automated,
-    notifyDaysBefore: src.notifyDaysBefore,
+    dueDay,
+    automated: src.section === 'income' ? false : src.automated,
+    notifyDaysBefore: src.section === 'income' ? null : src.notifyDaysBefore,
     observation: src.observation,
     recurring: src.recurring,
+    repeatEvery: src.repeatEvery,
     sortOrder,
     templateKey: src.templateKey,
     paid: false,
@@ -96,6 +102,46 @@ function copyLine(src: BudgetLine, month: string, sortOrder: number): Omit<Budge
   };
 }
 
+function groupRepeating(lines: BudgetLine[]): BudgetLine[][] {
+  const groups = new Map<string, BudgetLine[]>();
+  for (const line of lines) {
+    const key = repeatGroupKey(line);
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(line);
+    else groups.set(key, [line]);
+  }
+  return [...groups.values()];
+}
+
+function seedFromSource(source: BudgetLine[], sourceMonth: string, targetMonth: string): Omit<BudgetLine, 'id'>[] {
+  const out: Omit<BudgetLine, 'id'>[] = [];
+  let order = 0;
+  for (const members of groupRepeating(source)) {
+    const proto = members.slice().sort((a, b) => (a.dueDay ?? 99) - (b.dueDay ?? 99))[0];
+    const step = repeatStepDays(proto.repeatEvery);
+    if (step > 0 && proto.dueDay != null) {
+      const days = occurrenceDaysFromAnchor(sourceMonth, proto.dueDay, step, targetMonth);
+      for (const day of days) out.push(copyLine(proto, targetMonth, order++, day));
+    } else {
+      const dueDay = proto.dueDay == null
+        ? null
+        : dueDayInMonth(sourceMonth, proto.dueDay, step, targetMonth);
+      out.push(copyLine(proto, targetMonth, order++, dueDay));
+    }
+  }
+  return out;
+}
+
+function keepBestDuplicate(a: BudgetLine, b: BudgetLine): BudgetLine {
+  if (a.actualOverride != null && b.actualOverride == null) return a;
+  if (b.actualOverride != null && a.actualOverride == null) return b;
+  if (a.paid && !b.paid) return a;
+  if (b.paid && !a.paid) return b;
+  if (a.sortOrder !== b.sortOrder) return a.sortOrder < b.sortOrder ? a : b;
+  return a.id < b.id ? a : b;
+}
+
+const monthLocks = new Set<string>();
 let stopBudget: (() => void) | null = null;
 
 export const useBudget = create<BudgetState>((set, get) => ({
@@ -131,13 +177,17 @@ export const useBudget = create<BudgetState>((set, get) => ({
     try {
       const months = [...new Set(get().lines.map(l => l.month))].sort().reverse();
       const sourceMonth = months.find(m => m < month) ?? months[0];
-      const source = sourceMonth ? get().lines.filter(l => l.month === sourceMonth && l.recurring) : [];
+      const source = sourceMonth
+        ? get().lines.filter(l => l.month === sourceMonth && l.recurring && l.section !== 'income')
+        : [];
       if (source.length === 0) return;
 
+      const seeded = seedFromSource(source, sourceMonth, month);
+      if (seeded.length === 0) return;
       const batch = writeBatch(db);
-      source.forEach((l, i) => {
+      seeded.forEach((line) => {
         const id = makeId();
-        batch.set(doc(linesCol(uid), id), toDoc(copyLine(l, month, i)));
+        batch.set(doc(linesCol(uid), id), toDoc(line));
       });
       await batch.commit();
     } finally {
@@ -165,6 +215,7 @@ export const useBudget = create<BudgetState>((set, get) => ({
       notifyDaysBefore: line.notifyDaysBefore ?? null,
       observation: line.observation ?? null,
       recurring: line.recurring ?? true,
+      repeatEvery: parseRepeatEvery(line.repeatEvery),
       sortOrder: line.sortOrder ?? monthLines.length,
       templateKey: line.templateKey || slugKey(line.name),
       paid: line.paid ?? false,
@@ -191,6 +242,44 @@ export const useBudget = create<BudgetState>((set, get) => ({
     await updateDoc(doc(linesCol(uidStr), id), cleaned);
   },
 
+  addMany: async (rows) => {
+    const uidStr = get().uid;
+    if (!uidStr || rows.length === 0) return [];
+    const batch = writeBatch(db);
+    const created: BudgetLine[] = [];
+    for (const line of rows) {
+      const id = line.id ?? makeId();
+      const monthLines = get().lines.filter(l => l.month === line.month && l.section === line.section);
+      const full: BudgetLine = {
+        id,
+        month: line.month,
+        section: line.section,
+        name: line.name,
+        expected: line.expected,
+        actualOverride: line.actualOverride ?? null,
+        currency: line.currency,
+        dueDay: line.dueDay ?? null,
+        automated: line.section === 'income' ? false : (line.automated ?? false),
+        notifyDaysBefore: line.section === 'income' ? null : (line.notifyDaysBefore ?? null),
+        observation: line.observation ?? null,
+        recurring: line.recurring ?? true,
+        repeatEvery: parseRepeatEvery(line.repeatEvery),
+        sortOrder: line.sortOrder ?? monthLines.length + created.length,
+        templateKey: line.templateKey || slugKey(line.name),
+        paid: line.paid ?? false,
+        paidAt: line.paidAt ?? null,
+        paidSource: line.paidSource ?? null,
+        color: line.color,
+      };
+      created.push(full);
+      batch.set(doc(linesCol(uidStr), id), toDoc(full));
+    }
+    const createdIds = new Set(created.map(l => l.id));
+    set({ lines: [...get().lines.filter(l => !createdIds.has(l.id)), ...created] });
+    await batch.commit();
+    return created;
+  },
+
   remove: async (id) => {
     const uidStr = get().uid;
     if (!uidStr) return;
@@ -205,8 +294,72 @@ export const useBudget = create<BudgetState>((set, get) => ({
     await batch.commit();
   },
 
+  dedupeRepeats: async (month) => {
+    const lock = `dedupe:${month}`;
+    if (monthLocks.has(lock)) return;
+    monthLocks.add(lock);
+    const uidStr = get().uid;
+    if (!uidStr) {
+      monthLocks.delete(lock);
+      return;
+    }
+    try {
+      const drop: string[] = [];
+      const monthLines = get().lines.filter(l => l.month === month && l.recurring);
+      for (const members of groupRepeating(monthLines)) {
+        const byDay = new Map<number | 'none', BudgetLine[]>();
+        for (const line of members) {
+          const key = line.dueDay ?? 'none';
+          const bucket = byDay.get(key);
+          if (bucket) bucket.push(line);
+          else byDay.set(key, [line]);
+        }
+        for (const bucket of byDay.values()) {
+          if (bucket.length < 2) continue;
+          const keep = bucket.reduce(keepBestDuplicate);
+          for (const line of bucket) {
+            if (line.id !== keep.id) drop.push(line.id);
+          }
+        }
+      }
+      if (drop.length === 0) return;
+      const dropSet = new Set(drop);
+      set({ lines: get().lines.filter(l => !dropSet.has(l.id)) });
+      const batch = writeBatch(db);
+      for (const id of drop) batch.delete(doc(linesCol(uidStr), id));
+      await batch.commit();
+    } finally {
+      monthLocks.delete(lock);
+    }
+  },
+
+  carryIncome: async (month, templateKeys) => {
+    const uidStr = get().uid;
+    if (!uidStr || templateKeys.length === 0) return;
+    const keys = new Set(templateKeys);
+    const sourceMonth = [...new Set(get().lines.filter(l => l.section === 'income' && l.recurring).map(l => l.month))]
+      .filter(m => m < month)
+      .sort()
+      .reverse()[0];
+    if (!sourceMonth) return;
+    const source = get().lines.filter(l =>
+      l.month === sourceMonth && l.section === 'income' && l.recurring && keys.has(l.templateKey)
+    );
+    if (source.length === 0) return;
+    const already = new Set(
+      get().lines.filter(l => l.month === month && l.section === 'income').map(l => l.templateKey),
+    );
+    const seeded = seedFromSource(
+      source.filter(l => !already.has(l.templateKey)),
+      sourceMonth,
+      month,
+    );
+    if (seeded.length === 0) return;
+    await get().addMany(seeded);
+  },
+
   forMonth: (month) =>
     get().lines
       .filter(l => l.month === month)
-      .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
+      .sort((a, b) => a.sortOrder - b.sortOrder || (a.dueDay ?? 99) - (b.dueDay ?? 99) || a.name.localeCompare(b.name)),
 }));
