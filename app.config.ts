@@ -19,9 +19,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     supportsTablet: false,
     googleServicesFile: './GoogleService-Info.plist',
     infoPlist: {
-      NSCameraUsageDescription: 'Tally uses the camera to scan receipts.',
-      NSPhotoLibraryUsageDescription: 'Tally reads receipts from your photo library.',
-      NSMicrophoneUsageDescription: 'Tally lets you log expenses by voice.',
+      NSCameraUsageDescription: 'Expnsify uses the camera to scan receipts.',
+      NSPhotoLibraryUsageDescription: 'Expnsify reads receipts from your photo library.',
+      NSMicrophoneUsageDescription: 'Expnsify lets you log spending by voice.',
     },
   },
   android: {
@@ -33,20 +33,28 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   web: {
     favicon: './assets/favicon.png',
+    bundler: 'metro',
   },
   plugins: [
     [
       'expo-image-picker',
       {
-        photosPermission: 'Tally reads receipts from your photo library.',
-        cameraPermission: 'Tally uses the camera to scan receipts.',
+        photosPermission: 'Expnsify reads receipts from your photo library.',
+        cameraPermission: 'Expnsify uses the camera to scan receipts.',
         microphonePermission: false,
       },
     ],
     [
       'expo-av',
       {
-        microphonePermission: 'Tally lets you log expenses by voice.',
+        microphonePermission: 'Expnsify lets you log spending by voice.',
+      },
+    ],
+    [
+      'expo-notifications',
+      {
+        icon: './assets/icon.png',
+        color: '#B8D4B0',
       },
     ],
   ],

@@ -4,7 +4,8 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useTheme } from '../theme';
-import { Icon, Tap } from './index';
+import { Icon } from './Icon';
+import { Tap } from './Tap';
 import { FRANKFURTER_CURRENCIES } from '../store/useRates';
 
 const CURRENCY_NAMES: Record<string, string> = {

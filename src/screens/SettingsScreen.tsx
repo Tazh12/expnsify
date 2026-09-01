@@ -10,6 +10,9 @@ import { useAuth } from '../store/useAuth';
 import { SectionHeader, SettingsRow } from './ReportsScreen';
 import { useRates } from '../store/useRates';
 import { CurrencyPickerSheet } from '../components/CurrencyPicker';
+import { requestNotificationPermission, syncNotifications, ordinalDay } from '../services/notifications';
+import { useBudget } from '../store/useBudget';
+import { monthKey } from '../services/month';
 
 function ratesAge(fetchedAt: number): string {
   const mins = Math.round((Date.now() - fetchedAt) / 60000);
@@ -44,6 +47,7 @@ export function SettingsScreen({ onOpenCategories }: Props) {
   const rates = useRates();
   const [currencyPickerOpen, setCurrencyPickerOpen] = useState(false);
   const [editNameOpen, setEditNameOpen] = useState(false);
+  const [notifyOpen, setNotifyOpen] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<TextInput>(null);
@@ -264,29 +268,30 @@ export function SettingsScreen({ onOpenCategories }: Props) {
           Font style
         </Text>
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 10 }}>
-          {([ 
-            { id: 'default' as FontId, label: 'Default',  previewFont: FONTS.default.regular,  agFont: FONTS.default.semibold },
-            { id: 'serif'   as FontId, label: 'Serif',    previewFont: FONTS.serif.serif,       agFont: FONTS.serif.serif },
-            { id: 'mono'    as FontId, label: 'Mono',     previewFont: FONTS.mono.regular,      agFont: FONTS.mono.regular },
-          ] as const).map(item => {
+          {([
+            { id: 'default' as FontId, label: 'Default', previewFont: FONTS.default.regular, agFont: FONTS.default.serif },
+            { id: 'sans'    as FontId, label: 'Sans',    previewFont: FONTS.sans.regular,    agFont: FONTS.sans.regular },
+            { id: 'mono'    as FontId, label: 'Mono',    previewFont: FONTS.mono.regular,    agFont: FONTS.mono.regular },
+            { id: 'comic'   as FontId, label: 'Comic',   previewFont: FONTS.comic.regular,   agFont: FONTS.comic.regular },
+          ]).map(item => {
             const on = settings.fontId === item.id;
             return (
               <Tap
                 key={item.id}
                 onPress={() => settings.set('fontId', item.id)}
                 style={{
-                  flex: 1, paddingVertical: 16, borderRadius: 16,
+                  width: 68, paddingVertical: 12, borderRadius: 18,
                   backgroundColor: on ? `${C.sage}1e` : C.surface2,
                   borderWidth: on ? 1.5 : 0.5,
                   borderColor: on ? C.sage : C.hair,
-                  alignItems: 'center', gap: 10,
+                  alignItems: 'center', gap: 8,
                 }}
               >
                 <Text style={{
                   fontFamily: item.agFont,
-                  fontSize: 28,
+                  fontSize: 22,
                   color: on ? C.cream : C.muted,
-                  lineHeight: 34,
+                  lineHeight: 28,
                 }}>
                   Ag
                 </Text>
@@ -316,7 +321,13 @@ export function SettingsScreen({ onOpenCategories }: Props) {
           </View>
         )}
         <SettingsRow icon={<Icon name="tag" size={18} stroke={C.cream}/>} label="Categories" detail={`${categories.filter(c => !c.archived).length}`} onPress={onOpenCategories}/>
-        <SettingsRow icon={<Icon name="bell" size={18} stroke={C.cream}/>} label="Notifications" detail="On" onPress={() => {}} isLast/>
+        <SettingsRow
+          icon={<Icon name="bell" size={18} stroke={C.cream}/>}
+          label="Notifications"
+          detail={settings.notifyBudget ? `Budget on the ${ordinalDay(settings.budgetReminderDay)}` : 'Off'}
+          onPress={() => setNotifyOpen(true)}
+          isLast
+        />
       </Card>
 
       <SectionHeader title="AI"/>
@@ -350,6 +361,84 @@ export function SettingsScreen({ onOpenCategories }: Props) {
       onSelect={(code) => settings.set('preferredCurrency', code)}
       onClose={() => setCurrencyPickerOpen(false)}
     />
+    <NotifySheet open={notifyOpen} onClose={() => setNotifyOpen(false)}/>
     </>
+  );
+}
+
+function NotifySheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const C = useTheme();
+  const settings = useSettings();
+  const { forMonth } = useBudget();
+  const [day, setDay] = useState(String(settings.budgetReminderDay));
+
+  React.useEffect(() => {
+    if (open) setDay(String(settings.budgetReminderDay));
+  }, [open, settings.budgetReminderDay]);
+
+  const persist = async (patch: Partial<{ notifyBudget: boolean; notifyDueDates: boolean; budgetReminderDay: number }>) => {
+    if (patch.notifyBudget != null) await settings.set('notifyBudget', patch.notifyBudget);
+    if (patch.notifyDueDates != null) await settings.set('notifyDueDates', patch.notifyDueDates);
+    if (patch.budgetReminderDay != null) await settings.set('budgetReminderDay', patch.budgetReminderDay);
+    const next = { ...settings, ...patch };
+    if (next.notifyBudget || next.notifyDueDates) await requestNotificationPermission();
+    const month = monthKey(new Date());
+    await syncNotifications({
+      notifyBudget: next.notifyBudget,
+      budgetReminderDay: next.budgetReminderDay,
+      notifyDueDates: next.notifyDueDates,
+      lines: forMonth(month),
+      month,
+    });
+  };
+
+  return (
+    <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
+      <BlurView intensity={40} tint="dark" style={{ flex: 1, justifyContent: 'flex-end' }}>
+        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose}/>
+        <View style={{
+          backgroundColor: C.bgElev,
+          borderTopLeftRadius: 28, borderTopRightRadius: 28,
+          borderWidth: 0.5, borderColor: C.hairStrong,
+          paddingTop: 12, paddingHorizontal: 22, paddingBottom: 40,
+        }}>
+          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.subtle, alignSelf: 'center', marginBottom: 20 }}/>
+          <Text style={{ fontFamily: C.fonts.serif, fontSize: 26, color: C.cream, marginBottom: 18 }}>Notifications</Text>
+
+          <Card style={{ padding: 4, marginBottom: 14 }}>
+            <SettingsRow
+              label="Monthly budget reminder"
+              control={<Toggle on={settings.notifyBudget} onChange={v => persist({ notifyBudget: v })}/>}
+            />
+            <View style={{ paddingHorizontal: 16, paddingBottom: 14 }}>
+              <Text style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>Day of month</Text>
+              <TextInput
+                value={day}
+                onChangeText={setDay}
+                onBlur={() => {
+                  const n = Math.min(28, Math.max(1, parseInt(day, 10) || 1));
+                  setDay(String(n));
+                  persist({ budgetReminderDay: n });
+                }}
+                keyboardType="number-pad"
+                style={{
+                  backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
+                  borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10,
+                  color: C.cream, fontSize: 16, width: 80,
+                }}
+              />
+            </View>
+            <SettingsRow
+              label="Upcoming payment pings"
+              control={<Toggle on={settings.notifyDueDates} onChange={v => persist({ notifyDueDates: v })}/>}
+              isLast
+            />
+          </Card>
+          <Text style={{ fontSize: 12, color: C.muted, lineHeight: 18 }}>
+            Reminders stay on this device. We’ll nudge you on the {ordinalDay(settings.budgetReminderDay)} to sit down and budget, and before unpaid due dates.
+          </Text>
+        </View>
+      </BlurView>
+    </Modal>
   );
 }

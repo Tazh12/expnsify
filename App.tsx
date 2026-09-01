@@ -1,19 +1,25 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, StatusBar, Modal, SafeAreaView, ActivityIndicator,
-  Image, AppState,
+  View, StatusBar, Modal, SafeAreaView, ActivityIndicator,
+  AppState, Platform,
 } from 'react-native';
 import { useFonts, InstrumentSerif_400Regular, InstrumentSerif_400Regular_Italic } from '@expo-google-fonts/instrument-serif';
 import { Geist_400Regular, Geist_500Medium, Geist_600SemiBold, Geist_700Bold } from '@expo-google-fonts/geist';
 import { GeistMono_400Regular, GeistMono_500Medium } from '@expo-google-fonts/geist-mono';
+import { ComicNeue_400Regular, ComicNeue_400Regular_Italic, ComicNeue_700Bold } from '@expo-google-fonts/comic-neue';
 import { ThemeContext, buildTheme } from './src/theme';
 import { useSettings } from './src/store/useSettings';
 import { useRates } from './src/store/useRates';
 import { useCategories } from './src/store/useCategories';
 import { useExpenses } from './src/store/useExpenses';
+import { useBudget } from './src/store/useBudget';
+import { useBudgetGroups } from './src/store/useBudgetGroups';
 import { useAuth, onAuthStateChanged, firebaseAuth } from './src/store/useAuth';
-
-import { TabBar, type TabId } from './src/components/TabBar';
+import { useLayout } from './src/hooks/useLayout';
+import { defaultBudgetMonth } from './src/services/month';
+import { AppShell } from './src/components/AppShell';
+import { AppHeader } from './src/components/AppHeader';
+import type { TabId } from './src/components/TabBar';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { ActivityScreen } from './src/screens/ActivityScreen';
 import { ReportsScreen } from './src/screens/ReportsScreen';
@@ -24,7 +30,7 @@ import { AddSheet } from './src/flows/AddSheet';
 import { RecapModal } from './src/flows/RecapModal';
 
 export default function App() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     InstrumentSerif_400Regular,
     InstrumentSerif_400Regular_Italic,
     Geist_400Regular,
@@ -33,22 +39,37 @@ export default function App() {
     Geist_700Bold,
     GeistMono_400Regular,
     GeistMono_500Medium,
+    ComicNeue_400Regular,
+    ComicNeue_400Regular_Italic,
+    ComicNeue_700Bold,
   });
+  const [fontWaitOver, setFontWaitOver] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setFontWaitOver(true), Platform.OS === 'web' ? 1200 : 4000);
+    return () => clearTimeout(t);
+  }, []);
+  const fontsReady = fontsLoaded || !!fontError || fontWaitOver;
 
   const settings = useSettings();
+  const { isWide } = useLayout();
   const { setUser, setInitializing, initializing, user } = useAuth();
   const { subscribe: subCats, reset: resetCats } = useCategories();
   const { subscribe: subExp, reset: resetExp } = useExpenses();
+  const { subscribe: subBudget, reset: resetBudget } = useBudget();
+  const { subscribe: subGroups, reset: resetGroups } = useBudgetGroups();
 
   const unsubCats = useRef<(() => void) | null>(null);
   const unsubExp = useRef<(() => void) | null>(null);
+  const unsubBudget = useRef<(() => void) | null>(null);
+  const unsubGroups = useRef<(() => void) | null>(null);
 
   const [tab, setTab] = useState<TabId>('home');
   const [addOpen, setAddOpen] = useState(false);
   const [recapOpen, setRecapOpen] = useState(false);
   const [catsOpen, setCatsOpen] = useState(false);
-  const [month, setMonth] = useState(new Date());
-  // Boot: load settings → hydrate rate cache → fetch if stale
+  const [month, setMonth] = useState(defaultBudgetMonth);
+  const [pendingShare, setPendingShare] = useState<{ uri: string; mimeType?: string } | null>(null);
+
   useEffect(() => {
     (async () => {
       await settings.load();
@@ -60,7 +81,6 @@ export default function App() {
     })().catch(() => {});
   }, []);
 
-  // AppState: re-fetch rates when app comes to foreground
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active' && useRates.getState().isStale()) {
@@ -70,31 +90,71 @@ export default function App() {
     return () => sub.remove();
   }, []);
 
-  // Firebase auth listener
   useEffect(() => {
-    const unsub = onAuthStateChanged(firebaseAuth, (firebaseUser) => {
-      setUser(firebaseUser);
-      setInitializing(false);
+    const unsub = onAuthStateChanged(
+      firebaseAuth,
+      (firebaseUser) => {
+        setUser(firebaseUser);
+        setInitializing(false);
 
-      if (firebaseUser) {
-        unsubCats.current = subCats(firebaseUser.uid);
-        unsubExp.current = subExp(firebaseUser.uid);
-      } else {
-        unsubCats.current?.();
-        unsubExp.current?.();
-        unsubCats.current = null;
-        unsubExp.current = null;
-        resetCats();
-        resetExp();
-      }
-    });
-    return unsub;
+        if (firebaseUser) {
+          unsubCats.current = subCats(firebaseUser.uid);
+          unsubExp.current = subExp(firebaseUser.uid);
+          unsubBudget.current = subBudget(firebaseUser.uid);
+          unsubGroups.current = subGroups(firebaseUser.uid);
+        } else {
+          unsubCats.current?.();
+          unsubExp.current?.();
+          unsubBudget.current?.();
+          unsubGroups.current?.();
+          unsubCats.current = null;
+          unsubExp.current = null;
+          unsubBudget.current = null;
+          unsubGroups.current = null;
+          resetCats();
+          resetExp();
+          resetBudget();
+          resetGroups();
+        }
+      },
+      () => setInitializing(false),
+    );
+    // Don't blank the web app if IndexedDB/auth persistence never resolves.
+    const t = setTimeout(() => setInitializing(false), 2500);
+    return () => {
+      unsub();
+      clearTimeout(t);
+    };
+  }, []);
+
+  useIncomingShare((file) => {
+    setPendingShare(file);
+    setAddOpen(true);
+  });
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const onDragOver = (e: DragEvent) => { e.preventDefault(); };
+    const onDrop = (e: DragEvent) => {
+      e.preventDefault();
+      const file = e.dataTransfer?.files?.[0];
+      if (!file) return;
+      const uri = URL.createObjectURL(file);
+      setPendingShare({ uri, mimeType: file.type || 'application/pdf' });
+      setAddOpen(true);
+    };
+    window.addEventListener('dragover', onDragOver);
+    window.addEventListener('drop', onDrop);
+    return () => {
+      window.removeEventListener('dragover', onDragOver);
+      window.removeEventListener('drop', onDrop);
+    };
   }, []);
 
   const theme = buildTheme(settings.palette, settings.accent, settings.fontId);
   const isLight = settings.palette === 'cream';
 
-  if (!fontsLoaded || initializing) {
+  if (!fontsReady || initializing) {
     return (
       <View style={{ flex: 1, backgroundColor: '#0E0E0C', alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color="#B8D4B0" />
@@ -120,15 +180,7 @@ export default function App() {
   const screen = (() => {
     switch (tab) {
       case 'home':
-        return (
-          <HomeScreen
-            month={month}
-            onChangeMonth={onChangeMonth}
-            onOpenAdd={() => setAddOpen(true)}
-            onOpenRecap={() => setRecapOpen(true)}
-            onSeeAll={() => setTab('txns')}
-          />
-        );
+        return <HomeScreen month={month} onChangeMonth={onChangeMonth} />;
       case 'txns':
         return <ActivityScreen />;
       case 'reports':
@@ -142,34 +194,30 @@ export default function App() {
     <ThemeContext.Provider value={theme}>
       <StatusBar barStyle={isLight ? 'dark-content' : 'light-content'} backgroundColor={theme.bg} />
       <View style={{ flex: 1, backgroundColor: theme.bg }}>
-        <SafeAreaView style={{ backgroundColor: theme.bg }}>
-          <View style={{
-            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-            paddingHorizontal: 20, paddingVertical: 8,
-          }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Image
-                source={require('./assets/app-icon-transparent.png')}
-                style={{ width: 24, height: 24 }}
-                resizeMode="contain"
-              />
-              <Text style={{ fontSize: 14, fontWeight: '500', color: theme.cream, letterSpacing: 0.02 }}>
-                expnsify
-              </Text>
-            </View>
-            <Text style={{ fontSize: 11, color: theme.muted, letterSpacing: 0.06, textTransform: 'uppercase' }}>
-              ✦ AI · on
-            </Text>
-          </View>
-        </SafeAreaView>
+        {!isWide && (
+          <SafeAreaView style={{ backgroundColor: theme.bg }}>
+            <AppHeader
+              tab={tab}
+              month={month}
+              onChangeMonth={onChangeMonth}
+            />
+          </SafeAreaView>
+        )}
 
-        <View style={{ flex: 1 }}>
+        <AppShell
+          tab={tab}
+          onTab={setTab}
+          onAdd={() => setAddOpen(true)}
+          isWide={isWide}
+        >
           {screen}
-        </View>
+        </AppShell>
 
-        <TabBar tab={tab} onTab={setTab} onAdd={() => setAddOpen(true)} />
-
-        <AddSheet open={addOpen} onClose={() => setAddOpen(false)} />
+        <AddSheet
+          open={addOpen}
+          onClose={() => { setAddOpen(false); setPendingShare(null); }}
+          pendingShare={pendingShare}
+        />
         <RecapModal open={recapOpen} onClose={() => setRecapOpen(false)} />
 
         <Modal visible={catsOpen} animationType="slide" presentationStyle="fullScreen">
@@ -177,8 +225,35 @@ export default function App() {
             <CategoriesScreen onClose={() => setCatsOpen(false)} />
           </ThemeContext.Provider>
         </Modal>
-
       </View>
     </ThemeContext.Provider>
   );
+}
+
+function useIncomingShare(onShare: (file: { uri: string; mimeType?: string }) => void) {
+  const onShareRef = useRef(onShare);
+  onShareRef.current = onShare;
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    let unsub: (() => void) | undefined;
+    try {
+      // Optional native share extension. Present after an EAS build with the plugin.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const mod = require('expo-share-intent') as {
+        addChangeListener?: (cb: (ev: { files?: { path: string; mimeType?: string }[] }) => void) => { remove: () => void };
+        getShareIntent?: () => { files?: { path: string; mimeType?: string }[] } | null;
+      };
+      const emit = (files?: { path: string; mimeType?: string }[]) => {
+        const f = files?.[0];
+        if (f?.path) onShareRef.current({ uri: f.path, mimeType: f.mimeType });
+      };
+      emit(mod.getShareIntent?.()?.files);
+      const sub = mod.addChangeListener?.((ev) => emit(ev.files));
+      if (sub) unsub = () => sub.remove();
+    } catch {
+      // Share extension not installed — in-app file pick still works.
+    }
+    return () => unsub?.();
+  }, []);
 }

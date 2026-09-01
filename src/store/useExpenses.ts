@@ -1,11 +1,13 @@
 import { create } from 'zustand';
 import {
   collection, doc, setDoc, updateDoc, deleteDoc,
-  onSnapshot, query, orderBy, writeBatch,
+  onSnapshot, query, orderBy,
 } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { DEMO_TXNS } from './defaults';
 import { useRates } from './useRates';
+
+export type TxnType = 'expense' | 'income';
+export type TxnSource = 'manual' | 'voice' | 'photo' | 'share' | 'pdf' | null;
 
 export interface Expense {
   id: string;
@@ -17,6 +19,10 @@ export interface Expense {
   note: string | null;
   receipt_uri: string | null;
   confidence: number | null;
+  line_id: string | null;
+  type: TxnType;
+  unbudgeted: boolean;
+  source: TxnSource;
 }
 
 interface ExpensesState {
@@ -49,6 +55,24 @@ function groupByDay(txns: Expense[]): [string, Expense[]][] {
   return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
 }
 
+function fromDoc(id: string, raw: Record<string, unknown>): Expense {
+  return {
+    id,
+    merchant: String(raw.merchant ?? ''),
+    category_id: String(raw.category_id ?? 'other'),
+    amount: Number(raw.amount ?? 0),
+    currency: String(raw.currency ?? 'USD'),
+    date: String(raw.date ?? ''),
+    note: raw.note == null ? null : String(raw.note),
+    receipt_uri: raw.receipt_uri == null ? null : String(raw.receipt_uri),
+    confidence: raw.confidence == null ? null : Number(raw.confidence),
+    line_id: raw.line_id == null ? null : String(raw.line_id),
+    type: raw.type === 'income' ? 'income' : 'expense',
+    unbudgeted: Boolean(raw.unbudgeted),
+    source: (raw.source as TxnSource) ?? null,
+  };
+}
+
 export const useExpenses = create<ExpensesState>((set, get) => ({
   expenses: [],
   loaded: false,
@@ -57,47 +81,8 @@ export const useExpenses = create<ExpensesState>((set, get) => ({
   subscribe: (uid) => {
     set({ uid });
     const q = query(expCol(uid), orderBy('date', 'desc'));
-    const unsub = onSnapshot(q, async (snap) => {
-      if (snap.empty) {
-        const batch = writeBatch(db);
-        for (const t of DEMO_TXNS) {
-          batch.set(doc(expCol(uid), t.id), {
-            merchant: t.merchant,
-            category_id: t.category_id,
-            amount: t.amount,
-            currency: t.currency,
-            date: t.date,
-            note: t.note ?? null,
-            receipt_uri: null,
-            confidence: t.confidence ?? null,
-          });
-        }
-        await batch.commit();
-        return;
-      }
-
-      // Migrate stale demo entries: if all data is the original demo set with old dates,
-      // re-date them to the current month so they appear on the home screen.
-      const demoIds = new Set(DEMO_TXNS.map(t => t.id));
-      const docs = snap.docs;
-      const allAreDemo = docs.length === DEMO_TXNS.length && docs.every(d => demoIds.has(d.id));
-      if (allAreDemo) {
-        const now = new Date();
-        const anyStale = docs.some(d => {
-          const date = new Date((d.data() as Expense).date);
-          return date.getFullYear() !== now.getFullYear() || date.getMonth() !== now.getMonth();
-        });
-        if (anyStale) {
-          const batch = writeBatch(db);
-          for (const t of DEMO_TXNS) {
-            batch.update(doc(expCol(uid), t.id), { date: t.date });
-          }
-          await batch.commit();
-          return;
-        }
-      }
-
-      const expenses = snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<Expense, 'id'>) }));
+    const unsub = onSnapshot(q, (snap) => {
+      const expenses = snap.docs.map(d => fromDoc(d.id, d.data() as Record<string, unknown>));
       set({ expenses, loaded: true });
     });
     return unsub;
@@ -114,13 +99,17 @@ export const useExpenses = create<ExpensesState>((set, get) => ({
       note: data.note ?? null,
       receipt_uri: data.receipt_uri ?? null,
       confidence: data.confidence ?? null,
+      line_id: data.line_id ?? null,
+      type: data.type ?? 'expense',
+      unbudgeted: data.unbudgeted ?? !data.line_id,
+      source: data.source ?? null,
     });
   },
 
   update: async (id, patch) => {
     const uid = get().uid;
     if (!uid) return;
-    await updateDoc(doc(expCol(uid), id), patch);
+    await updateDoc(doc(expCol(uid), id), patch as Record<string, unknown>);
   },
 
   remove: async (id) => {
@@ -135,6 +124,7 @@ export const useExpenses = create<ExpensesState>((set, get) => ({
     const { convert } = useRates.getState();
     const totals: Record<string, number> = {};
     for (const t of (expenses ?? get().expenses)) {
+      if (t.type === 'income') continue;
       totals[t.category_id] = (totals[t.category_id] ?? 0) + convert(t.amount, t.currency);
     }
     return totals;
@@ -142,7 +132,7 @@ export const useExpenses = create<ExpensesState>((set, get) => ({
 
   byWeek: (expenses) => {
     const { convert } = useRates.getState();
-    const txns = expenses ?? get().expenses;
+    const txns = (expenses ?? get().expenses).filter(t => t.type !== 'income');
     const weeks: Record<number, number> = {};
     for (const t of txns) {
       const d = new Date(t.date);
@@ -159,7 +149,9 @@ export const useExpenses = create<ExpensesState>((set, get) => ({
 
   total: (expenses) => {
     const { convert } = useRates.getState();
-    return (expenses ?? get().expenses).reduce((s, t) => s + convert(t.amount, t.currency), 0);
+    return (expenses ?? get().expenses)
+      .filter(t => t.type !== 'income')
+      .reduce((s, t) => s + convert(t.amount, t.currency), 0);
   },
 
   forMonth: (year, month) =>

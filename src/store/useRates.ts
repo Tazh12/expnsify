@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const CACHE_KEY = '@tally:rates';
@@ -39,6 +40,8 @@ export const useRates = create<RatesState>((set, get) => ({
 
   fetch: async (base: string) => {
     try {
+      // Frankfurter doesn't send CORS headers for localhost; native still fetches.
+      if (Platform.OS === 'web') return;
       const res = await fetch(`https://api.frankfurter.app/latest?from=${base}`);
       if (!res.ok) return;
       const json = await res.json() as { base: string; rates: Record<string, number> };

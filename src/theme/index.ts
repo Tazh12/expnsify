@@ -2,7 +2,9 @@ import React from 'react';
 
 export type PaletteId = 'midnight' | 'cream' | 'carbon';
 export type AccentId = 'sage' | 'amber' | 'rose' | 'blue';
-export type FontId = 'default' | 'serif' | 'mono';
+export type FontId = 'default' | 'sans' | 'mono' | 'comic';
+
+export const FONT_IDS: FontId[] = ['default', 'sans', 'mono', 'comic'];
 
 export interface FontMap {
   regular: string;
@@ -24,14 +26,14 @@ export const FONTS: Record<FontId, FontMap> = {
     serif:       'InstrumentSerif_400Regular',
     serifItalic: 'InstrumentSerif_400Regular_Italic',
   },
-  serif: {
-    regular:     'InstrumentSerif_400Regular',
-    medium:      'InstrumentSerif_400Regular',
-    semibold:    'InstrumentSerif_400Regular',
-    bold:        'InstrumentSerif_400Regular',
-    italic:      'InstrumentSerif_400Regular_Italic',
-    serif:       'InstrumentSerif_400Regular',
-    serifItalic: 'InstrumentSerif_400Regular_Italic',
+  sans: {
+    regular:     'Geist_400Regular',
+    medium:      'Geist_500Medium',
+    semibold:    'Geist_600SemiBold',
+    bold:        'Geist_700Bold',
+    italic:      'Geist_400Regular',
+    serif:       'Geist_600SemiBold',
+    serifItalic: 'Geist_400Regular',
   },
   mono: {
     regular:     'GeistMono_400Regular',
@@ -41,6 +43,15 @@ export const FONTS: Record<FontId, FontMap> = {
     italic:      'GeistMono_400Regular',
     serif:       'GeistMono_400Regular',
     serifItalic: 'GeistMono_400Regular',
+  },
+  comic: {
+    regular:     'ComicNeue_400Regular',
+    medium:      'ComicNeue_400Regular',
+    semibold:    'ComicNeue_700Bold',
+    bold:        'ComicNeue_700Bold',
+    italic:      'ComicNeue_400Regular_Italic',
+    serif:       'ComicNeue_700Bold',
+    serifItalic: 'ComicNeue_400Regular_Italic',
   },
 };
 
@@ -145,7 +156,7 @@ export function buildTheme(paletteId: PaletteId, accentId: AccentId, fontId: Fon
     ...PALETTES[paletteId],
     ...ACCENTS[accentId],
     ...STATIC,
-    fonts: FONTS[fontId],
+    fonts: FONTS[fontId] ?? FONTS.default,
   };
 }
 

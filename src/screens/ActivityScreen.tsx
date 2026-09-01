@@ -5,13 +5,14 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useTheme } from '../theme';
-import { Card, Icon, Tap } from '../components';
+import { Card, Icon, Tap, TxnRow } from '../components';
 import { useExpenses, type Expense } from '../store/useExpenses';
 import { useCategories } from '../store/useCategories';
+import { useBudget } from '../store/useBudget';
 import { useRates } from '../store/useRates';
 import { useSettings } from '../store/useSettings';
 import { fmt, dayLabel } from '../services/format';
-import { TxnRow } from './HomeScreen';
+import { isUnbudgeted, lineActual } from '../services/budget';
 import { TxnDetailModal } from './TxnDetailModal';
 import { AddSheet } from '../flows/AddSheet';
 
@@ -45,16 +46,27 @@ export function ActivityScreen() {
   const C = useTheme();
   const { expenses, byDay, remove } = useExpenses();
   const { categories } = useCategories();
+  const { lines } = useBudget();
   const { convert } = useRates();           // subscribe so screen re-renders when rates update
   const { preferredCurrency } = useSettings();
-  const catMap = Object.fromEntries(categories.map(c => [c.id, c]));
+  const catMap = {
+    ...Object.fromEntries(categories.map(c => [c.id, c])),
+    ...Object.fromEntries(lines.map(l => [l.templateKey, { name: l.name, color: l.color }])),
+    ...Object.fromEntries(lines.map(l => [l.id, { name: l.name, color: l.color }])),
+  };
 
   const [q, setQ] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [detailExpense, setDetailExpense] = useState<Expense | null>(null);
   const [editTarget, setEditTarget] = useState<Expense | null>(null);
-  const detailCategory = detailExpense ? (categories.find(c => c.id === detailExpense.category_id) ?? null) : null;
+  const detailCategory = detailExpense
+    ? (categories.find(c => c.id === detailExpense.category_id)
+      ?? (() => {
+        const line = lines.find(l => l.id === detailExpense.line_id || l.templateKey === detailExpense.category_id);
+        return line ? { id: line.id, name: line.name, color: line.color, source: 'user' as const, sort_order: 0, archived: 0 } : null;
+      })())
+    : null;
 
   const filtered = useMemo(() => {
     const now = new Date();
@@ -184,7 +196,13 @@ export function ActivityScreen() {
                       t={t}
                       catMap={catMap}
                       isLast={i === items.length - 1}
-                      onViewDetail={(exp) => setDetailExpense(exp as Expense)}
+                      unbudgeted={isUnbudgeted(t, lines.filter(l => l.month === t.date.slice(0, 7)))}
+                      overspend={(() => {
+                        const line = lines.find(l => l.id === t.line_id);
+                        if (!line || line.section === 'income') return false;
+                        return lineActual(line, expenses, convert) > line.expected && line.expected > 0;
+                      })()}
+                      onViewDetail={(exp) => setDetailExpense(exp)}
                       onEdit={() => setEditTarget(t)}
                       onDelete={() => Alert.alert(
                         'Delete expense?',

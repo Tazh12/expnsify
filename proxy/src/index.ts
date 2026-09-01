@@ -41,21 +41,49 @@ export default {
   },
 };
 
-// ── /scan ─────────────────────────────────────────────────────
+interface ScanLine {
+  id: string;
+  name: string;
+  expected: number;
+  dueDay: number | null;
+  section: string;
+  paid: boolean;
+}
+
 async function handleScan(req: Request, env: Env): Promise<Response> {
-  let body: { imageBase64?: string; mimeType?: string; text?: string; categories?: { id: string; name: string }[] };
+  let body: {
+    imageBase64?: string;
+    mimeType?: string;
+    text?: string;
+    pdfBase64?: string;
+    categories?: { id: string; name: string }[];
+    lines?: ScanLine[];
+  };
   try {
     body = await req.json() as typeof body;
   } catch {
     return err('Invalid JSON');
   }
 
-  const categories = body.categories ?? [];
-  const categoryList = categories.length > 0
-    ? categories.map((c: { id: string; name: string }) => `- ${c.id}: ${c.name}`).join('\n')
-    : '(none yet — invent a sensible one)';
+  let text = body.text ?? '';
+  if (body.pdfBase64 && !text) {
+    const extracted = await extractPdfText(body.pdfBase64);
+    if (!extracted) return err('Could not read that PDF. Try a screenshot of the confirmation.');
+    text = extracted;
+  }
 
-  const system = `You extract a single expense from a receipt, bank-app screenshot, or short user note.
+  const categories = body.categories ?? [];
+  const lines = body.lines ?? [];
+  const categoryList = categories.length > 0
+    ? categories.map((c) => `- ${c.id}: ${c.name}`).join('\n')
+    : '(none yet — invent a sensible one)';
+  const lineList = lines.length > 0
+    ? lines.map((l) =>
+        `- ${l.id}: ${l.name} | section=${l.section} | expected=${l.expected} | dueDay=${l.dueDay ?? 'none'} | paid=${l.paid}`
+      ).join('\n')
+    : '(no budget lines this month)';
+
+  const system = `You extract a single money movement from a receipt, bank screenshot, payment confirmation email/PDF, or short user note.
 Return ONLY JSON with this exact shape:
 {
   "merchant": string,
@@ -69,17 +97,26 @@ Return ONLY JSON with this exact shape:
     "suggestedColor": string
   },
   "note": string | null,
-  "confidence": number
+  "confidence": number,
+  "lineId": string | null,
+  "matchConfidence": number,
+  "isPaymentConfirmation": boolean
 }
 
 Existing user categories (prefer these; only invent a new one if none truly fit):
 ${categoryList}
 
+This month's budget lines (prefer matching one of these; use the line's id as lineId):
+${lineList}
+
 Rules:
 - If an existing category fits, set category.id to that id and isNew=false. suggestedColor is ignored when isNew=false.
 - If you must invent one, use a single short lowercase word (a-z only) as id, Title Case as name, isNew=true, and pick a tasteful hex color for suggestedColor.
-- date: ISO 8601, today if unclear.
-- confidence: 0..1 based on image clarity.`;
+- date: ISO 8601 using today's date ${new Date().toISOString().slice(0, 10)} if unclear.
+- confidence: 0..1 based on image/text clarity.
+- lineId: id of the best matching unpaid budget line, or null if none fit. Prefer unpaid lines whose name/merchant is close and whose expected amount is within ~5%.
+- matchConfidence: 0..1 for that line match.
+- isPaymentConfirmation: true if this is a bill/receipt/email confirming a payment already made (mark the line complete), false if it is a new spend to log.`;
 
   const messages: { role: string; content: unknown }[] = [
     { role: 'system', content: system },
@@ -94,13 +131,13 @@ Rules:
           type: 'image_url',
           image_url: { url: `data:${imageMime};base64,${body.imageBase64}` },
         },
-        { type: 'text', text: 'Extract the expense from this image.' },
+        { type: 'text', text: 'Extract the payment or expense from this image.' },
       ],
     });
-  } else if (body.text) {
-    messages.push({ role: 'user', content: body.text });
+  } else if (text) {
+    messages.push({ role: 'user', content: text });
   } else {
-    return err('Provide imageBase64 or text');
+    return err('Provide imageBase64, pdfBase64, or text');
   }
 
   const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -110,31 +147,71 @@ Rules:
       Authorization: `Bearer ${env.GROQ_API_KEY}`,
     },
     body: JSON.stringify({
-      model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+      model: 'qwen/qwen3.6-27b',
       messages,
-      response_format: { type: 'json_object' },
       temperature: 0.1,
-      max_tokens: 512,
+      max_tokens: 1024,
+      reasoning_effort: 'none',
     }),
   });
 
   if (!groqRes.ok) {
-    const text = await groqRes.text();
-    return err(`Groq error: ${text}`, 502);
+    const groqText = await groqRes.text();
+    console.error('groq scan failed', groqRes.status, groqText.slice(0, 300));
+    return err(`Groq error: ${groqText}`, 502);
   }
 
   const groqJson = await groqRes.json() as { choices: { message: { content: string } }[] };
   const raw = groqJson.choices?.[0]?.message?.content ?? '{}';
 
   try {
-    const parsed = JSON.parse(raw);
-    return ok(parsed);
+    return ok(parseModelJson(raw));
   } catch {
+    console.error('groq scan parse failed', raw.slice(0, 300));
     return err('Failed to parse Groq response', 502);
   }
 }
 
-// ── /transcribe ───────────────────────────────────────────────
+function parseModelJson(raw: string): unknown {
+  const trimmed = raw.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fenced) return JSON.parse(fenced[1]);
+    const objectMatch = trimmed.match(/\{[\s\S]*\}/);
+    if (objectMatch) return JSON.parse(objectMatch[0]);
+    throw new Error('parse failed');
+  }
+}
+
+async function extractPdfText(b64: string): Promise<string | null> {
+  try {
+    const binary = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    const mod = await import('unpdf').catch(() => null);
+    if (mod) {
+      const pdf = await mod.getDocumentProxy(binary);
+      const result = await mod.extractText(pdf, { mergePages: true });
+      const text = Array.isArray(result.text) ? result.text.join('\n') : String(result.text ?? '');
+      if (text.trim().length > 12) return text;
+    }
+  } catch (e) {
+    console.error('unpdf failed', e);
+  }
+  return naivePdfText(b64);
+}
+
+function naivePdfText(b64: string): string | null {
+  try {
+    const raw = atob(b64);
+    const strings = [...raw.matchAll(/\(([^)]{3,120})\)/g)].map(m => m[1]);
+    const joined = strings.join(' ').replace(/\\n/g, ' ').trim();
+    return joined.length > 20 ? joined : null;
+  } catch {
+    return null;
+  }
+}
+
 async function handleTranscribe(req: Request, env: Env): Promise<Response> {
   const formData = await req.formData();
   const audio = formData.get('audio');
@@ -154,6 +231,7 @@ async function handleTranscribe(req: Request, env: Env): Promise<Response> {
 
   if (!groqRes.ok) {
     const text = await groqRes.text();
+    console.error('groq transcribe failed', groqRes.status, text.slice(0, 300));
     return err(`Groq transcription error: ${text}`, 502);
   }
 

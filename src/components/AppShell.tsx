@@ -1,0 +1,83 @@
+import React from 'react';
+import { View, Text, Image } from 'react-native';
+import { useTheme } from '../theme';
+import { Tap } from './Tap';
+import { Icon } from './Icon';
+import { TabBar, type TabId } from './TabBar';
+
+const NAV: { id: TabId; icon: string; label: string }[] = [
+  { id: 'home',     icon: 'home',  label: 'Budget' },
+  { id: 'txns',     icon: 'list',  label: 'Activity' },
+  { id: 'reports',  icon: 'chart', label: 'Reports' },
+  { id: 'settings', icon: 'gear',  label: 'Settings' },
+];
+
+export function AppShell({
+  tab, onTab, onAdd, isWide, children,
+}: {
+  tab: TabId;
+  onTab: (id: TabId) => void;
+  onAdd: () => void;
+  isWide: boolean;
+  children: React.ReactNode;
+}) {
+  const C = useTheme();
+
+  if (!isWide) {
+    return (
+      <View style={{ flex: 1, backgroundColor: C.bg }}>
+        <View style={{ flex: 1 }}>{children}</View>
+        <TabBar tab={tab} onTab={onTab} onAdd={onAdd}/>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ flex: 1, flexDirection: 'row', backgroundColor: C.bg }}>
+      <View style={{
+        width: 220, borderRightWidth: 0.5, borderRightColor: C.hair,
+        paddingTop: 24, paddingHorizontal: 14, backgroundColor: C.bgElev,
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 8, marginBottom: 28 }}>
+          <Image
+            source={require('../../assets/app-icon-transparent.png')}
+            style={{ width: 22, height: 22 }}
+            resizeMode="contain"
+          />
+          <Text style={{ fontSize: 14, fontWeight: '500', color: C.cream, letterSpacing: 0.02 }}>
+            expnsify
+          </Text>
+        </View>
+
+        {NAV.map(item => {
+          const on = tab === item.id;
+          return (
+            <Tap
+              key={item.id}
+              onPress={() => onTab(item.id)}
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: 10,
+                paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12,
+                backgroundColor: on ? C.sageGlow : 'transparent',
+                marginBottom: 4,
+              }}
+            >
+              <Icon name={item.icon} size={18} stroke={on ? C.sage : C.muted} sw={on ? 2 : 1.6}/>
+              <Text style={{ fontSize: 14, fontWeight: on ? '600' : '500', color: on ? C.cream : C.muted }}>
+                {item.label}
+              </Text>
+            </Tap>
+          );
+        })}
+
+        <Tap onPress={onAdd} haptic style={{
+          marginTop: 18, backgroundColor: C.sage, borderRadius: 14,
+          paddingVertical: 12, alignItems: 'center',
+        }}>
+          <Text style={{ color: '#0E0E0C', fontWeight: '600', fontSize: 14 }}>Add transaction</Text>
+        </Tap>
+      </View>
+      <View style={{ flex: 1 }}>{children}</View>
+    </View>
+  );
+}

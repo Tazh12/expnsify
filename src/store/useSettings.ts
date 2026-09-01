@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { PaletteId, AccentId, FontId } from '../theme';
+import { FONT_IDS, type PaletteId, type AccentId, type FontId } from '../theme';
 import { useRates } from './useRates';
 
 export type { FontId };
@@ -14,6 +14,9 @@ export interface Settings {
   receiptOcr: boolean;
   preferredCurrency: string;
   currencyPrompted: boolean;
+  notifyBudget: boolean;
+  budgetReminderDay: number;
+  notifyDueDates: boolean;
 }
 
 const DEFAULTS: Settings = {
@@ -25,6 +28,9 @@ const DEFAULTS: Settings = {
   receiptOcr: true,
   preferredCurrency: 'USD',
   currencyPrompted: false,
+  notifyBudget: true,
+  budgetReminderDay: 1,
+  notifyDueDates: true,
 };
 
 const KEY = '@tally:settings';
@@ -33,6 +39,22 @@ interface SettingsState extends Settings {
   loaded: boolean;
   load: () => Promise<void>;
   set: <K extends keyof Settings>(key: K, value: Settings[K]) => Promise<void>;
+}
+
+function snapshot(current: SettingsState): Settings {
+  return {
+    palette: current.palette,
+    accent: current.accent,
+    fontId: current.fontId,
+    showRecap: current.showRecap,
+    autoCategories: current.autoCategories,
+    receiptOcr: current.receiptOcr,
+    preferredCurrency: current.preferredCurrency,
+    currencyPrompted: current.currencyPrompted,
+    notifyBudget: current.notifyBudget,
+    budgetReminderDay: current.budgetReminderDay,
+    notifyDueDates: current.notifyDueDates,
+  };
 }
 
 export const useSettings = create<SettingsState>((setState, get) => ({
@@ -44,7 +66,10 @@ export const useSettings = create<SettingsState>((setState, get) => ({
       const raw = await AsyncStorage.getItem(KEY);
       if (raw) {
         const saved = JSON.parse(raw) as Partial<Settings>;
-        setState({ ...DEFAULTS, ...saved, loaded: true });
+        const fontId = FONT_IDS.includes(saved.fontId as FontId)
+          ? (saved.fontId as FontId)
+          : DEFAULTS.fontId;
+        setState({ ...DEFAULTS, ...saved, fontId, loaded: true });
       } else {
         setState({ loaded: true });
       }
@@ -59,18 +84,7 @@ export const useSettings = create<SettingsState>((setState, get) => ({
       useRates.getState().fetch(value as string);
     }
     try {
-      const current = get();
-      const toSave: Settings = {
-        palette: current.palette,
-        accent: current.accent,
-        fontId: current.fontId,
-        showRecap: current.showRecap,
-        autoCategories: current.autoCategories,
-        receiptOcr: current.receiptOcr,
-        preferredCurrency: current.preferredCurrency,
-        currencyPrompted: current.currencyPrompted,
-        [key]: value,
-      };
+      const toSave = { ...snapshot(get()), [key]: value };
       await AsyncStorage.setItem(KEY, JSON.stringify(toSave));
     } catch {}
   },

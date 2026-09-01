@@ -1,433 +1,238 @@
-import React, { useRef } from 'react';
-import {
-  View, Text, ScrollView, TouchableOpacity,
-  Animated, PanResponder,
-} from 'react-native';
-import Svg, { Circle, Path, LinearGradient as SvgLinearGradient, Stop, Defs } from 'react-native-svg';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, ScrollView } from 'react-native';
 import { useTheme } from '../theme';
-import { Card, Icon, Tap, AnimatedNumber } from '../components';
+import { Card, Icon, Tap } from '../components';
+import { AddMenu } from '../components/AddMenu';
+import { BudgetRing } from '../components/BudgetRing';
+import { BudgetSection } from '../components/BudgetSection';
+import { UpcomingPayments } from '../components/UpcomingPayments';
+import { LineEditor } from '../flows/LineEditor';
+import { useBudget } from '../store/useBudget';
 import { useExpenses } from '../store/useExpenses';
-import { useCategories } from '../store/useCategories';
 import { useRates } from '../store/useRates';
 import { useSettings } from '../store/useSettings';
-import { fmt, dayLabel, fmtTime, currencySymbol } from '../services/format';
+import { useBudgetGroups } from '../store/useBudgetGroups';
+import { fmt } from '../services/format';
+import { monthKey } from '../services/month';
+import { lineActual, summarizeMonth } from '../services/budget';
+import { syncNotifications } from '../services/notifications';
+import { type BudgetLine, type BudgetSection as BudgetSectionId } from '../store/budgetTypes';
+import { useLayout } from '../hooks/useLayout';
 
 interface Props {
   month: Date;
   onChangeMonth: (delta: number) => void;
-  onOpenAdd: () => void;
-  onOpenRecap: () => void;
-  onSeeAll: () => void;
 }
 
-export function HomeScreen({ month, onChangeMonth, onOpenAdd, onOpenRecap, onSeeAll }: Props) {
+export function HomeScreen({ month, onChangeMonth }: Props) {
   const C = useTheme();
-  const { forMonth, byCategory } = useExpenses();
-  const { categories } = useCategories();
-
+  const { isWide } = useLayout();
+  const key = monthKey(month);
+  const { forMonth, ensureMonth, add, update, remove, loaded } = useBudget();
+  const allMeta = useBudgetGroups(s => s.all);
+  const lines = forMonth(key);
+  const { expenses } = useExpenses();
   const { convert } = useRates();
-  const { preferredCurrency } = useSettings();
+  const settings = useSettings();
+  const { preferredCurrency } = settings;
 
-  const txns = forMonth(month.getFullYear(), month.getMonth());
-  const total = txns.reduce((s, t) => s + convert(t.amount, t.currency), 0);
-  const recent = txns.slice(0, 5);
-  const catTotals = byCategory(txns);
+  const [editor, setEditor] = useState<{ section: BudgetSectionId; line: BudgetLine | null } | null>(null);
 
-  const catMap = Object.fromEntries(categories.map(c => [c.id, c]));
+  useEffect(() => {
+    if (loaded) ensureMonth(key).catch(() => {});
+  }, [key, loaded]);
 
-  const slices = Object.entries(catTotals)
-    .map(([id, value]) => ({ id, value, color: catMap[id]?.color ?? '#888', name: catMap[id]?.name ?? id }))
-    .sort((a, b) => b.value - a.value);
+  useEffect(() => {
+    if (!loaded || lines.length === 0) return;
+    syncNotifications({
+      notifyBudget: settings.notifyBudget,
+      budgetReminderDay: settings.budgetReminderDay,
+      notifyDueDates: settings.notifyDueDates,
+      lines,
+      month: key,
+    }).catch(() => {});
+  }, [loaded, lines, key, settings.notifyBudget, settings.budgetReminderDay, settings.notifyDueDates]);
+
+  const monthExpenses = useMemo(
+    () => expenses.filter(e => e.date.slice(0, 7) === key),
+    [expenses, key],
+  );
+
+  const actuals = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const line of lines) {
+      map[line.id] = lineActual(line, monthExpenses, convert);
+    }
+    return map;
+  }, [lines, monthExpenses, convert]);
+
+  const summary = useMemo(
+    () => summarizeMonth(lines, monthExpenses, convert),
+    [lines, monthExpenses, convert],
+  );
 
   const monthLabel = month.toLocaleString('en-US', { month: 'long', year: 'numeric' });
   const [mName, mYear] = monthLabel.split(' ');
+  const leftColor = summary.leftToBudget === 0 ? C.sage : summary.leftToBudget < 0 ? C.rose : C.cream;
+  const over = summary.assigned > 0 && summary.spent > summary.assigned;
+  const noPlan = summary.assigned <= 0;
+
+  const saveLine = async (payload: Omit<BudgetLine, 'id'> & { id?: string }) => {
+    if (payload.id) {
+      const { id, ...patch } = payload;
+      await update(id, patch);
+    } else {
+      await add(payload);
+    }
+  };
+
+  const togglePaid = async (line: BudgetLine) => {
+    await update(line.id, {
+      paid: !line.paid,
+      paidAt: !line.paid ? new Date().toISOString() : null,
+      paidSource: !line.paid ? 'manual' : null,
+    });
+  };
 
   return (
-    <ScrollView
-      style={{ flex: 1 }}
-      contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Month Switcher */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, paddingBottom: 18 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Tap onPress={() => onChangeMonth(-1)} style={{
-            width: 36, height: 36, borderRadius: 18,
-            backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
-            alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Icon name="chev-l" size={16} stroke={C.cream}/>
-          </Tap>
-          <View>
-            <Text style={{ fontFamily: C.fonts.serif, fontSize: 24, color: C.cream, letterSpacing: -0.3 }}>
-              {mName}{' '}
-              <Text style={{ color: C.muted, fontStyle: 'italic' }}>{mYear}</Text>
-            </Text>
-          </View>
-          <Tap onPress={() => onChangeMonth(1)} style={{
-            width: 36, height: 36, borderRadius: 18,
-            backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
-            alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Icon name="chev-r" size={16} stroke={C.cream}/>
-          </Tap>
-        </View>
-      </View>
-
-      {/* Hero Amount */}
-      <View style={{ paddingBottom: 24 }}>
-        <Text style={{ color: C.muted, fontSize: 13, marginBottom: 6 }}>You spent</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingTop: 8 }}>
-          <Text style={{ fontFamily: C.fonts.serif, fontSize: 18, color: C.muted, lineHeight: 72 }}>
-            {currencySymbol(preferredCurrency)}
-          </Text>
-          <AnimatedNumber
-            value={total}
-            duration={1100}
-            style={{ fontFamily: C.fonts.serif, fontSize: 64, lineHeight: 72, color: C.cream }}
-          />
-        </View>
-        <Text style={{ marginTop: 10, color: C.cream, fontSize: 14 }}>
-          across{' '}
-          <Text style={{ fontFamily: C.fonts.serifItalic, fontSize: 16 }}>{txns.length}</Text>
-          {' '}transactions{' '}
-          <Text style={{ color: C.muted }}>this month</Text>
-        </Text>
-      </View>
-
-      {/* Donut */}
-      {slices.length > 0 && <DonutCard slices={slices} total={total} preferredCurrency={preferredCurrency}/>}
-
-      {/* Recap teaser */}
-      <Tap onPress={onOpenRecap} style={{ marginTop: 16 }}>
-        <RecapTeaser/>
-      </Tap>
-
-      {/* Recent */}
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingTop: 24, paddingBottom: 12 }}>
-        <Text style={{ fontFamily: C.fonts.serif, fontSize: 22, color: C.cream, letterSpacing: -0.2 }}>Recent</Text>
-        <Tap onPress={onSeeAll}><Text style={{ fontSize: 13, color: C.sage }}>See all →</Text></Tap>
-      </View>
-
-      <Card style={{ overflow: 'hidden' }}>
-        {recent.map((t, i) => (
-          <TxnRow key={t.id} t={t} catMap={catMap} isLast={i === recent.length - 1}/>
-        ))}
-        {recent.length === 0 && (
-          <View style={{ padding: 32, alignItems: 'center' }}>
-            <Text style={{ fontFamily: C.fonts.serifItalic, fontSize: 18, color: C.muted }}>no expenses yet.</Text>
+    <>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          padding: isWide ? 32 : 20,
+          paddingBottom: isWide ? 48 : 120,
+          maxWidth: isWide ? 1100 : undefined,
+          width: '100%' as any,
+          alignSelf: isWide ? 'center' : undefined,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        {isWide && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, paddingBottom: 18 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+              <Tap onPress={() => onChangeMonth(-1)} style={{
+                width: 36, height: 36, borderRadius: 18,
+                backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Icon name="chev-l" size={16} stroke={C.cream}/>
+              </Tap>
+              <Text style={{ fontFamily: C.fonts.serif, fontSize: 24, color: C.cream, letterSpacing: -0.3 }} numberOfLines={1}>
+                {mName}{' '}
+                <Text style={{ color: C.muted, fontStyle: 'italic' }}>{mYear}</Text>
+              </Text>
+              <Tap onPress={() => onChangeMonth(1)} style={{
+                width: 36, height: 36, borderRadius: 18,
+                backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Icon name="chev-r" size={16} stroke={C.cream}/>
+              </Tap>
+            </View>
+            <AddMenu
+              onAddBudget={() => setEditor({ section: 'variable', line: null })}
+              onAddIncome={() => setEditor({ section: 'income', line: null })}
+            />
           </View>
         )}
-      </Card>
-    </ScrollView>
-  );
-}
 
-function DonutCard({ slices, total, preferredCurrency }: { slices: { id: string; value: number; color: string; name: string }[]; total: number; preferredCurrency: string }) {
-  const C = useTheme();
-  const [active, setActive] = React.useState<number | null>(null);
-  const size = 180;
-  const r = 68, cx = size / 2, cy = size / 2, sw = 16;
-  const circ = 2 * Math.PI * r;
-  let acc = 0;
-
-  const focus = active != null ? slices[active] : null;
-  const top = slices[0];
-
-  function handleDonutPress(evt: { nativeEvent: { locationX: number; locationY: number } }) {
-    const { locationX, locationY } = evt.nativeEvent;
-    const dx = locationX - cx;
-    const dy = locationY - cy;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    // Only respond if touch is within the donut ring
-    if (dist < r - sw || dist > r + sw) return;
-    // Compute angle; SVG is rotated -90deg so offset by +90deg
-    let angle = (Math.atan2(dy, dx) + Math.PI / 2 + 2 * Math.PI) % (2 * Math.PI);
-    const fraction = angle / (2 * Math.PI);
-    // Dead zone at every slice boundary (including the 12 o'clock seam,
-    // where the first slice's start meets the last slice's end): a tap
-    // within this margin of an edge is genuinely ambiguous between two
-    // neighbors, so treat it as a miss rather than guessing wrong. Capped
-    // at 25% of a slice's own width so thin slices stay tappable.
-    const MARGIN = 0.01;
-    let prev = 0;
-    for (let i = 0; i < slices.length; i++) {
-      const width = slices[i].value / total;
-      const cumulative = prev + width;
-      const halfMargin = Math.min(MARGIN / 2, width * 0.25);
-      if (fraction >= prev + halfMargin && fraction <= cumulative - halfMargin) {
-        setActive(active === i ? null : i);
-        return;
-      }
-      prev = cumulative;
-    }
-  }
-
-  return (
-    <Card style={{ padding: 20, marginBottom: 16 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
-        <View
-          style={{ width: size, height: size, position: 'relative' }}
-          onStartShouldSetResponder={() => true}
-          onResponderGrant={handleDonutPress}
-        >
-          <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }} pointerEvents="none">
-            {slices.map((s, i) => {
-              const frac = s.value / total;
-              const dash = frac * circ;
-              const off = -acc;
-              acc += dash;
-              const dim = active != null && active !== i;
-              return (
-                <Circle
-                  key={s.id}
-                  cx={cx} cy={cy} r={r}
-                  fill="none"
-                  stroke={s.color}
-                  strokeWidth={active === i ? sw + 4 : sw}
-                  strokeDasharray={`${dash - 2} ${circ - dash + 2}`}
-                  strokeDashoffset={off}
-                  opacity={dim ? 0.25 : 1}
-                />
-              );
-            })}
-          </Svg>
-          <View style={{
-            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-            alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.04, textTransform: 'uppercase' }}>
-              {focus ? focus.name : 'Top'}
-            </Text>
-            <Text style={{ fontFamily: C.fonts.serif, fontSize: 26, color: C.cream, lineHeight: 30, marginTop: 2 }}>
-              {fmt(focus ? focus.value : top?.value ?? 0, preferredCurrency)}
-            </Text>
-            <Text style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
-              {focus
-                ? `${Math.round(focus.value / total * 100)}%`
-                : top?.name ?? ''}
-            </Text>
-          </View>
-        </View>
-
-        <View style={{ flex: 1, gap: 8 }}>
-          {slices.slice(0, 5).map((s, i) => (
-            <TouchableOpacity key={s.id} onPress={() => setActive(active === i ? null : i)} style={{
-              flexDirection: 'row', alignItems: 'center', gap: 8,
-              opacity: active != null && active !== i ? 0.4 : 1,
+        <View style={{
+          flexDirection: isWide ? 'row' : 'column',
+          alignItems: 'center',
+          gap: isWide ? 36 : 8,
+          paddingVertical: 12,
+          marginBottom: 8,
+        }}>
+          <BudgetRing
+            spent={summary.spent}
+            assigned={summary.assigned}
+            currency={preferredCurrency}
+            size={isWide ? 188 : 168}
+          />
+          <View style={{ flex: 1, alignItems: isWide ? 'flex-start' : 'center', width: '100%' }}>
+            <Text style={{
+              fontFamily: C.fonts.serif, fontSize: isWide ? 32 : 26, color: C.cream,
+              letterSpacing: -0.4, textAlign: isWide ? 'left' : 'center',
             }}>
-              <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: s.color }}/>
-              <Text style={{ flex: 1, fontSize: 13, color: C.cream }}>{s.name}</Text>
-              <Text style={{ fontSize: 12, color: C.muted }}>
-                {Math.round(s.value / total * 100)}%
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-    </Card>
-  );
-}
-
-function RecapTeaser() {
-  const C = useTheme();
-  return (
-    <View style={{
-      backgroundColor: C.surface,
-      borderWidth: 0.5, borderColor: C.hairStrong,
-      borderRadius: 22, padding: 18,
-      flexDirection: 'row', alignItems: 'center', gap: 14,
-    }}>
-      <View style={{
-        width: 44, height: 44, borderRadius: 14,
-        backgroundColor: C.sageGlow,
-        borderWidth: 0.5, borderColor: C.sageDeep,
-        alignItems: 'center', justifyContent: 'center',
-      }}>
-        <Icon name="sparkles" size={22} stroke={C.sage} sw={1.4}/>
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 11, color: C.sage, letterSpacing: 0.05, textTransform: 'uppercase', marginBottom: 2 }}>
-          Weekly recap · ready
-        </Text>
-        <Text style={{ fontFamily: C.fonts.serif, fontSize: 18, color: C.cream, lineHeight: 22 }}>
-          Tap to see your{' '}
-          <Text style={{ fontStyle: 'italic' }}>spending insights</Text>.
-        </Text>
-      </View>
-      <Icon name="chev-r" size={18} stroke={C.muted}/>
-    </View>
-  );
-}
-
-const REVEAL_W = 68;
-const REVEAL_L = 120;
-
-export function TxnRow({
-  t, catMap, isLast = false, onViewDetail, onEdit, onDelete,
-}: {
-  t: { id: string; merchant: string; category_id: string; amount: number; date: string; note: string | null; receipt_uri?: string | null; confidence?: number | null; currency?: string };
-  catMap: Record<string, { name: string; color: string }>;
-  isLast?: boolean;
-  onViewDetail?: (t: any) => void;
-  onEdit?: () => void;
-  onDelete?: () => void;
-}) {
-  const C = useTheme();
-  const { convert } = useRates.getState();
-  const { preferredCurrency } = useSettings.getState();
-  const convertedAmount = convert(t.amount, t.currency ?? 'USD');
-  const showOriginal = !!t.currency && t.currency !== preferredCurrency;
-  const cat = catMap[t.category_id] ?? { name: t.category_id, color: C.muted };
-  const initial = cat.name[0]?.toUpperCase() ?? '?';
-
-  const translateX = useRef(new Animated.Value(0)).current;
-  const isOpen = useRef<'none' | 'right' | 'left'>('none');
-  const hasRight = onViewDetail != null;
-  const hasLeft = onEdit != null || onDelete != null;
-
-  const pan = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) =>
-        (hasRight || hasLeft) && Math.abs(g.dx) > 3 && Math.abs(g.dx) > Math.abs(g.dy),
-      onPanResponderMove: (_, g) => {
-        const base = isOpen.current === 'right' ? REVEAL_W : isOpen.current === 'left' ? -REVEAL_L : 0;
-        const next = Math.max(
-          hasLeft ? -(REVEAL_L + 12) : 0,
-          Math.min(hasRight ? (REVEAL_W + 12) : 0, base + g.dx),
-        );
-        translateX.setValue(next);
-      },
-      onPanResponderRelease: (_, g) => {
-        const base = isOpen.current === 'right' ? REVEAL_W : isOpen.current === 'left' ? -REVEAL_L : 0;
-        const end = base + g.dx;
-        if (hasRight && (end > REVEAL_W * 0.45 || g.vx > 0.5)) {
-          Animated.spring(translateX, { toValue: REVEAL_W, useNativeDriver: true, speed: 20, bounciness: 0 }).start();
-          isOpen.current = 'right';
-        } else if (hasLeft && (end < -(REVEAL_L * 0.45) || g.vx < -0.5)) {
-          Animated.spring(translateX, { toValue: -REVEAL_L, useNativeDriver: true, speed: 20, bounciness: 0 }).start();
-          isOpen.current = 'left';
-        } else {
-          Animated.spring(translateX, { toValue: 0, useNativeDriver: true, speed: 20, bounciness: 0 }).start();
-          isOpen.current = 'none';
-        }
-      },
-    })
-  ).current;
-
-  function close() {
-    Animated.spring(translateX, { toValue: 0, useNativeDriver: true, speed: 20, bounciness: 0 }).start();
-    isOpen.current = 'none';
-  }
-
-  return (
-    <View style={{
-      overflow: 'hidden',
-      borderBottomWidth: isLast ? 0 : 0.5,
-      borderBottomColor: C.hair,
-    }}>
-      {/* Eye action revealed on swipe right */}
-      {hasRight && (
-        <View style={{
-          position: 'absolute', left: 0, top: 0, bottom: 0,
-          width: REVEAL_W,
-          backgroundColor: C.sageGlow,
-          alignItems: 'center', justifyContent: 'center',
-        }}>
-          <TouchableOpacity
-            onPress={() => { close(); onViewDetail!(t); }}
-            style={{
-              width: 42, height: 42, borderRadius: 21,
-              backgroundColor: C.sage,
-              alignItems: 'center', justifyContent: 'center',
-            }}
-            activeOpacity={0.8}
-          >
-            <Icon name="eye" size={18} stroke="#0E0E0C" sw={2}/>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Edit / delete actions revealed on swipe left */}
-      {hasLeft && (
-        <View style={{
-          position: 'absolute', right: 0, top: 0, bottom: 0,
-          width: REVEAL_L,
-          flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-          backgroundColor: C.bgElev,
-        }}>
-          {onEdit && (
-            <TouchableOpacity
-              onPress={() => { close(); onEdit(); }}
-              style={{
-                width: 48, height: 48, borderRadius: 24,
-                backgroundColor: C.sageGlow, borderWidth: 0.5, borderColor: C.sage,
-                alignItems: 'center', justifyContent: 'center',
-              }}
-              activeOpacity={0.8}
-            >
-              <Icon name="edit" size={17} stroke={C.sage} sw={1.8}/>
-            </TouchableOpacity>
-          )}
-          {onDelete && (
-            <TouchableOpacity
-              onPress={() => { close(); onDelete(); }}
-              style={{
-                width: 48, height: 48, borderRadius: 24,
-                backgroundColor: `${C.rose}1a`, borderWidth: 0.5, borderColor: C.rose,
-                alignItems: 'center', justifyContent: 'center',
-              }}
-              activeOpacity={0.8}
-            >
-              <Icon name="trash" size={17} stroke={C.rose} sw={1.8}/>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
-
-      {/* Row content — slides on swipe */}
-      <Animated.View
-        {...((hasRight || hasLeft) ? pan.panHandlers : {})}
-        style={[
-          { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14, paddingHorizontal: 18, backgroundColor: C.bgElev },
-          (hasRight || hasLeft) ? { transform: [{ translateX }] } : undefined,
-        ]}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={isOpen.current !== 'none' ? close : undefined}
-          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 14 }}
-        >
-          <View style={{
-            width: 36, height: 36, borderRadius: 36 * 0.32,
-            backgroundColor: `${cat.color}2e`,
-            alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Text style={{ fontFamily: C.fonts.serifItalic, fontSize: 18, color: cat.color }}>
-              {initial}
+              {noPlan ? 'No budget yet' : over ? 'Overspent' : 'On track'}
             </Text>
+            <Text style={{
+              marginTop: 8, color: C.muted, fontSize: 15, lineHeight: 22,
+              textAlign: isWide ? 'left' : 'center', maxWidth: 340,
+            }}>
+              {noPlan
+                ? 'Tap Add to add income, then add rent, groceries, and the rest. We’ll put each line in the right place.'
+                : over
+                  ? `Spent ${fmt(summary.spent, preferredCurrency)} of ${fmt(summary.assigned, preferredCurrency)} planned.`
+                  : `Spent ${fmt(summary.spent, preferredCurrency)} of ${fmt(summary.assigned, preferredCurrency)} planned.`}
+            </Text>
+            {!isWide && (
+              <View style={{ marginTop: 16 }}>
+                <AddMenu
+                  quiet
+                  onAddBudget={() => setEditor({ section: 'variable', line: null })}
+                  onAddIncome={() => setEditor({ section: 'income', line: null })}
+                />
+              </View>
+            )}
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 15, color: C.cream, fontWeight: '500' }} numberOfLines={1}>
-              {t.merchant}
-            </Text>
-            <Text style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
-              {cat.name}{t.note ? ` · ${t.note}` : ''}
-            </Text>
-          </View>
-        </TouchableOpacity>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text style={{ fontSize: 15, color: C.cream, fontWeight: '500', fontVariant: ['tabular-nums'] }}>
-            {fmt(convertedAmount, preferredCurrency)}
+        </View>
+
+        <Card style={{ padding: 16, marginTop: 8, marginBottom: 8 }}>
+          <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.05, textTransform: 'uppercase' }}>
+            Left to budget
           </Text>
-          {showOriginal && (
-            <Text style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
-              {t.currency} {t.amount.toFixed(2)}
-            </Text>
-          )}
-          <Text style={{ fontSize: 11, color: C.muted, marginTop: showOriginal ? 0 : 2 }}>{fmtTime(t.date)}</Text>
-        </View>
-      </Animated.View>
-    </View>
+          <Text style={{ fontFamily: C.fonts.serif, fontSize: 28, color: leftColor, marginTop: 4 }}>
+            {fmt(summary.leftToBudget, preferredCurrency)}
+          </Text>
+          <Text style={{ marginTop: 4, color: C.muted, fontSize: 13 }}>
+            {summary.leftToBudget === 0
+              ? 'Every dollar has a job.'
+              : summary.leftToBudget < 0
+                ? 'Over-assigned — pull something back.'
+                : 'Income that still needs a job.'}
+          </Text>
+        </Card>
+
+        <UpcomingPayments
+          lines={lines}
+          preferredCurrency={preferredCurrency}
+          onPress={(line) => setEditor({ section: line.section, line })}
+        />
+
+        {allMeta.map(s => {
+          const sectionLines = lines.filter(l => l.section === s.id);
+          if (sectionLines.length === 0) return null;
+          return (
+            <BudgetSection
+              key={s.id}
+              section={s.id}
+              label={s.label}
+              hint={s.hint}
+              lines={sectionLines}
+              actuals={actuals}
+              preferredCurrency={preferredCurrency}
+              onPressLine={(line) => setEditor({ section: line.section, line })}
+              onTogglePaid={togglePaid}
+              wide={isWide}
+            />
+          );
+        })}
+      </ScrollView>
+
+      <LineEditor
+        open={!!editor}
+        section={editor?.section ?? 'variable'}
+        month={key}
+        currency={preferredCurrency}
+        initial={editor?.line ?? null}
+        existing={lines}
+        onSave={saveLine}
+        onDelete={editor?.line ? () => remove(editor.line!.id) : undefined}
+        onClose={() => setEditor(null)}
+      />
+    </>
   );
 }
+
+export { TxnRow } from '../components/TxnRow';

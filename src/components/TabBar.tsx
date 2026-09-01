@@ -8,7 +8,7 @@ import { Icon } from './Icon';
 export type TabId = 'home' | 'txns' | 'reports' | 'settings';
 
 const TABS: { id: TabId; icon: string; label: string }[] = [
-  { id: 'home',     icon: 'home',  label: 'Home' },
+  { id: 'home',     icon: 'home',  label: 'Budget' },
   { id: 'txns',     icon: 'list',  label: 'Activity' },
   { id: 'reports',  icon: 'chart', label: 'Reports' },
   { id: 'settings', icon: 'gear',  label: 'Settings' },
@@ -43,7 +43,6 @@ export function TabBar({ tab, onTab, onAdd }: Props) {
           gap: 2,
         }}
       >
-        {/* Glass tint + specular highlight, layered under content */}
         <LinearGradient
           pointerEvents="none"
           colors={C.isLight
@@ -55,8 +54,12 @@ export function TabBar({ tab, onTab, onAdd }: Props) {
 
         {TABS.slice(0, 2).map(t => <TabItem key={t.id} item={t} active={tab === t.id} onPress={() => onTab(t.id)}/>)}
 
-        {/* Add button */}
-        <TouchableOpacity onPress={onAdd} activeOpacity={0.8} style={{ width: 56, height: 56, borderRadius: 28, overflow: 'hidden', marginHorizontal: 4 }}>
+        <TouchableOpacity
+          onPress={onAdd}
+          activeOpacity={0.8}
+          accessibilityLabel="Add transaction"
+          style={{ width: 56, height: 56, borderRadius: 28, overflow: 'hidden', marginHorizontal: 4 }}
+        >
           <LinearGradient
             colors={[C.sage, C.sageDeep]}
             start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }}

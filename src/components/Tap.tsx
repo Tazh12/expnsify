@@ -19,7 +19,9 @@ export function Tap({ children, onPress, style, haptic = false, ...rest }: TapPr
   };
 
   const handlePress = (e: Parameters<NonNullable<PressableProps['onPress']>>[0]) => {
-    if (haptic) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (haptic) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    }
     onPress?.(e);
   };
 
