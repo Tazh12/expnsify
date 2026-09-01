@@ -6,7 +6,6 @@ import {
 import { db } from '../services/firebase';
 import { uid as makeId } from '../services/format';
 import { slugKey } from '../services/month';
-import { sampleLineIdsToZero } from './defaults';
 import { SECTION_COLORS, type BudgetLine, type BudgetSection } from './budgetTypes';
 
 interface BudgetState {
@@ -34,7 +33,8 @@ function fromDoc(id: string, raw: Record<string, unknown>): BudgetLine {
     month: String(raw.month ?? ''),
     section: (raw.section as BudgetSection) ?? 'variable',
     name: String(raw.name ?? ''),
-    expected: Number(raw.expected ?? 0),
+    // Prefer `planned`: an old client used to clobber `expected` on common names like Rent.
+    expected: Number(raw.planned ?? raw.expected ?? 0),
     actualOverride: raw.actualOverride == null ? null : Number(raw.actualOverride),
     currency: String(raw.currency ?? 'USD'),
     dueDay: raw.dueDay == null ? null : Number(raw.dueDay),
@@ -57,6 +57,7 @@ function toDoc(line: Omit<BudgetLine, 'id'>): Record<string, unknown> {
     section: line.section,
     name: line.name,
     expected: line.expected,
+    planned: line.expected,
     actualOverride: line.actualOverride,
     currency: line.currency,
     dueDay: line.dueDay,
@@ -95,6 +96,8 @@ function copyLine(src: BudgetLine, month: string, sortOrder: number): Omit<Budge
   };
 }
 
+let stopBudget: (() => void) | null = null;
+
 export const useBudget = create<BudgetState>((set, get) => ({
   lines: [],
   loaded: false,
@@ -102,23 +105,19 @@ export const useBudget = create<BudgetState>((set, get) => ({
   ensuring: {},
 
   subscribe: (uid) => {
+    stopBudget?.();
     set({ uid });
     const unsub = onSnapshot(linesCol(uid), (snap) => {
       const lines = snap.docs.map(d => fromDoc(d.id, d.data() as Record<string, unknown>));
-      const zero = sampleLineIdsToZero(lines);
-      if (zero.length > 0) {
-        const batch = writeBatch(db);
-        for (const id of zero) batch.update(doc(linesCol(uid), id), { expected: 0, actualOverride: null });
-        batch.commit().catch(() => {});
-        set({
-          lines: lines.map(l => zero.includes(l.id) ? { ...l, expected: 0, actualOverride: null } : l),
-          loaded: true,
-        });
-        return;
-      }
       set({ lines, loaded: true });
     });
-    return unsub;
+    stopBudget = unsub;
+    return () => {
+      if (stopBudget === unsub) {
+        unsub();
+        stopBudget = null;
+      }
+    };
   },
 
   reset: () => set({ lines: [], loaded: false, uid: null, ensuring: {} }),
@@ -173,6 +172,7 @@ export const useBudget = create<BudgetState>((set, get) => ({
       paidSource: line.paidSource ?? null,
       color: line.color,
     };
+    set({ lines: [...get().lines.filter(l => l.id !== id), full] });
     await setDoc(doc(linesCol(uidStr), id), toDoc(full));
     return full;
   },
@@ -184,6 +184,10 @@ export const useBudget = create<BudgetState>((set, get) => ({
     for (const [k, v] of Object.entries(patch)) {
       if (v !== undefined) cleaned[k] = v;
     }
+    if ('expected' in cleaned) cleaned.planned = cleaned.expected;
+    set({
+      lines: get().lines.map(l => l.id === id ? { ...l, ...patch } : l),
+    });
     await updateDoc(doc(linesCol(uidStr), id), cleaned);
   },
 

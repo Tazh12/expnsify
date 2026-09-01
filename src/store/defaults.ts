@@ -1,4 +1,3 @@
-import type { BudgetSection } from './budgetTypes';
 import { monthKey } from '../services/month';
 
 export const DEFAULT_CATEGORIES = [
@@ -12,18 +11,6 @@ export const DEFAULT_CATEGORIES = [
   { id: 'health',    name: 'Health',    color: '#C9A0DC', sort_order: 7 },
   { id: 'other',     name: 'Other',     color: '#8F8A80', sort_order: 8 },
 ];
-
-/** Old placeholder names — used only to zero leftover demo amounts in Firebase. */
-const SAMPLE_NAMES = new Set([
-  'paycheck', 'rent', 'internet', 'phone', 'electricity', 'car insurance',
-  'groceries', 'gas', 'coffee', 'dining', 'gym', 'buffer', 'retirement',
-]);
-
-export function sampleLineIdsToZero(lines: { id: string; name: string; expected: number }[]): string[] {
-  return lines
-    .filter(l => SAMPLE_NAMES.has(l.name.toLowerCase()) && l.expected !== 0)
-    .map(l => l.id);
-}
 
 export function currentMonthKey(): string {
   return monthKey(new Date());

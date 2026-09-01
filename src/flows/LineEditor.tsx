@@ -16,6 +16,11 @@ import { findLineByName, inferDestination } from '../services/budget';
 import { GoesToPicker } from '../components/GoesToPicker';
 import { useBudgetGroups } from '../store/useBudgetGroups';
 
+function parseMoney(raw: string): number {
+  const n = parseFloat(raw.replace(/,/g, '').trim());
+  return Number.isFinite(n) ? n : 0;
+}
+
 export function LineEditor({
   open, section: sectionProp, month, currency, initial, existing = [], onSave, onDelete, onClose,
 }: {
@@ -47,7 +52,7 @@ export function LineEditor({
   useEffect(() => {
     if (!open) return;
     setName(initial?.name ?? '');
-    setExpected(initial ? String(initial.expected) : '');
+    setExpected(initial?.expected ? String(initial.expected) : '');
     setActual(initial?.actualOverride != null ? String(initial.actualOverride) : '');
     setDueDay(initial?.dueDay != null ? String(initial.dueDay) : '');
     setAutomated(initial?.automated ?? false);
@@ -56,7 +61,9 @@ export function LineEditor({
     setSection(initial?.section ?? sectionProp);
     setSectionLocked(!!initial || sectionProp === 'income');
     setSaving(false);
-  }, [open, initial, sectionProp]);
+    // Only re-hydrate when opening or switching lines — not when the store
+    // pushes a new object for the same line (that was wiping the amount).
+  }, [open, initial?.id, sectionProp]);
 
   const match = useMemo(() => {
     if (initial || !name.trim()) return undefined;
@@ -87,8 +94,8 @@ export function LineEditor({
       month,
       section,
       name: name.trim(),
-      expected: parseFloat(expected) || 0,
-      actualOverride: section === 'income' && actual !== '' ? parseFloat(actual) || 0 : target?.actualOverride ?? null,
+      expected: parseMoney(expected),
+      actualOverride: section === 'income' && actual !== '' ? parseMoney(actual) : target?.actualOverride ?? null,
       currency: target?.currency ?? currency,
       dueDay: day,
       automated,
