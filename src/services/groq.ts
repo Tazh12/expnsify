@@ -1,5 +1,6 @@
 import type { Category } from '../store/useCategories';
 import type { BudgetLine } from '../store/budgetTypes';
+import * as FileSystem from 'expo-file-system/legacy';
 
 const proxyUrl = process.env.EXPO_PUBLIC_PROXY_URL ?? '';
 
@@ -97,8 +98,14 @@ async function scan(body: {
       return null;
     }
     const json = await res.json() as ScannedExpense;
+    const amount = Number(json.amount);
+    if (!Number.isFinite(amount)) {
+      console.error('scan missing amount', json);
+      return null;
+    }
     return {
       ...json,
+      amount,
       lineId: json.lineId ?? null,
       matchConfidence: json.matchConfidence ?? null,
       isPaymentConfirmation: Boolean(json.isPaymentConfirmation),
@@ -109,23 +116,48 @@ async function scan(body: {
   }
 }
 
+async function uriToBase64(uri: string): Promise<string> {
+  if (uri.startsWith('blob:') || uri.startsWith('data:') || uri.startsWith('http')) {
+    const res = await fetch(uri);
+    const blob = await res.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = String(reader.result || '');
+        const comma = result.indexOf(',');
+        resolve(comma >= 0 ? result.slice(comma + 1) : result);
+      };
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+  }
+  return FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+}
+
+function audioMeta(uri: string): { mimeType: string } {
+  const lower = uri.toLowerCase();
+  if (lower.includes('webm')) return { mimeType: 'audio/webm' };
+  if (lower.includes('.wav')) return { mimeType: 'audio/wav' };
+  return { mimeType: 'audio/m4a' };
+}
+
 export async function transcribeAudio(uri: string): Promise<string | null> {
   try {
-    const formData = new FormData();
-    formData.append('audio', {
-      uri,
-      type: 'audio/m4a',
-      name: 'audio.m4a',
-    } as unknown as Blob);
-
+    const audioBase64 = await uriToBase64(uri);
+    const { mimeType } = audioMeta(uri);
     const res = await fetch(`${proxyUrl}/transcribe`, {
       method: 'POST',
-      body: formData,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ audioBase64, mimeType }),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error('transcribe failed', res.status, await res.text());
+      return null;
+    }
     const json = await res.json() as { text: string };
     return json.text ?? null;
-  } catch {
+  } catch (e) {
+    console.error('transcribe error', e);
     return null;
   }
 }

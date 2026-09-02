@@ -66,10 +66,22 @@ async function handleScan(req: Request, env: Env): Promise<Response> {
   }
 
   let text = body.text ?? '';
-  if (body.pdfBase64 && !text) {
+  let imageBase64 = body.imageBase64;
+  let imageMime = body.mimeType ?? 'image/jpeg';
+
+  if (body.pdfBase64 && !text && !imageBase64) {
     const extracted = await extractPdfText(body.pdfBase64);
-    if (!extracted) return err('Could not read that PDF. Try a screenshot of the confirmation.');
-    text = extracted;
+    const jpeg = extractJpegFromPdf(body.pdfBase64);
+    if (extracted && looksLikePaymentText(extracted)) {
+      text = extracted;
+    } else if (jpeg) {
+      imageBase64 = jpeg;
+      imageMime = 'image/jpeg';
+    } else if (extracted && extracted.trim().length > 12) {
+      text = extracted;
+    } else {
+      return err('Could not read that PDF. Try a screenshot of the confirmation.');
+    }
   }
 
   const categories = body.categories ?? [];
@@ -122,14 +134,13 @@ Rules:
     { role: 'system', content: system },
   ];
 
-  if (body.imageBase64) {
-    const imageMime = body.mimeType ?? 'image/jpeg';
+  if (imageBase64) {
     messages.push({
       role: 'user',
       content: [
         {
           type: 'image_url',
-          image_url: { url: `data:${imageMime};base64,${body.imageBase64}` },
+          image_url: { url: `data:${imageMime};base64,${imageBase64}` },
         },
         { type: 'text', text: 'Extract the payment or expense from this image.' },
       ],
@@ -152,6 +163,7 @@ Rules:
       temperature: 0.1,
       max_tokens: 1024,
       reasoning_effort: 'none',
+      reasoning_format: 'hidden',
     }),
   });
 
@@ -161,11 +173,23 @@ Rules:
     return err(`Groq error: ${groqText}`, 502);
   }
 
-  const groqJson = await groqRes.json() as { choices: { message: { content: string } }[] };
-  const raw = groqJson.choices?.[0]?.message?.content ?? '{}';
+  const groqJson = await groqRes.json() as {
+    choices: { message: { content?: string | null; reasoning?: string | null } }[];
+  };
+  const msg = groqJson.choices?.[0]?.message;
+  const raw = (msg?.content && msg.content.trim()) || msg?.reasoning || '';
+  if (!raw) {
+    console.error('groq scan empty body');
+    return err('Groq returned an empty scan', 502);
+  }
 
   try {
-    return ok(parseModelJson(raw));
+    const parsed = parseModelJson(raw) as { amount?: unknown };
+    if (!Number.isFinite(Number(parsed?.amount))) {
+      console.error('groq scan missing amount', raw.slice(0, 300));
+      return err('Groq scan had no amount', 502);
+    }
+    return ok(parsed);
   } catch {
     console.error('groq scan parse failed', raw.slice(0, 300));
     return err('Failed to parse Groq response', 502);
@@ -187,7 +211,7 @@ function parseModelJson(raw: string): unknown {
 
 async function extractPdfText(b64: string): Promise<string | null> {
   try {
-    const binary = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    const binary = decodeBase64(b64);
     const mod = await import('unpdf').catch(() => null);
     if (mod) {
       const pdf = await mod.getDocumentProxy(binary);
@@ -201,6 +225,32 @@ async function extractPdfText(b64: string): Promise<string | null> {
   return naivePdfText(b64);
 }
 
+function looksLikePaymentText(text: string): boolean {
+  return /(?:\$|usd|eur|gbp|cad|mxn)?\s*\d{1,7}(?:[.,]\d{2})\b|\b(total|paid|amount|invoice|receipt)\b/i.test(text);
+}
+
+function extractJpegFromPdf(b64: string): string | null {
+  try {
+    const bytes = decodeBase64(b64);
+    let best: Uint8Array | null = null;
+    for (let i = 0; i < bytes.length - 1; i++) {
+      if (bytes[i] !== 0xFF || bytes[i + 1] !== 0xD8) continue;
+      for (let j = i + 2; j < bytes.length - 1; j++) {
+        if (bytes[j] === 0xFF && bytes[j + 1] === 0xD9) {
+          const slice = bytes.subarray(i, j + 2);
+          if (slice.length > 8000 && (!best || slice.length > best.length)) best = slice;
+          i = j;
+          break;
+        }
+      }
+    }
+    return best ? encodeBase64(best) : null;
+  } catch (e) {
+    console.error('pdf jpeg extract failed', e);
+    return null;
+  }
+}
+
 function naivePdfText(b64: string): string | null {
   try {
     const raw = atob(b64);
@@ -212,14 +262,53 @@ function naivePdfText(b64: string): string | null {
   }
 }
 
+function decodeBase64(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function encodeBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
 async function handleTranscribe(req: Request, env: Env): Promise<Response> {
-  const formData = await req.formData();
-  const audio = formData.get('audio');
-  if (!audio || typeof audio === 'string') return err('No audio file');
-  const audioFile = audio as unknown as File;
+  const contentType = req.headers.get('content-type') ?? '';
+  let bytes: Uint8Array | null = null;
+  let filename = 'audio.m4a';
+  let mime = 'audio/m4a';
+
+  if (contentType.includes('application/json')) {
+    let body: { audioBase64?: string; mimeType?: string };
+    try {
+      body = await req.json() as typeof body;
+    } catch {
+      return err('Invalid JSON');
+    }
+    if (!body.audioBase64) return err('No audio file');
+    bytes = decodeBase64(body.audioBase64);
+    mime = body.mimeType ?? 'audio/m4a';
+    if (mime.includes('webm')) filename = 'audio.webm';
+    else if (mime.includes('wav')) filename = 'audio.wav';
+    else if (mime.includes('mp4') || mime.includes('m4a') || mime.includes('aac')) filename = 'audio.m4a';
+  } else {
+    const formData = await req.formData();
+    const audio = formData.get('audio');
+    if (!audio || typeof audio === 'string') return err('No audio file');
+    const audioFile = audio as unknown as File;
+    bytes = new Uint8Array(await audioFile.arrayBuffer());
+    mime = audioFile.type || 'audio/m4a';
+    filename = audioFile.name || 'audio.m4a';
+  }
 
   const groqForm = new FormData();
-  groqForm.append('file', audioFile, 'audio.m4a');
+  groqForm.append('file', new Blob([bytes], { type: mime }), filename);
   groqForm.append('model', 'whisper-large-v3-turbo');
   groqForm.append('response_format', 'json');
 

@@ -56,6 +56,38 @@ async function uriToBase64(uri: string): Promise<string> {
   return FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
 }
 
+async function readTextFile(uri: string): Promise<string> {
+  if (Platform.OS === 'web' || uri.startsWith('blob:') || uri.startsWith('data:')) {
+    const res = await fetch(uri);
+    return await res.text();
+  }
+  return FileSystem.readAsStringAsync(uri);
+}
+
+function guessMime(uri: string, name?: string): string {
+  const lower = `${name ?? ''} ${uri}`.toLowerCase();
+  if (lower.includes('.pdf')) return 'application/pdf';
+  if (lower.includes('.eml') || lower.includes('.msg')) return 'message/rfc822';
+  if (lower.includes('.html')) return 'text/html';
+  if (lower.includes('.png')) return 'image/png';
+  if (lower.includes('.heic')) return 'image/heic';
+  if (/\.jpe?g/.test(lower)) return 'image/jpeg';
+  return 'application/pdf';
+}
+
+function emailToPlain(raw: string): string {
+  let body = raw.replace(/\r\n/g, '\n');
+  const headerBreak = body.search(/\n\n/);
+  if (headerBreak >= 0) body = body.slice(headerBreak + 2);
+  body = body.replace(/=\n/g, '');
+  body = body.replace(/=([0-9A-Fa-f]{2})/g, (_, hex: string) =>
+    String.fromCharCode(parseInt(hex, 16))
+  );
+  body = body.replace(/<style[\s\S]*?<\/style>/gi, ' ');
+  body = body.replace(/<[^>]+>/g, ' ');
+  return body.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 interface AddSheetProps {
   open: boolean;
   onClose: () => void;
@@ -104,8 +136,11 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
     else doneScale.setValue(0.6);
   }, [saveState]);
 
-  const failScan = (message = 'Could not read that receipt. Try again, or enter it manually.') => {
-    Alert.alert('Could not read that receipt', message);
+  const failScan = (
+    message = 'Could not read that receipt. Try again, or enter it manually.',
+    title = 'Could not read that receipt',
+  ) => {
+    Alert.alert(title, message);
     setPhase('pick');
   };
 
@@ -131,12 +166,23 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
     setPhase('scan');
     const { categories } = useCategories.getState();
     const lines = useBudget.getState().forMonth(monthKey(new Date()));
-    const isPdf = mimeType.includes('pdf') || uri.toLowerCase().endsWith('.pdf');
+    const mime = (mimeType || '').toLowerCase();
+    const lower = uri.toLowerCase();
+    const isPdf = mime.includes('pdf') || lower.endsWith('.pdf');
+    const isEmail = mime.includes('rfc822') || mime.includes('html') || mime.startsWith('text/')
+      || /\.(eml|html?|txt|msg)$/i.test(lower);
     if (isPdf) {
       const base64 = await uriToBase64(uri);
       const data = await scanPdf(base64, categories, lines);
-      if (!data) { failScan(); return; }
+      if (!data) { failScan('Could not read that PDF. Try a screenshot of the confirmation.'); return; }
       goReview(data, uri, src);
+      return;
+    }
+    if (isEmail) {
+      const raw = await readTextFile(uri);
+      const data = await scanText(emailToPlain(raw), categories, lines);
+      if (!data) { failScan('Could not read that email. Try a PDF or screenshot.'); return; }
+      goReview(data, undefined, src);
       return;
     }
     const manipulated = await ImageManipulator.manipulateAsync(
@@ -144,13 +190,11 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
       [{ resize: { width: 1024 } }],
       { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true },
     );
-    const savedUri = FileSystem.cacheDirectory + `receipt-${uid()}.jpg`;
-    await FileSystem.copyAsync({ from: manipulated.uri, to: savedUri });
     const base64 = manipulated.base64
-      ?? await FileSystem.readAsStringAsync(savedUri, { encoding: FileSystem.EncodingType.Base64 });
+      ?? await FileSystem.readAsStringAsync(manipulated.uri, { encoding: FileSystem.EncodingType.Base64 });
     const data = await scanImage(base64, categories, 'image/jpeg', lines);
     if (!data) { failScan(); return; }
-    goReview(data, savedUri, src);
+    goReview(data, manipulated.uri, src);
   };
 
   const startScan = async (m: Method) => {
@@ -177,8 +221,8 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
         }
 
         const result = m === 'photo'
-          ? await ImagePicker.launchCameraAsync({ base64: true, quality: 0.5, mediaTypes: 'images' })
-          : await ImagePicker.launchImageLibraryAsync({ base64: true, quality: 0.5, mediaTypes: 'images' });
+          ? await ImagePicker.launchCameraAsync({ base64: true, quality: 0.5, mediaTypes: ['images'] })
+          : await ImagePicker.launchImageLibraryAsync({ base64: true, quality: 0.5, mediaTypes: ['images'] });
 
         if (result.canceled || !result.assets[0]) return;
         setPhase('scan');
@@ -188,23 +232,30 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
           [{ resize: { width: 1024 } }],
           { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true },
         );
-        const savedUri = FileSystem.cacheDirectory + `receipt-${uid()}.jpg`;
-        await FileSystem.copyAsync({ from: manipulated.uri, to: savedUri });
         const base64 = manipulated.base64
-          ?? await FileSystem.readAsStringAsync(savedUri, { encoding: FileSystem.EncodingType.Base64 });
+          ?? await FileSystem.readAsStringAsync(manipulated.uri, { encoding: FileSystem.EncodingType.Base64 });
         const { categories } = useCategories.getState();
         const lines = useBudget.getState().forMonth(monthKey(new Date()));
         const data = await scanImage(base64, categories, 'image/jpeg', lines);
         if (!data) { failScan(); return; }
-        goReview(data, savedUri, 'photo');
+        goReview(data, manipulated.uri, 'photo');
       } else if (m === 'file') {
         const result = await DocumentPicker.getDocumentAsync({
-          type: ['application/pdf', 'image/*'],
+          type: [
+            'application/pdf',
+            'image/jpeg',
+            'image/png',
+            'image/heic',
+            'image/webp',
+            'message/rfc822',
+            'text/html',
+            'text/plain',
+          ],
           copyToCacheDirectory: true,
         });
         if (result.canceled || !result.assets?.[0]) return;
         const asset = result.assets[0];
-        await ingestFile(asset.uri, asset.mimeType ?? 'application/pdf', 'pdf');
+        await ingestFile(asset.uri, asset.mimeType ?? guessMime(asset.uri, asset.name), 'pdf');
       } else {
         goReview(null);
       }
@@ -223,18 +274,30 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
   const startVoice = async () => {
     try {
       const perm = await Audio.requestPermissionsAsync();
-      if (perm.status !== 'granted') { setPhase('pick'); return; }
+      if (perm.status !== 'granted') {
+        Alert.alert('Microphone access needed', 'Please enable microphone access in Settings to log spending by voice.');
+        setPhase('pick');
+        return;
+      }
       setPhase('scan');
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const recording = new Audio.Recording();
-      await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      await recording.startAsync();
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY,
+      );
       await new Promise(r => setTimeout(r, 5000));
       await recording.stopAndUnloadAsync();
       const uri = recording.getURI();
-      if (!uri) { failScan('No audio was captured. Please try again.'); return; }
+      try {
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      } catch (e) {
+        console.error('audio mode reset', e);
+      }
+      if (!uri) { failScan('No audio was captured. Please try again.', 'Could not record'); return; }
       const text = await transcribeAudio(uri);
-      if (!text) { failScan('Could not hear that. Please try again, or enter it manually.'); return; }
+      if (!text) { failScan('Could not hear that. Please try again, or enter it manually.', 'Could not record'); return; }
       const { categories } = useCategories.getState();
       const lines = useBudget.getState().forMonth(monthKey(new Date()));
       const data = await scanText(text, categories, lines);
@@ -242,7 +305,8 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
       goReview(data, undefined, 'voice');
     } catch (e) {
       console.error('voice error', e);
-      failScan('Could not record that. Please try again.');
+      const detail = e instanceof Error ? e.message.split('\n')[0] : 'Please try again.';
+      failScan(detail, 'Could not record');
     }
   };
 
@@ -354,7 +418,7 @@ function PickPhase({
   const opts: { id: Method; icon: string; label: string; hint: string; color: string }[] = [
     { id: 'photo',  icon: 'cam',   label: 'Snap a receipt',     hint: 'AI reads it in seconds',           color: C.sage },
     { id: 'image',  icon: 'image', label: 'Upload image',       hint: 'From your photo library',          color: C.plum },
-    { id: 'file',   icon: 'doc',   label: 'Share a PDF / email', hint: 'Mark a bill paid from the receipt', color: C.sky },
+    { id: 'file',   icon: 'doc',   label: 'Share a PDF / email', hint: 'PDF, confirmation email, or screenshot', color: C.sky },
     { id: 'voice',  icon: 'mic',   label: 'Say it out loud',    hint: 'Merchant, amount, budget line',    color: C.rose },
     { id: 'manual', icon: 'edit',  label: 'Enter manually',     hint: 'Old fashioned',                    color: C.muted },
   ];
