@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, Modal, TouchableOpacity, ScrollView,
+  View, Text, Modal, TouchableOpacity, Pressable, ScrollView,
   Animated, TextInput, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
@@ -16,6 +16,7 @@ import { DatePicker } from '../components/DatePicker';
 import { useCategories } from '../store/useCategories';
 import { useExpenses, type Expense, type TxnSource } from '../store/useExpenses';
 import { useBudget } from '../store/useBudget';
+import { useBudgetGroups } from '../store/useBudgetGroups';
 import { useSettings } from '../store/useSettings';
 import { useRates, FRANKFURTER_CURRENCIES } from '../store/useRates';
 import { useAuth } from '../store/useAuth';
@@ -26,7 +27,61 @@ import { CompletePaymentSheet } from './CompletePaymentSheet';
 import { matchLine } from '../services/budget';
 import { monthKey, expenseMonthKey } from '../services/month';
 import { uploadReceipt } from '../services/receipts';
-import type { BudgetLine } from '../store/budgetTypes';
+import { DEFAULT_CATEGORIES } from '../store/defaults';
+import type { BudgetLine, SectionMeta } from '../store/budgetTypes';
+
+const GENERAL_VARIABLE_IDS = ['groceries', 'coffee', 'dining', 'transport', 'travel', 'home', 'software', 'health'] as const;
+const PICKER_SECTION_ORDER = ['bills', 'variable', 'investments'] as const;
+
+function normName(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function spendLines(lines: BudgetLine[]): BudgetLine[] {
+  return lines.filter(l => l.section !== 'income');
+}
+
+function preferUnpaid(lines: BudgetLine[]): BudgetLine[] {
+  return lines.slice().sort((a, b) => {
+    if (a.paid !== b.paid) return a.paid ? 1 : -1;
+    return (a.sortOrder - b.sortOrder) || (a.dueDay ?? 99) - (b.dueDay ?? 99) || a.name.localeCompare(b.name);
+  });
+}
+
+function uniqueByTemplate(lines: BudgetLine[]): BudgetLine[] {
+  const seen = new Set<string>();
+  const out: BudgetLine[] = [];
+  for (const line of preferUnpaid(lines)) {
+    const key = line.templateKey || normName(line.name) || line.id;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(line);
+  }
+  return out;
+}
+
+function matchGeneralLine(cat: { id: string; name: string }, lines: BudgetLine[]): BudgetLine | undefined {
+  const spend = spendLines(lines);
+  const n = normName(cat.name);
+  const pred = (l: BudgetLine) => l.templateKey === cat.id || normName(l.name) === n;
+  const vars = spend.filter(l => l.section === 'variable');
+  return preferUnpaid(vars.filter(pred))[0] ?? preferUnpaid(spend.filter(pred))[0];
+}
+
+function initialSpendLineId(
+  editExpense: Expense | undefined,
+  matchedLine: BudgetLine | null,
+  scannedLineId: string | null | undefined,
+): string | null {
+  const id = editExpense?.line_id ?? matchedLine?.id ?? scannedLineId ?? null;
+  if (!id) return null;
+  if (editExpense?.type === 'income') return id;
+  const line = matchedLine?.id === id
+    ? matchedLine
+    : useBudget.getState().lines.find(l => l.id === id);
+  if (line?.section === 'income') return null;
+  return id;
+}
 
 type Phase = 'pick' | 'coach' | 'scan' | 'review';
 type Method = 'photo' | 'image' | 'voice' | 'file' | 'manual';
@@ -598,8 +653,14 @@ function ReviewPhase({
   );
   const [note, setNote] = useState(scanned?.note ?? editExpense?.note ?? '');
   const [selectedLineId, setSelectedLineId] = useState<string | null>(
-    editExpense?.line_id ?? matchedLine?.id ?? scanned?.lineId ?? null
+    () => initialSpendLineId(editExpense, matchedLine, scanned?.lineId)
   );
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(() => {
+    if (editExpense && !editExpense.line_id && editExpense.category_id && editExpense.category_id !== 'other') {
+      return editExpense.category_id;
+    }
+    return null;
+  });
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [txnType, setTxnType] = useState<'expense' | 'income'>(editExpense?.type ?? 'expense');
 
@@ -622,7 +683,7 @@ function ReviewPhase({
     const source: TxnSource = method === 'voice' ? 'voice' : method === 'file' ? 'pdf' : method === 'photo' || method === 'image' ? 'photo' : 'manual';
     const payload = {
       merchant: merchant || 'Unknown',
-      category_id: line?.templateKey ?? editExpense?.category_id ?? 'other',
+      category_id: line?.templateKey ?? selectedCategoryId ?? editExpense?.category_id ?? 'other',
       amount: parseFloat(amount) || 0,
       currency: currencyCode,
       date: dateISO,
@@ -709,31 +770,24 @@ function ReviewPhase({
           <ReviewRow label="Notes" value={note} onEdit={setNote} muted last/>
         </Card>
 
-        <View style={{ marginBottom: 16 }}>
-          <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.06, textTransform: 'uppercase', marginBottom: 8 }}>
-            Budget line
-          </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={{ flexDirection: 'row', gap: 6, paddingBottom: 4 }}>
-              <CategoryChip
-                label="Unbudgeted"
-                color={C.rose}
-                selected={!selectedLineId}
-                onPress={() => setSelectedLineId(null)}
-              />
-              {monthLines.map(line => (
-                <CategoryChip
-                  key={line.id}
-                  label={line.name}
-                  color={line.color}
-                  selected={selectedLineId === line.id}
-                  aiSuggested={matchedLine?.id === line.id}
-                  onPress={() => setSelectedLineId(line.id)}
-                />
-              ))}
-            </View>
-          </ScrollView>
-        </View>
+        <BudgetLinePicker
+          monthLines={monthLines}
+          selectedLineId={selectedLineId}
+          selectedCategoryId={selectedCategoryId}
+          matchedLineId={matchedLine?.id ?? scanned?.lineId ?? null}
+          onSelectUnbudgeted={() => {
+            setSelectedLineId(null);
+            setSelectedCategoryId(null);
+          }}
+          onSelectCategory={(cat, line) => {
+            setSelectedLineId(line?.id ?? null);
+            setSelectedCategoryId(cat.id);
+          }}
+          onSelectLine={(line) => {
+            setSelectedLineId(line.id);
+            setSelectedCategoryId(null);
+          }}
+        />
 
         <Tap onPress={handleSave} haptic style={{ marginBottom: 8 }}>
           <LinearGradient
@@ -766,6 +820,170 @@ function ReviewPhase({
         onClose={() => setCurrencyPickerOpen(false)}
       />
     </KeyboardAvoidingView>
+  );
+}
+
+function BudgetLinePicker({
+  monthLines, selectedLineId, selectedCategoryId, matchedLineId,
+  onSelectUnbudgeted, onSelectCategory, onSelectLine,
+}: {
+  monthLines: BudgetLine[];
+  selectedLineId: string | null;
+  selectedCategoryId: string | null;
+  matchedLineId: string | null;
+  onSelectUnbudgeted: () => void;
+  onSelectCategory: (cat: { id: string; name: string }, line?: BudgetLine) => void;
+  onSelectLine: (line: BudgetLine) => void;
+}) {
+  const C = useTheme();
+  const { categories } = useCategories();
+  const allMeta = useBudgetGroups(s => s.all);
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  const generalCats = useMemo(() => (
+    GENERAL_VARIABLE_IDS.map(id => {
+      const live = categories.find(c => c.id === id && !c.archived);
+      const fallback = DEFAULT_CATEGORIES.find(c => c.id === id)!;
+      return live ?? fallback;
+    })
+  ), [categories]);
+
+  const selectedLine = monthLines.find(l => l.id === selectedLineId) ?? null;
+  const extraSelected = selectedLine && selectedLine.section !== 'income' && !generalCats.some(cat => {
+    const match = matchGeneralLine(cat, monthLines);
+    return !!match && (match.id === selectedLine.id || match.templateKey === selectedLine.templateKey);
+  }) ? selectedLine : null;
+
+  const groups = useMemo(() => {
+    const unique = uniqueByTemplate(spendLines(monthLines));
+    const extras = allMeta
+      .map(s => s.id)
+      .filter(id => id !== 'income' && !(PICKER_SECTION_ORDER as readonly string[]).includes(id));
+    const order = [...PICKER_SECTION_ORDER, ...extras];
+    return order
+      .map(id => {
+        const meta = allMeta.find(s => s.id === id);
+        return {
+          meta,
+          lines: unique.filter(l => l.section === id),
+        };
+      })
+      .filter((g): g is { meta: SectionMeta; lines: BudgetLine[] } => !!g.meta && g.lines.length > 0);
+  }, [monthLines, allMeta]);
+
+  return (
+    <View style={{ marginBottom: 16 }}>
+      <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.06, textTransform: 'uppercase', marginBottom: 8 }}>
+        Budget line
+      </Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={{ flexDirection: 'row', gap: 6, paddingBottom: 4, alignItems: 'center' }}>
+          <CategoryChip
+            label="Unbudgeted"
+            color={C.rose}
+            selected={!selectedLineId && !selectedCategoryId}
+            onPress={onSelectUnbudgeted}
+          />
+          {generalCats.map(cat => {
+            const match = matchGeneralLine(cat, monthLines);
+            const selected = selectedLine
+              ? !!match && (match.id === selectedLine.id || match.templateKey === selectedLine.templateKey)
+              : selectedCategoryId === cat.id;
+            return (
+              <CategoryChip
+                key={cat.id}
+                label={cat.name}
+                color={cat.color}
+                selected={selected}
+                aiSuggested={!!match && match.id === matchedLineId}
+                onPress={() => onSelectCategory(cat, match)}
+              />
+            );
+          })}
+          {extraSelected && (
+            <CategoryChip
+              label={extraSelected.name}
+              color={extraSelected.color}
+              selected
+              aiSuggested={extraSelected.id === matchedLineId}
+              onPress={() => onSelectLine(extraSelected)}
+            />
+          )}
+          <Tap
+            onPress={() => setMoreOpen(true)}
+            haptic
+            accessibilityLabel="More budget lines"
+            style={{
+              width: 36, height: 36, borderRadius: 18,
+              backgroundColor: extraSelected ? `${extraSelected.color}38` : C.surface,
+              borderWidth: 0.5,
+              borderColor: extraSelected ? extraSelected.color : C.hair,
+              alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <Icon name="plus" size={16} stroke={extraSelected ? extraSelected.color : C.sage} sw={2}/>
+          </Tap>
+        </View>
+      </ScrollView>
+
+      <Modal visible={moreOpen} transparent animationType="fade" onRequestClose={() => setMoreOpen(false)}>
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }} onPress={() => setMoreOpen(false)} />
+          <View style={{
+            backgroundColor: C.bgElev,
+            borderTopLeftRadius: 24, borderTopRightRadius: 24,
+            borderWidth: 0.5, borderColor: C.hairStrong,
+            paddingHorizontal: 20, paddingTop: 12, paddingBottom: 28, maxHeight: '70%',
+          }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.subtle, alignSelf: 'center', marginBottom: 14 }} />
+            <Text style={{ fontFamily: C.fonts.serif, fontSize: 24, color: C.cream, marginBottom: 12 }}>
+              Budget line
+            </Text>
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {groups.length === 0 ? (
+                <Text style={{ fontSize: 14, color: C.muted, paddingVertical: 16 }}>
+                  Nothing on the budget this month yet.
+                </Text>
+              ) : groups.map(g => (
+                <View key={g.meta.id} style={{ marginBottom: 8 }}>
+                  <Text style={{
+                    fontSize: 11, color: C.muted, letterSpacing: 0.06, textTransform: 'uppercase',
+                    marginTop: 10, marginBottom: 4,
+                  }}>
+                    {g.meta.label}
+                  </Text>
+                  {g.lines.map(line => {
+                    const on = selectedLineId === line.id
+                      || (!!selectedLine && selectedLine.templateKey === line.templateKey && selectedLine.section === line.section);
+                    return (
+                      <Tap
+                        key={line.id}
+                        onPress={() => { onSelectLine(line); setMoreOpen(false); }}
+                        style={{
+                          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                          paddingVertical: 14, borderBottomWidth: 0.5, borderBottomColor: C.hair,
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                          <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: line.color }}/>
+                          <Text
+                            style={{ fontSize: 16, color: C.cream, fontWeight: on ? '600' : '400', flex: 1 }}
+                            numberOfLines={1}
+                          >
+                            {line.name}
+                          </Text>
+                        </View>
+                        {on ? <Icon name="check" size={18} stroke={C.sage} sw={2} /> : null}
+                      </Tap>
+                    );
+                  })}
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
