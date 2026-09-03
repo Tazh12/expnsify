@@ -276,6 +276,7 @@ export function HomeScreen({ month, onChangeMonth }: Props) {
               onPressLine={(line) => setEditor({ section: line.section, line })}
               onTogglePaid={togglePaid}
               wide={isWide}
+              onAddLine={() => setEditor({ section: s.id as BudgetSectionId, line: null })}
             />
           );
         })}

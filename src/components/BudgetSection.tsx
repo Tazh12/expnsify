@@ -10,7 +10,7 @@ import type { BudgetLine, BudgetSection } from '../store/budgetTypes';
 import { SECTIONS } from '../store/budgetTypes';
 
 export function BudgetSection({
-  section, label, hint, lines, actuals, preferredCurrency, onPressLine, onTogglePaid, wide,
+  section, label, hint, lines, actuals, preferredCurrency, onPressLine, onTogglePaid, wide, onAddLine,
 }: {
   section: BudgetSection;
   label?: string;
@@ -21,6 +21,7 @@ export function BudgetSection({
   onPressLine: (line: BudgetLine) => void;
   onTogglePaid: (line: BudgetLine) => void;
   wide?: boolean;
+  onAddLine?: () => void;
 }) {
   const C = useTheme();
   const meta = SECTIONS.find(s => s.id === section);
@@ -91,6 +92,24 @@ export function BudgetSection({
                 nothing here yet.
               </Text>
             </View>
+          )}
+          {onAddLine && (
+            <Tap onPress={onAddLine} haptic style={{
+              flexDirection: 'row', alignItems: 'center', gap: 8,
+              paddingVertical: 12, paddingHorizontal: 16,
+              borderTopWidth: lines.length > 0 ? 0 : 0.5, borderTopColor: C.hair,
+            }}>
+              <View style={{
+                width: 22, height: 22, borderRadius: 11,
+                borderWidth: 1.5, borderColor: C.subtle, borderStyle: 'dashed',
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Icon name="plus" size={10} stroke={C.muted} sw={2}/>
+              </View>
+              <Text style={{ fontSize: 14, color: C.muted, fontWeight: '500' }}>
+                {section === 'income' ? 'Add income' : 'Add budget'}
+              </Text>
+            </Tap>
           )}
         </Card>
       )}
