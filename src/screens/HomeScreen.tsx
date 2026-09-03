@@ -13,7 +13,7 @@ import { useRates } from '../store/useRates';
 import { useSettings } from '../store/useSettings';
 import { useBudgetGroups } from '../store/useBudgetGroups';
 import { fmt } from '../services/format';
-import { monthKey, occurrenceDaysInMonth, repeatStepDays } from '../services/month';
+import { monthKey, occurrenceDaysInMonth, repeatStepDays, uniqueTemplateKey } from '../services/month';
 import { incomeCarryOffers, lineActual, summarizeMonth } from '../services/budget';
 import { syncNotifications } from '../services/notifications';
 import { type BudgetLine, type BudgetSection as BudgetSectionId } from '../store/budgetTypes';
@@ -86,29 +86,41 @@ export function HomeScreen({ month, onChangeMonth }: Props) {
   const noPlan = summary.assigned <= 0;
 
   const saveLine = async (payload: Omit<BudgetLine, 'id'> & { id?: string }) => {
-    const step = payload.recurring ? repeatStepDays(payload.repeatEvery) : 0;
-    const days = step > 0 && payload.dueDay != null
-      ? occurrenceDaysInMonth(payload.month, payload.dueDay, payload.repeatEvery)
-      : [payload.dueDay];
+    const isNew = !payload.id;
+    let templateKey = payload.templateKey;
+    if (isNew) {
+      const takenKeys = new Set(
+        allLines
+          .filter(l => l.month === payload.month && l.section === payload.section)
+          .map(l => l.templateKey),
+      );
+      templateKey = uniqueTemplateKey(payload.templateKey || payload.name, takenKeys);
+    }
+    const saved = { ...payload, templateKey };
+
+    const step = saved.recurring ? repeatStepDays(saved.repeatEvery) : 0;
+    const days = step > 0 && saved.dueDay != null
+      ? occurrenceDaysInMonth(saved.month, saved.dueDay, saved.repeatEvery)
+      : [saved.dueDay];
 
     const series = allLines.filter(l =>
-      l.month === payload.month
-      && l.section === payload.section
-      && l.templateKey === (payload.templateKey)
+      l.month === saved.month
+      && l.section === saved.section
+      && l.templateKey === templateKey
     );
 
-    if (payload.id) {
-      const { id, ...patch } = payload;
+    if (saved.id) {
+      const { id, ...patch } = saved;
       await update(id, patch);
       for (const sib of series) {
         if (sib.id === id || sib.paid) continue;
         await update(sib.id, {
-          name: payload.name,
-          expected: payload.expected,
-          observation: payload.observation,
-          recurring: payload.recurring,
-          repeatEvery: payload.repeatEvery,
-          currency: payload.currency,
+          name: saved.name,
+          expected: saved.expected,
+          observation: saved.observation,
+          recurring: saved.recurring,
+          repeatEvery: saved.repeatEvery,
+          currency: saved.currency,
         });
       }
       return;
@@ -118,10 +130,10 @@ export function HomeScreen({ month, onChangeMonth }: Props) {
     const fresh = days.filter(day => !taken.has(day ?? null));
     if (fresh.length === 0) return;
     await addMany(fresh.map((day, i) => ({
-      ...payload,
+      ...saved,
       dueDay: day ?? null,
-      actualOverride: i === 0 ? payload.actualOverride : null,
-      sortOrder: (payload.sortOrder ?? 0) + i,
+      actualOverride: i === 0 ? saved.actualOverride : null,
+      sortOrder: (saved.sortOrder ?? 0) + i,
     })));
   };
 

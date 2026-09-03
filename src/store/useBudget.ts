@@ -307,9 +307,9 @@ export const useBudget = create<BudgetState>((set, get) => ({
       const drop: string[] = [];
       const monthLines = get().lines.filter(l => l.month === month && l.recurring);
       for (const members of groupRepeating(monthLines)) {
-        const byDay = new Map<number | 'none', BudgetLine[]>();
+        const byDay = new Map<string, BudgetLine[]>();
         for (const line of members) {
-          const key = line.dueDay ?? 'none';
+          const key = `${line.dueDay ?? 'none'}::${line.name.trim().toLowerCase()}`;
           const bucket = byDay.get(key);
           if (bucket) bucket.push(line);
           else byDay.set(key, [line]);

@@ -75,10 +75,8 @@ export function LineEditor({
   }, [open, initial?.id, sectionProp]);
 
   const match = useMemo(() => {
-    if (initial || !name.trim()) return undefined;
-    const pool = addingIncome
-      ? existing.filter(l => l.section === 'income')
-      : existing.filter(l => l.section !== 'income');
+    if (initial || !name.trim() || addingIncome) return undefined;
+    const pool = existing.filter(l => l.section !== 'income');
     return findLineByName(name, pool);
   }, [initial, name, existing, addingIncome]);
 

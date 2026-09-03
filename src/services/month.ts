@@ -23,6 +23,16 @@ export function slugKey(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 24) || `line${Date.now()}`;
 }
 
+/** Keep a new budget series distinct when the name slug is already in use. */
+export function uniqueTemplateKey(base: string, taken: Iterable<string>): string {
+  const used = taken instanceof Set ? taken : new Set(taken);
+  const root = slugKey(base);
+  if (!used.has(root)) return root;
+  let n = 2;
+  while (used.has(`${root}${n}`)) n += 1;
+  return `${root}${n}`;
+}
+
 export function daysInMonth(year: number, monthIndex: number): number {
   return new Date(year, monthIndex + 1, 0).getDate();
 }
