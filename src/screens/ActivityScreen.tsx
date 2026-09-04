@@ -240,7 +240,7 @@ export function ActivityScreen() {
       />
 
       <TxnDetailModal
-        expense={detailExpense}
+        expense={detailExpense ? (expenses.find(e => e.id === detailExpense.id) ?? detailExpense) : null}
         category={detailCategory}
         onClose={() => setDetailExpense(null)}
       />

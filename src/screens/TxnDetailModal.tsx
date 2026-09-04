@@ -1,16 +1,21 @@
 import React from 'react';
 import {
   View, Text, Modal, ScrollView, Image, TouchableOpacity,
-  StyleSheet, Pressable,
+  StyleSheet, Alert, ActivityIndicator,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
+import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { useTheme } from '../theme';
 import { Icon, Tap } from '../components';
-import type { Expense } from '../store/useExpenses';
+import { useExpenses, type Expense } from '../store/useExpenses';
 import type { Category } from '../store/useCategories';
 import { useRates } from '../store/useRates';
 import { useSettings } from '../store/useSettings';
+import { useAuth } from '../store/useAuth';
 import { fmt, parseLocalDate } from '../services/format';
+import { isDurableReceiptUri, RECEIPT_STORAGE_ENABLED } from '../services/receiptUri';
+import { uploadReceipt } from '../services/receipts';
 
 interface Props {
   expense: Expense | null;
@@ -28,6 +33,49 @@ function fmtFull(iso: string) {
 export function TxnDetailModal({ expense: t, category, onClose }: Props) {
   const C = useTheme();
   const [imgError, setImgError] = React.useState(false);
+  const [attaching, setAttaching] = React.useState(false);
+
+  React.useEffect(() => {
+    setImgError(false);
+  }, [t?.id, t?.receipt_uri]);
+
+  const attachReceipt = async () => {
+    if (!t || attaching || !RECEIPT_STORAGE_ENABLED) return;
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Photo library access needed', 'Please enable photo library access in Settings to attach a receipt.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      quality: 0.5,
+      mediaTypes: ['images'],
+    });
+    if (result.canceled || !result.assets[0]) return;
+    setAttaching(true);
+    try {
+      const manipulated = await ImageManipulator.manipulateAsync(
+        result.assets[0].uri,
+        [{ resize: { width: 1024 } }],
+        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG },
+      );
+      const { user } = useAuth.getState();
+      const uri = await uploadReceipt(manipulated.uri, user?.uid);
+      if (!uri) {
+        Alert.alert(
+          'Could not save receipt',
+          'The photo could not be stored. Sign in and try again after Storage is enabled.',
+        );
+        return;
+      }
+      await useExpenses.getState().update(t.id, { receipt_uri: uri });
+      setImgError(false);
+    } catch (e) {
+      console.error('attachReceipt failed', e);
+      Alert.alert('Could not save receipt', 'Please try again.');
+    } finally {
+      setAttaching(false);
+    }
+  };
 
   if (!t) return null;
 
@@ -37,8 +85,16 @@ export function TxnDetailModal({ expense: t, category, onClose }: Props) {
   const showOriginal = !!t.currency && t.currency !== preferredCurrency;
 
   const cat = category ?? { name: t.category_id, color: C.muted } as any;
-  const hasReceipt = !!t.receipt_uri && !imgError;
+  const displayUri = isDurableReceiptUri(t.receipt_uri) ? t.receipt_uri : null;
+  const hasReceipt = !!displayUri && !imgError;
+  const lostReceipt = !!t.receipt_uri && !displayUri;
+  const isPdf = (displayUri ?? '').toLowerCase().includes('.pdf');
   const confidencePct = t.confidence != null ? Math.round(t.confidence * 100) : null;
+  const receiptLabel = hasReceipt
+    ? (isPdf ? 'PDF attached' : 'Attached above')
+    : RECEIPT_STORAGE_ENABLED
+      ? (lostReceipt || imgError ? 'Not saved — tap to add' : 'No attachment')
+      : 'Not stored';
 
   return (
     <Modal visible={!!t} transparent animationType="slide" onRequestClose={onClose}>
@@ -56,10 +112,10 @@ export function TxnDetailModal({ expense: t, category, onClose }: Props) {
             contentContainerStyle={{ paddingBottom: 40 }}
           >
             {/* Receipt image */}
-            {hasReceipt && (
+            {hasReceipt && !isPdf && (
               <View style={sh.imgWrap}>
                 <Image
-                  source={{ uri: t.receipt_uri! }}
+                  source={{ uri: displayUri! }}
                   style={sh.img}
                   resizeMode="cover"
                   onError={() => setImgError(true)}
@@ -122,18 +178,36 @@ export function TxnDetailModal({ expense: t, category, onClose }: Props) {
               />
 
               {/* Receipt */}
-              <Row
-                label="Receipt"
-                value={t.receipt_uri ? (imgError ? 'Could not load' : 'Attached above') : 'No attachment'}
-                C={C}
-                valueColor={t.receipt_uri && !imgError ? C.sage : C.subtle}
-              />
+              <Tap
+                onPress={RECEIPT_STORAGE_ENABLED ? attachReceipt : undefined}
+                style={sh.row}
+              >
+                <Text style={{ fontSize: 12, color: C.muted, width: 80 }}>Receipt</Text>
+                {attaching ? (
+                  <ActivityIndicator size="small" color={C.sage}/>
+                ) : (
+                  <Text style={{ flex: 1, fontSize: 14, color: hasReceipt ? C.sage : C.subtle }}>
+                    {receiptLabel}
+                  </Text>
+                )}
+              </Tap>
 
               {/* No receipt placeholder */}
-              {!hasReceipt && !t.receipt_uri && (
+              {!hasReceipt && (
                 <View style={[sh.noReceiptBox, { backgroundColor: C.surface, borderColor: C.hair }]}>
                   <Icon name="receipt" size={28} stroke={C.subtle}/>
-                  <Text style={{ fontSize: 13, color: C.subtle, marginTop: 8 }}>No receipt attached</Text>
+                  <Text style={{ fontSize: 13, color: C.subtle, marginTop: 8, textAlign: 'center' }}>
+                    {RECEIPT_STORAGE_ENABLED
+                      ? (lostReceipt || imgError ? 'Photo was not saved to the cloud' : 'No receipt attached')
+                      : "Photos are read to fill the expense. They aren't stored yet."}
+                  </Text>
+                  {RECEIPT_STORAGE_ENABLED && (
+                    <Tap onPress={attachReceipt}>
+                      <Text style={{ fontSize: 12, color: C.sage, marginTop: 6 }}>
+                        {attaching ? 'Saving…' : 'Tap to add a photo'}
+                      </Text>
+                    </Tap>
+                  )}
                 </View>
               )}
             </View>

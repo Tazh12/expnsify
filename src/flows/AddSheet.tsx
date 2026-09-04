@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, Modal, TouchableOpacity, Pressable, ScrollView,
+  View, Text, Modal, TouchableOpacity, Pressable, ScrollView, Image,
   Animated, TextInput, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
@@ -27,6 +27,7 @@ import { CompletePaymentSheet } from './CompletePaymentSheet';
 import { matchLine } from '../services/budget';
 import { monthKey, expenseMonthKey } from '../services/month';
 import { uploadReceipt } from '../services/receipts';
+import { RECEIPT_STORAGE_ENABLED, resolveReceiptUriToPersist } from '../services/receiptUri';
 import { DEFAULT_CATEGORIES } from '../store/defaults';
 import type { BudgetLine, SectionMeta } from '../store/budgetTypes';
 
@@ -363,7 +364,11 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
     setSaveState('saving');
     const { user } = useAuth.getState();
     let uri = receiptUri;
-    if (uri && user) uri = await uploadReceipt(uri, user.uid, method === 'file' ? 'application/pdf' : 'image/jpeg');
+    if (uri && RECEIPT_STORAGE_ENABLED) {
+      uri = await uploadReceipt(uri, user?.uid, method === 'file' ? 'application/pdf' : 'image/jpeg');
+    } else {
+      uri = resolveReceiptUriToPersist(uri);
+    }
     await useExpenses.getState().add({
       id: uid(),
       merchant: scanned.merchant || matchedLine.name,
@@ -497,6 +502,17 @@ function PickPhase({
           <Icon name="x" size={16} stroke={C.muted}/>
         </Tap>
       </View>
+
+      {!RECEIPT_STORAGE_ENABLED && (
+        <View style={{
+          marginBottom: 12, padding: 12, borderRadius: 14,
+          backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
+        }}>
+          <Text style={{ fontSize: 13, color: C.muted, lineHeight: 18 }}>
+            I can read a photo or PDF to fill the expense. The file itself won't be stored.
+          </Text>
+        </View>
+      )}
 
       <View style={{ gap: 8, marginTop: 8 }}>
         {opts.filter(o => !(Platform.OS === 'web' && o.id === 'photo')).map(o => (
@@ -660,9 +676,9 @@ function ReviewPhase({
     setSaveState('saving');
     const line = monthLines.find(l => l.id === selectedLineId) ?? null;
     const unbudgeted = !line && txnType === 'expense';
-    let storedUri = receiptUri;
-    if (storedUri && user && !editExpense) {
-      storedUri = await uploadReceipt(storedUri, user.uid, method === 'file' ? 'application/pdf' : 'image/jpeg');
+    let storedUri: string | null = null;
+    if (receiptUri && !editExpense && RECEIPT_STORAGE_ENABLED) {
+      storedUri = await uploadReceipt(receiptUri, user?.uid, method === 'file' ? 'application/pdf' : 'image/jpeg');
     }
     const source: TxnSource = method === 'voice' ? 'voice' : method === 'file' ? 'pdf' : method === 'photo' || method === 'image' ? 'photo' : 'manual';
     const payload = {
@@ -708,6 +724,28 @@ function ReviewPhase({
             <Text style={{ color: C.sage }}>{' '}✦ confidence {Math.round(scanned.confidence * 100)}%</Text>
           )}
         </Text>
+
+        {receiptUri && (
+          <View style={{
+            marginBottom: 12, padding: 10, borderRadius: 16,
+            backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
+          }}>
+            {!(method === 'file' || receiptUri.toLowerCase().includes('.pdf')) && (
+              <Image
+                source={{ uri: receiptUri }}
+                style={{ width: '100%', height: 148, borderRadius: 12, marginBottom: 10, backgroundColor: C.surface2 }}
+                resizeMode="cover"
+              />
+            )}
+            <Text style={{ fontSize: 13, color: C.muted, lineHeight: 18, paddingHorizontal: 4, paddingBottom: 2 }}>
+              {RECEIPT_STORAGE_ENABLED
+                ? 'This file will be saved with the expense.'
+                : method === 'file' || receiptUri.toLowerCase().includes('.pdf')
+                  ? "I used this file to fill the fields. It won't be stored."
+                  : "I used this photo to fill the fields. The image won't be stored."}
+            </Text>
+          </View>
+        )}
 
         {(!selectedLineId || overspend) && txnType === 'expense' && (
           <View style={{

@@ -31,6 +31,8 @@ cp .env.example .env
 # Edit .env and set EXPO_PUBLIC_PROXY_URL to your worker URL
 ```
 
+Receipt photos need **Firebase Storage** (Blaze billing). Until that is on, the app reads photos to fill the expense and does not store the file. In [Firebase Console → Storage](https://console.firebase.google.com/project/expense-tracker-da669/storage) click **Get started**, then paste the rules from `storage.rules` (signed-in users can only read/write their own `users/{uid}/…` files). Then set `RECEIPT_STORAGE_ENABLED` to `true` in `src/services/receiptUri.ts`.
+
 ### 3. Run
 
 ```bash
