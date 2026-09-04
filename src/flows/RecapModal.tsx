@@ -6,7 +6,7 @@ import { useTheme } from '../theme';
 import { Card, Icon, Tap } from '../components';
 import { useExpenses, type Expense } from '../store/useExpenses';
 import { useCategories } from '../store/useCategories';
-import { fmt } from '../services/format';
+import { fmt, parseLocalDate } from '../services/format';
 
 // ─── Shared type (mirrors ReportsScreen's DateFilter) ─────────────────────────
 
@@ -101,8 +101,8 @@ function getPeriodInfo(filter: DateFilter, now: Date): PeriodInfo {
       };
     }
     case 'custom': {
-      const from = filter.customFrom ? new Date(filter.customFrom) : new Date(now.getFullYear(), now.getMonth(), 1);
-      const to   = filter.customTo   ? new Date(filter.customTo + 'T23:59:59') : new Date(now);
+      const from = filter.customFrom ? parseLocalDate(filter.customFrom) : new Date(now.getFullYear(), now.getMonth(), 1);
+      const to   = filter.customTo   ? parseLocalDate(filter.customTo + 'T23:59:59') : new Date(now);
       const spanMs   = Math.max(to.getTime() - from.getTime(), 86400000);
       const spanDays = Math.ceil(spanMs / 86400000);
       const ps = new Date(from.getTime() - spanMs);
@@ -144,7 +144,7 @@ function buildSparkline(
       bEnd   = new Date(currentStart.getFullYear(), currentStart.getMonth() + i + 1, 0, 23,59,59,999);
     }
     return expenses
-      .filter(t => { const d = new Date(t.date); return d >= bStart && d <= bEnd; })
+      .filter(t => { const d = parseLocalDate(t.date); return d >= bStart && d <= bEnd; })
       .reduce((s, t) => s + t.amount, 0);
   });
 }
@@ -168,8 +168,8 @@ export function RecapModal({ open, onClose, dateFilter = DEFAULT_FILTER }: Props
   const now = new Date();
   const period = getPeriodInfo(dateFilter, now);
 
-  const current = expenses.filter(t => { const d = new Date(t.date); return d >= period.currentStart && d <= period.currentEnd; });
-  const prev    = expenses.filter(t => { const d = new Date(t.date); return d >= period.prevStart    && d <= period.prevEnd; });
+  const current = expenses.filter(t => { const d = parseLocalDate(t.date); return d >= period.currentStart && d <= period.currentEnd; });
+  const prev    = expenses.filter(t => { const d = parseLocalDate(t.date); return d >= period.prevStart    && d <= period.prevEnd; });
 
   const currentTotal = current.reduce((s, t) => s + t.amount, 0);
   const prevTotal    = prev.reduce((s, t) => s + t.amount, 0);

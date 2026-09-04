@@ -1,3 +1,4 @@
+import { parseLocalDate } from './format';
 import type { RepeatEvery } from '../store/budgetTypes';
 
 export function monthKey(d: Date): string {
@@ -14,7 +15,7 @@ export function parseMonthKey(key: string): { year: number; monthIndex: number }
 export function expenseMonthKey(iso: string): string {
   const dateOnly = iso.match(/^(\d{4})-(\d{2})/);
   if (dateOnly) return `${dateOnly[1]}-${dateOnly[2]}`;
-  const d = new Date(iso);
+  const d = parseLocalDate(iso);
   if (isNaN(d.getTime())) return monthKey(new Date());
   return monthKey(d);
 }

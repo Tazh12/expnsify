@@ -4,6 +4,7 @@ import {
   onSnapshot, query, orderBy,
 } from 'firebase/firestore';
 import { db } from '../services/firebase';
+import { parseLocalDate } from '../services/format';
 import { useRates } from './useRates';
 
 export type TxnType = 'expense' | 'income';
@@ -135,12 +136,11 @@ export const useExpenses = create<ExpensesState>((set, get) => ({
     const txns = (expenses ?? get().expenses).filter(t => t.type !== 'income');
     const weeks: Record<number, number> = {};
     for (const t of txns) {
-      const d = new Date(t.date);
+      const d = parseLocalDate(t.date);
       const day = d.getDay();
-      const monday = new Date(d);
-      monday.setDate(d.getDate() - ((day + 6) % 7));
-      const key = monday.toISOString().slice(0, 10);
-      const n = parseInt(key.replace(/-/g, ''), 10);
+      const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((day + 6) % 7));
+      const key = `${monday.getFullYear()}${String(monday.getMonth() + 1).padStart(2, '0')}${String(monday.getDate()).padStart(2, '0')}`;
+      const n = parseInt(key, 10);
       weeks[n] = (weeks[n] ?? 0) + convert(t.amount, t.currency);
     }
     const sorted = Object.entries(weeks).sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
@@ -156,7 +156,7 @@ export const useExpenses = create<ExpensesState>((set, get) => ({
 
   forMonth: (year, month) =>
     get().expenses.filter(t => {
-      const d = new Date(t.date);
+      const d = parseLocalDate(t.date);
       return d.getFullYear() === year && d.getMonth() === month;
     }),
 }));

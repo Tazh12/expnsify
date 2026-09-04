@@ -21,7 +21,7 @@ import { useSettings } from '../store/useSettings';
 import { useRates, FRANKFURTER_CURRENCIES } from '../store/useRates';
 import { useAuth } from '../store/useAuth';
 import { scanImage, scanText, scanPdf, transcribeAudio, type ScannedExpense } from '../services/groq';
-import { uid, fmt, currencySymbol } from '../services/format';
+import { uid, fmt, currencySymbol, parseLocalDate, toLocalDateISO } from '../services/format';
 import { CurrencyPickerSheet } from '../components/CurrencyPicker';
 import { CompletePaymentSheet } from './CompletePaymentSheet';
 import { matchLine } from '../services/budget';
@@ -85,13 +85,6 @@ function initialSpendLineId(
 
 type Phase = 'pick' | 'coach' | 'scan' | 'review';
 type Method = 'photo' | 'image' | 'voice' | 'file' | 'manual';
-
-function toLocalDateISO(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}T00:00:00`;
-}
 
 async function uriToBase64(uri: string): Promise<string> {
   if (Platform.OS === 'web' || uri.startsWith('blob:') || uri.startsWith('data:')) {
@@ -377,7 +370,7 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
       category_id: matchedLine.templateKey,
       amount: scanned.amount || matchedLine.expected,
       currency: scanned.currency || matchedLine.currency,
-      date: scanned.date?.includes('T') ? scanned.date : toLocalDateISO(new Date()),
+      date: scanned.date ? toLocalDateISO(parseLocalDate(scanned.date)) : toLocalDateISO(new Date()),
       note: scanned.note,
       receipt_uri: uri,
       confidence: scanned.confidence ?? null,
@@ -630,16 +623,7 @@ function ReviewPhase({
   const scannedDateInfo = (() => {
     const raw = scanned?.date ?? editExpense?.date;
     if (!raw) return null;
-    const dateOnlyMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:T00:00:00)?$/);
-    if (dateOnlyMatch) {
-      const [, y, m, day] = dateOnlyMatch;
-      return {
-        iso: `${y}-${m}-${day}T00:00:00`,
-        display: new Date(Number(y), Number(m) - 1, Number(day))
-          .toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      };
-    }
-    const d = new Date(raw);
+    const d = parseLocalDate(raw);
     if (isNaN(d.getTime())) return null;
     return {
       iso: toLocalDateISO(d),
@@ -805,7 +789,7 @@ function ReviewPhase({
 
       <DatePicker
         visible={datePickerVisible}
-        value={new Date(dateISO)}
+        value={parseLocalDate(dateISO)}
         onSelect={(d) => {
           setDateISO(toLocalDateISO(d));
           setDateDisplay(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));

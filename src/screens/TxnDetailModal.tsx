@@ -10,7 +10,7 @@ import type { Expense } from '../store/useExpenses';
 import type { Category } from '../store/useCategories';
 import { useRates } from '../store/useRates';
 import { useSettings } from '../store/useSettings';
-import { fmt } from '../services/format';
+import { fmt, parseLocalDate } from '../services/format';
 
 interface Props {
   expense: Expense | null;
@@ -19,7 +19,7 @@ interface Props {
 }
 
 function fmtFull(iso: string) {
-  const d = new Date(iso);
+  const d = parseLocalDate(iso);
   return d.toLocaleDateString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   }) + ' · ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });

@@ -11,7 +11,7 @@ import { useCategories } from '../store/useCategories';
 import { useBudget } from '../store/useBudget';
 import { useRates } from '../store/useRates';
 import { useSettings } from '../store/useSettings';
-import { fmt, dayLabel } from '../services/format';
+import { fmt, dayLabel, parseLocalDate } from '../services/format';
 import { isUnbudgeted, lineActual } from '../services/budget';
 import { TxnDetailModal } from './TxnDetailModal';
 import { AddSheet } from '../flows/AddSheet';
@@ -75,7 +75,7 @@ export function ActivityScreen() {
       if (q && !t.merchant.toLowerCase().includes(q.toLowerCase())) return false;
 
       // Date range
-      const d = new Date(t.date);
+      const d = parseLocalDate(t.date);
       if (filters.dateRange === 'today') {
         if (d.toDateString() !== now.toDateString()) return false;
       } else if (filters.dateRange === 'week') {
@@ -84,8 +84,12 @@ export function ActivityScreen() {
       } else if (filters.dateRange === 'month') {
         if (d.getFullYear() !== now.getFullYear() || d.getMonth() !== now.getMonth()) return false;
       } else if (filters.dateRange === 'custom') {
-        if (filters.customFrom && d < new Date(filters.customFrom)) return false;
-        if (filters.customTo && d > new Date(filters.customTo + 'T23:59:59')) return false;
+        if (filters.customFrom && d < parseLocalDate(filters.customFrom)) return false;
+        if (filters.customTo) {
+          const to = parseLocalDate(filters.customTo);
+          to.setHours(23, 59, 59, 999);
+          if (d > to) return false;
+        }
       }
 
       // Categories

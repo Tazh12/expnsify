@@ -7,7 +7,7 @@ import { Card, Icon, Tap } from '../components';
 import { CategoryEditor } from '../components/CategoryEditor';
 import { useCategories, type Category } from '../store/useCategories';
 import { useExpenses } from '../store/useExpenses';
-import { fmt } from '../services/format';
+import { fmt, parseLocalDate } from '../services/format';
 
 interface Props {
   onClose: () => void;
@@ -22,7 +22,7 @@ export function CategoriesScreen({ onClose }: Props) {
 
   const now = new Date();
   const monthExpenses = expenses.filter(t => {
-    const d = new Date(t.date);
+    const d = parseLocalDate(t.date);
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   });
 
