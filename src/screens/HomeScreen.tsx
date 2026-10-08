@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../theme';
 import { Card, Icon, Tap, CarryIncomeCard } from '../components';
 import { AddMenu } from '../components/AddMenu';
@@ -24,11 +25,48 @@ interface Props {
   onChangeMonth: (delta: number) => void;
 }
 
+type DeclinedCarry = Record<string, string[]>;
+
+const declinedCarryCache = new Map<string, DeclinedCarry>();
+
+function declinedCarryKey(userId: string) {
+  return `@tally:declined-income-carry:${userId}`;
+}
+
+async function readDeclinedCarry(userId: string): Promise<DeclinedCarry> {
+  const cached = declinedCarryCache.get(userId);
+  if (cached) return cached;
+  try {
+    const raw = await AsyncStorage.getItem(declinedCarryKey(userId));
+    const parsed = raw ? JSON.parse(raw) : {};
+    const saved = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as DeclinedCarry : {};
+    declinedCarryCache.set(userId, saved);
+    return saved;
+  } catch {
+    const empty: DeclinedCarry = {};
+    declinedCarryCache.set(userId, empty);
+    return empty;
+  }
+}
+
+async function rememberDeclinedCarry(userId: string, month: string, templateKeys: string[]): Promise<DeclinedCarry> {
+  const current = declinedCarryCache.get(userId) ?? await readDeclinedCarry(userId);
+  const next = {
+    ...current,
+    [month]: [...new Set([...(current[month] ?? []), ...templateKeys])],
+  };
+  declinedCarryCache.set(userId, next);
+  try {
+    await AsyncStorage.setItem(declinedCarryKey(userId), JSON.stringify(next));
+  } catch {}
+  return next;
+}
+
 export function HomeScreen({ month, onChangeMonth }: Props) {
   const C = useTheme();
   const { isWide } = useLayout();
   const key = monthKey(month);
-  const { forMonth, ensureMonth, addMany, update, remove, loaded, dedupeRepeats, carryIncome, lines: allLines } = useBudget();
+  const { forMonth, ensureMonth, addMany, update, remove, loaded, dedupeRepeats, carryIncome, lines: allLines, uid } = useBudget();
   const allMeta = useBudgetGroups(s => s.all);
   const lines = forMonth(key);
   const { expenses } = useExpenses();
@@ -38,6 +76,9 @@ export function HomeScreen({ month, onChangeMonth }: Props) {
 
   const [editor, setEditor] = useState<{ section: BudgetSectionId; line: BudgetLine | null } | null>(null);
   const [skipCarry, setSkipCarry] = useState<Record<string, boolean>>({});
+  const [declinedCarry, setDeclinedCarry] = useState<DeclinedCarry | null>(
+    () => (uid ? declinedCarryCache.get(uid) ?? null : null),
+  );
 
   useEffect(() => {
     if (!loaded) return;
@@ -45,6 +86,24 @@ export function HomeScreen({ month, onChangeMonth }: Props) {
       .then(() => dedupeRepeats(key))
       .catch(() => {});
   }, [key, loaded]);
+
+  useEffect(() => {
+    if (!uid) {
+      setDeclinedCarry(null);
+      return;
+    }
+    const cached = declinedCarryCache.get(uid);
+    if (cached) {
+      setDeclinedCarry(cached);
+      return;
+    }
+    let active = true;
+    setDeclinedCarry(null);
+    readDeclinedCarry(uid).then(saved => {
+      if (active) setDeclinedCarry(saved);
+    });
+    return () => { active = false; };
+  }, [uid]);
 
   useEffect(() => {
     if (!loaded || lines.length === 0) return;
@@ -74,10 +133,11 @@ export function HomeScreen({ month, onChangeMonth }: Props) {
     () => summarizeMonth(lines, monthExpenses, convert),
     [lines, monthExpenses, convert],
   );
-  const carryOffers = useMemo(
-    () => skipCarry[key] ? [] : incomeCarryOffers(allLines, key),
-    [allLines, key, skipCarry],
-  );
+  const carryOffers = useMemo(() => {
+    if (!declinedCarry || skipCarry[key]) return [];
+    const declined = new Set(declinedCarry[key] ?? []);
+    return incomeCarryOffers(allLines, key).filter(o => !declined.has(o.templateKey));
+  }, [allLines, key, skipCarry, declinedCarry]);
 
   const monthLabel = month.toLocaleString('en-US', { month: 'long', year: 'numeric' });
   const [mName, mYear] = monthLabel.split(' ');
@@ -253,6 +313,11 @@ export function HomeScreen({ month, onChangeMonth }: Props) {
             carryIncome(key, carryOffers.map(o => o.templateKey)).catch(() => {});
           }}
           onSkip={() => setSkipCarry(s => ({ ...s, [key]: true }))}
+          onDecline={() => {
+            if (!uid) return;
+            const templateKeys = carryOffers.map(o => o.templateKey);
+            rememberDeclinedCarry(uid, key, templateKeys).then(setDeclinedCarry);
+          }}
         />
 
         <UpcomingPayments

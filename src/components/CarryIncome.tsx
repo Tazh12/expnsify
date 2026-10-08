@@ -13,12 +13,14 @@ export function CarryIncomeCard({
   preferredCurrency,
   onAdd,
   onSkip,
+  onDecline,
 }: {
   month: string;
   offers: IncomeCarryOffer[];
   preferredCurrency: string;
   onAdd: () => void;
   onSkip: () => void;
+  onDecline: () => void;
 }) {
   const C = useTheme();
   if (offers.length === 0) return null;
@@ -48,7 +50,7 @@ export function CarryIncomeCard({
           </View>
         ))}
       </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 16 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 16, marginTop: 16 }}>
         <Tap
           onPress={onAdd}
           haptic
@@ -64,6 +66,9 @@ export function CarryIncomeCard({
         </Tap>
         <Tap onPress={onSkip} accessibilityLabel="Not now" style={{ minHeight: 44, justifyContent: 'center' }}>
           <Text style={{ fontSize: 14, color: C.muted }}>Not now</Text>
+        </Tap>
+        <Tap onPress={onDecline} accessibilityLabel="Don't add" style={{ minHeight: 44, justifyContent: 'center' }}>
+          <Text style={{ fontSize: 14, color: C.muted }}>Don't add</Text>
         </Tap>
       </View>
     </Card>
