@@ -17,6 +17,7 @@ export interface Settings {
   notifyBudget: boolean;
   budgetReminderDay: number;
   notifyDueDates: boolean;
+  captureLocation: boolean;
 }
 
 const DEFAULTS: Settings = {
@@ -31,6 +32,7 @@ const DEFAULTS: Settings = {
   notifyBudget: true,
   budgetReminderDay: 1,
   notifyDueDates: true,
+  captureLocation: false,
 };
 
 const KEY = '@tally:settings';
@@ -54,6 +56,7 @@ function snapshot(current: SettingsState): Settings {
     notifyBudget: current.notifyBudget,
     budgetReminderDay: current.budgetReminderDay,
     notifyDueDates: current.notifyDueDates,
+    captureLocation: current.captureLocation,
   };
 }
 

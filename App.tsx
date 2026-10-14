@@ -28,6 +28,8 @@ import { CategoriesScreen } from './src/screens/CategoriesScreen';
 import AuthScreen from './src/screens/AuthScreen';
 import { AddSheet } from './src/flows/AddSheet';
 import { RecapModal } from './src/flows/RecapModal';
+import { UpgradeModal } from './src/flows/UpgradeModal';
+import { useAiUsage } from './src/store/useAiUsage';
 
 export default function App() {
   const [fontsLoaded, fontError] = useFonts({
@@ -98,6 +100,7 @@ export default function App() {
         setInitializing(false);
 
         if (firebaseUser) {
+          useAiUsage.getState().refresh();
           unsubCats.current = subCats(firebaseUser.uid);
           unsubExp.current = subExp(firebaseUser.uid);
           unsubBudget.current = subBudget(firebaseUser.uid);
@@ -219,6 +222,7 @@ export default function App() {
           pendingShare={pendingShare}
         />
         <RecapModal open={recapOpen} onClose={() => setRecapOpen(false)} />
+        <UpgradeModal />
 
         <Modal visible={catsOpen} animationType="slide" presentationStyle="fullScreen">
           <ThemeContext.Provider value={theme}>

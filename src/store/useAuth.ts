@@ -5,6 +5,7 @@ import {
   createUserWithEmailAndPassword,
   updateProfile,
   signOut as firebaseSignOut,
+  sendPasswordResetEmail,
   GoogleAuthProvider,
   signInWithCredential,
   type User,
@@ -23,6 +24,7 @@ interface AuthState {
   registerEmail: (email: string, password: string, displayName: string) => Promise<void>;
   updateDisplayName: (name: string) => Promise<void>;
   signOut: () => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<void>;
 }
 
 export const useAuth = create<AuthState>((set) => ({
@@ -49,6 +51,10 @@ export const useAuth = create<AuthState>((set) => ({
 
   signOut: async () => {
     await firebaseSignOut(auth);
+  },
+
+  sendPasswordReset: async (email) => {
+    await sendPasswordResetEmail(auth, email);
   },
 }));
 

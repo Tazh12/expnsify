@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, ScrollView, Alert, Modal, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useTheme, PALETTES, ACCENTS, type PaletteId, type AccentId } from '../theme';
@@ -13,6 +13,9 @@ import { CurrencyPickerSheet } from '../components/CurrencyPicker';
 import { requestNotificationPermission, syncNotifications, ordinalDay } from '../services/notifications';
 import { useBudget } from '../store/useBudget';
 import { monthKey } from '../services/month';
+import { useAiUsage } from '../store/useAiUsage';
+import { aiRemainingLabel } from '../flows/UpgradeModal';
+import { deleteAccount } from '../services/account';
 
 function ratesAge(fetchedAt: number): string {
   const mins = Math.round((Date.now() - fetchedAt) / 60000);
@@ -45,6 +48,10 @@ export function SettingsScreen({ onOpenCategories }: Props) {
   const { user, signOut, updateDisplayName } = useAuth();
 
   const rates = useRates();
+  const aiUsed = useAiUsage(s => s.used);
+  const aiLimit = useAiUsage(s => s.limit);
+  const aiLoaded = useAiUsage(s => s.loaded);
+  useEffect(() => { useAiUsage.getState().refresh(); }, []);
   const [currencyPickerOpen, setCurrencyPickerOpen] = useState(false);
   const [editNameOpen, setEditNameOpen] = useState(false);
   const [notifyOpen, setNotifyOpen] = useState(false);
@@ -326,12 +333,23 @@ export function SettingsScreen({ onOpenCategories }: Props) {
           label="Notifications"
           detail={settings.notifyBudget ? `Budget on the ${ordinalDay(settings.budgetReminderDay)}` : 'Off'}
           onPress={() => setNotifyOpen(true)}
+        />
+        <SettingsRow
+          icon={<Icon name="pin" size={18} stroke={C.cream}/>}
+          label="Save purchase location"
+          detail="Off unless you turn this on"
+          control={<Toggle on={settings.captureLocation} onChange={v => settings.set('captureLocation', v)}/>}
           isLast
         />
       </Card>
 
       <SectionHeader title="AI"/>
       <Card style={{ padding: 4 }}>
+        <SettingsRow
+          icon={<Icon name="sparkles" size={18} stroke={C.sage}/>}
+          label="AI actions"
+          detail={aiRemainingLabel(aiUsed, aiLimit, aiLoaded)}
+        />
         <SettingsRow
           icon={<Icon name="sparkles" size={18} stroke={C.sage}/>}
           label="Auto-categorize"
@@ -348,7 +366,23 @@ export function SettingsScreen({ onOpenCategories }: Props) {
       <SectionHeader title="Data"/>
       <Card style={{ padding: 4 }}>
         <SettingsRow icon={<Icon name="export" size={18} stroke={C.cream}/>} label="Export all data" onPress={() => Alert.alert('Use the Reports screen to export.')}/>
-        <SettingsRow icon={<Icon name="trash" size={18} stroke={C.rose}/>} label="Delete account" onPress={() => Alert.alert('Delete account', 'This will wipe all data.', [{ text: 'Cancel' }, { text: 'Delete', style: 'destructive' }])} isLast/>
+        <SettingsRow icon={<Icon name="trash" size={18} stroke={C.rose}/>} label="Delete account" onPress={() => Alert.alert(
+          'Delete account',
+          'This permanently deletes your expenses, budget, and sign-in. This cannot be undone.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Delete',
+              style: 'destructive',
+              onPress: () => {
+                deleteAccount().catch(e => {
+                  const msg = e instanceof Error ? e.message : 'Please try again.';
+                  Alert.alert('Could not delete account', msg.includes('recent') ? 'Sign out, sign back in, and try again.' : msg);
+                });
+              },
+            },
+          ],
+        )} isLast/>
       </Card>
 
       <Text style={{ textAlign: 'center', marginTop: 28, color: C.subtle, fontSize: 12 }}>

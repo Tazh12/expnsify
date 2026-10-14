@@ -8,3 +8,12 @@ enabled = true
 
 [vars]
 # GROQ_API_KEY set via: wrangler secret put GROQ_API_KEY
+# Public Firebase web API key. It identifies the project; it is not a secret.
+FIREBASE_API_KEY = "AIzaSyAoWSmnr7S-dkGR2JcKYaimgYbzzt53k_A"
+
+# Create with: npx wrangler kv namespace create USAGE
+# Then replace both ids. Until then the worker fails closed instead of leaving AI uncapped.
+[[kv_namespaces]]
+binding = "USAGE"
+id = "00000000000000000000000000000001"
+preview_id = "00000000000000000000000000000002"

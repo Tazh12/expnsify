@@ -10,6 +10,17 @@ import { useRates } from './useRates';
 export type TxnType = 'expense' | 'income';
 export type TxnSource = 'manual' | 'voice' | 'photo' | 'share' | 'pdf' | null;
 
+export interface LineItem {
+  name: string;
+  amount: number;
+}
+
+export interface ExpenseLocation {
+  lat: number;
+  lng: number;
+  address?: string;
+}
+
 export interface Expense {
   id: string;
   merchant: string;
@@ -24,6 +35,8 @@ export interface Expense {
   type: TxnType;
   unbudgeted: boolean;
   source: TxnSource;
+  line_items: LineItem[];
+  location: ExpenseLocation | null;
 }
 
 interface ExpensesState {
@@ -71,7 +84,29 @@ function fromDoc(id: string, raw: Record<string, unknown>): Expense {
     type: raw.type === 'income' ? 'income' : 'expense',
     unbudgeted: Boolean(raw.unbudgeted),
     source: (raw.source as TxnSource) ?? null,
+    line_items: lineItemsFrom(raw.line_items),
+    location: locationFrom(raw.location),
   };
+}
+
+function lineItemsFrom(raw: unknown): LineItem[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map(item => {
+      const row = item as { name?: unknown; amount?: unknown };
+      return { name: String(row?.name ?? '').trim(), amount: Number(row?.amount) || 0 };
+    })
+    .filter(item => item.name);
+}
+
+function locationFrom(raw: unknown): ExpenseLocation | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as { lat?: unknown; lng?: unknown; address?: unknown };
+  const lat = Number(row.lat);
+  const lng = Number(row.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const address = typeof row.address === 'string' && row.address.trim() ? row.address.trim() : undefined;
+  return address ? { lat, lng, address } : { lat, lng };
 }
 
 export const useExpenses = create<ExpensesState>((set, get) => ({
@@ -104,6 +139,8 @@ export const useExpenses = create<ExpensesState>((set, get) => ({
       type: data.type ?? 'expense',
       unbudgeted: data.unbudgeted ?? !data.line_id,
       source: data.source ?? null,
+      line_items: data.line_items ?? [],
+      location: data.location ?? null,
     });
   },
 

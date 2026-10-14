@@ -19,6 +19,8 @@ cd proxy
 npm install
 # Set your Groq API key as a secret (never shipped in the app)
 wrangler secret put GROQ_API_KEY
+npx wrangler kv namespace create USAGE
+# Put the printed id into proxy/wrangler.toml (binding USAGE). Until that id is real, AI routes refuse requests.
 wrangler deploy
 ```
 
@@ -61,3 +63,7 @@ Share-to-app (Mail / Files → Expnsify) needs this native build. In-app PDF upl
 - **Red states** — unbudgeted spend, or over the line
 - **Reminders** — monthly “time to budget” and upcoming due dates (on this device)
 - **Web** — sidebar + ledger table from 900px wide; tab bar on phones
+- **Line items** — a receipt scan can keep the items under the total
+- **AI cap** — scan, voice, insights, and Ask Tally need a signed-in Firebase token. Free accounts get 10 actions a month. The count lives in the worker, not in the app. Paid is reserved for later and cannot be turned on from the phone.
+- **Location** — off until you enable “Save purchase location” in Settings
+- **Export** — the month’s CSV and PDF live on Reports

@@ -14,7 +14,7 @@ type Tab = 'login' | 'register';
 
 export default function AuthScreen() {
   const theme = useTheme();
-  const { signInEmail, registerEmail } = useAuth();
+  const { signInEmail, registerEmail, sendPasswordReset } = useAuth();
 
   const [tab, setTab] = useState<Tab>('login');
   const [name, setName] = useState('');
@@ -100,6 +100,26 @@ export default function AuthScreen() {
             secureTextEntry
             textContentType={tab === 'login' ? 'password' : 'newPassword'}
           />
+
+          {tab === 'login' && (
+            <Pressable
+              onPress={async () => {
+                if (!email.trim()) {
+                  Alert.alert('Enter your email', 'Type the email for this account, then tap Forgot password.');
+                  return;
+                }
+                try {
+                  await sendPasswordReset(email.trim());
+                  Alert.alert('Check your email', 'We sent a link to reset your password.');
+                } catch (e: unknown) {
+                  const msg = e instanceof Error ? e.message : 'Please try again.';
+                  Alert.alert('Could not send reset', msg);
+                }
+              }}
+            >
+              <Text style={{ color: theme.muted, fontSize: 13, textAlign: 'right' }}>Forgot password</Text>
+            </Pressable>
+          )}
 
           <Pressable
             style={({ pressed }) => [s.btn, pressed && { opacity: 0.85 }]}

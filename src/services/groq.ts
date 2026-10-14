@@ -1,6 +1,9 @@
 import type { Category } from '../store/useCategories';
 import type { BudgetLine } from '../store/budgetTypes';
+import type { Expense, LineItem } from '../store/useExpenses';
 import * as FileSystem from 'expo-file-system/legacy';
+import { auth } from './firebase';
+import { publishAiLimit, publishAiUsage, type UsageSnapshot } from './aiUsageBridge';
 
 const proxyUrl = process.env.EXPO_PUBLIC_PROXY_URL ?? '';
 
@@ -20,6 +23,77 @@ export interface ScannedExpense {
   lineId: string | null;
   matchConfidence: number | null;
   isPaymentConfirmation: boolean;
+  line_items: LineItem[];
+}
+
+export type AiUsage = UsageSnapshot;
+
+export class AiLimitError extends Error {
+  used: number;
+  limit: number;
+  resetsAt: string;
+  code: 'limit_reached' | 'rate_limited';
+
+  constructor(body: { used?: number; limit?: number; resetsAt?: string; error?: string }) {
+    super(body.error === 'rate_limited' ? 'Too many AI requests. Wait a minute and try again.' : 'You have used this month’s AI actions.');
+    this.code = body.error === 'rate_limited' ? 'rate_limited' : 'limit_reached';
+    this.used = body.used ?? 0;
+    this.limit = body.limit ?? 10;
+    this.resetsAt = body.resetsAt ?? '';
+  }
+}
+
+let lastLimited = false;
+
+export function takeAiLimit(): boolean {
+  const hit = lastLimited;
+  lastLimited = false;
+  return hit;
+}
+
+async function authHeaders(extra?: Record<string, string>): Promise<Record<string, string>> {
+  const headers: Record<string, string> = { ...extra };
+  const user = auth.currentUser;
+  if (user) headers.Authorization = `Bearer ${await user.getIdToken()}`;
+  return headers;
+}
+
+function readUsage(res: Response): AiUsage | null {
+  const used = res.headers.get('X-Ai-Used');
+  const limit = res.headers.get('X-Ai-Limit');
+  if (used == null || limit == null) return null;
+  return {
+    used: Number(used) || 0,
+    limit: Number(limit) || 10,
+    resetsAt: res.headers.get('X-Ai-Resets'),
+    plan: res.headers.get('X-Ai-Plan') === 'paid' ? 'paid' : 'free',
+  };
+}
+
+function remember(res: Response) {
+  const usage = readUsage(res);
+  if (usage) publishAiUsage(usage);
+}
+
+async function throwIfLimited(res: Response): Promise<void> {
+  if (res.status !== 429) return;
+  let body: { used?: number; limit?: number; resetsAt?: string; error?: string } = {};
+  try {
+    body = await res.json();
+  } catch {
+    body = {};
+  }
+  const error = new AiLimitError(body);
+  publishAiLimit(error);
+  throw error;
+}
+
+function lineItemsOf(raw: unknown): LineItem[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item): item is { name: string; amount?: number } => !!item && typeof (item as { name?: unknown }).name === 'string')
+    .map(item => ({ name: item.name.trim(), amount: Number(item.amount) || 0 }))
+    .filter(item => item.name);
 }
 
 export interface ScanLine {
@@ -83,7 +157,7 @@ async function scan(body: {
   try {
     const res = await fetch(`${proxyUrl}/scan`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         imageBase64: body.imageBase64,
         mimeType: body.mimeType,
@@ -93,10 +167,12 @@ async function scan(body: {
         lines: body.lines,
       }),
     });
+    await throwIfLimited(res);
     if (!res.ok) {
       console.error('scan failed', res.status, await res.text());
       return null;
     }
+    remember(res);
     const json = await res.json() as ScannedExpense;
     const amount = Number(json.amount);
     if (!Number.isFinite(amount)) {
@@ -109,8 +185,13 @@ async function scan(body: {
       lineId: json.lineId ?? null,
       matchConfidence: json.matchConfidence ?? null,
       isPaymentConfirmation: Boolean(json.isPaymentConfirmation),
+      line_items: lineItemsOf(json.line_items),
     };
   } catch (e) {
+    if (e instanceof AiLimitError) {
+      lastLimited = true;
+      return null;
+    }
     console.error('scan error', e);
     return null;
   }
@@ -147,17 +228,83 @@ export async function transcribeAudio(uri: string): Promise<string | null> {
     const { mimeType } = audioMeta(uri);
     const res = await fetch(`${proxyUrl}/transcribe`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ audioBase64, mimeType }),
     });
+    await throwIfLimited(res);
     if (!res.ok) {
       console.error('transcribe failed', res.status, await res.text());
       return null;
     }
+    remember(res);
     const json = await res.json() as { text: string };
     return json.text ?? null;
   } catch (e) {
+    if (e instanceof AiLimitError) {
+      lastLimited = true;
+      return null;
+    }
     console.error('transcribe error', e);
     return null;
   }
+}
+
+export async function fetchUsage(): Promise<AiUsage | null> {
+  if (!proxyUrl || !auth.currentUser) return null;
+  try {
+    const res = await fetch(`${proxyUrl}/usage`, { headers: await authHeaders() });
+    if (!res.ok) return null;
+    const json = await res.json() as AiUsage;
+    return {
+      used: json.used ?? 0,
+      limit: json.limit ?? 10,
+      resetsAt: json.resetsAt ?? null,
+      plan: json.plan === 'paid' ? 'paid' : 'free',
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchInsights(
+  expenses: Pick<Expense, 'merchant' | 'amount' | 'currency' | 'date' | 'category_id' | 'note' | 'line_items'>[],
+  categories: { id: string; name: string }[],
+): Promise<string[]> {
+  const res = await fetch(`${proxyUrl}/insights`, {
+    method: 'POST',
+    headers: await authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ expenses, categories }),
+  });
+  await throwIfLimited(res);
+  if (!res.ok) return [];
+  remember(res);
+  const json = await res.json() as { insights?: string[] };
+  return Array.isArray(json.insights) ? json.insights.filter(line => typeof line === 'string' && line.trim()) : [];
+}
+
+export async function askTally(
+  question: string,
+  expenses: Pick<Expense, 'id' | 'merchant' | 'amount' | 'date' | 'category_id' | 'note' | 'line_items'>[],
+): Promise<string[]> {
+  const res = await fetch(`${proxyUrl}/ask`, {
+    method: 'POST',
+    headers: await authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({
+      question,
+      expenses: expenses.map(t => ({
+        id: t.id,
+        merchant: t.merchant,
+        amount: t.amount,
+        date: t.date,
+        category_id: t.category_id,
+        note: t.note,
+        items: (t.line_items ?? []).map(item => item.name),
+      })),
+    }),
+  });
+  await throwIfLimited(res);
+  if (!res.ok) return [];
+  remember(res);
+  const json = await res.json() as { ids?: string[] };
+  return Array.isArray(json.ids) ? json.ids.filter(id => typeof id === 'string') : [];
 }

@@ -22,6 +22,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       NSCameraUsageDescription: 'Expnsify uses the camera to scan receipts.',
       NSPhotoLibraryUsageDescription: 'Expnsify reads receipts from your photo library.',
       NSMicrophoneUsageDescription: 'Expnsify lets you log spending by voice.',
+      NSLocationWhenInUseUsageDescription: 'Expnsify can save where a purchase happened, only if you turn that on.',
     },
   },
   android: {
@@ -48,6 +49,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'expo-av',
       {
         microphonePermission: 'Expnsify lets you log spending by voice.',
+      },
+    ],
+    [
+      'expo-location',
+      {
+        locationWhenInUsePermission: 'Expnsify can save where a purchase happened, only if you turn that on.',
       },
     ],
     [

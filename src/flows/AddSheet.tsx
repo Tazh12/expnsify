@@ -20,7 +20,8 @@ import { useBudgetGroups } from '../store/useBudgetGroups';
 import { useSettings } from '../store/useSettings';
 import { useRates, FRANKFURTER_CURRENCIES } from '../store/useRates';
 import { useAuth } from '../store/useAuth';
-import { scanImage, scanText, scanPdf, transcribeAudio, type ScannedExpense } from '../services/groq';
+import { scanImage, scanText, scanPdf, transcribeAudio, takeAiLimit, type ScannedExpense } from '../services/groq';
+import { capturePurchaseLocation } from '../services/location';
 import { uid, fmt, currencySymbol, parseLocalDate, toLocalDateISO } from '../services/format';
 import { CurrencyPickerSheet } from '../components/CurrencyPicker';
 import { CompletePaymentSheet } from './CompletePaymentSheet';
@@ -40,6 +41,15 @@ function normName(s: string): string {
 
 function spendLines(lines: BudgetLine[]): BudgetLine[] {
   return lines.filter(l => l.section !== 'income');
+}
+
+async function maybeLocation() {
+  if (!useSettings.getState().captureLocation) return null;
+  try {
+    return await capturePurchaseLocation();
+  } catch {
+    return null;
+  }
 }
 
 function preferUnpaid(lines: BudgetLine[]): BudgetLine[] {
@@ -189,6 +199,10 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
     message = 'Could not read that receipt. Try again, or enter it manually.',
     title = 'Could not read that receipt',
   ) => {
+    if (takeAiLimit()) {
+      setPhase('pick');
+      return;
+    }
     Alert.alert(title, message);
     setPhase('pick');
   };
@@ -379,6 +393,8 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
       note: scanned.note,
       receipt_uri: uri,
       confidence: scanned.confidence ?? null,
+      line_items: scanned.line_items ?? [],
+      location: await maybeLocation(),
       line_id: matchedLine.id,
       type: matchedLine.section === 'income' ? 'income' : 'expense',
       unbudgeted: false,
@@ -701,6 +717,8 @@ function ReviewPhase({
         ...payload,
         receipt_uri: storedUri,
         confidence: scanned?.confidence ?? null,
+        line_items: scanned?.line_items ?? [],
+        location: await maybeLocation(),
       });
     }
     setSaveState('done');
@@ -720,10 +738,23 @@ function ReviewPhase({
         </View>
         <Text style={{ fontSize: 12, color: C.muted, marginBottom: 18 }}>
           {editExpense ? 'Edit any field.' : 'Tap any field to fix it.'}
-          {!editExpense && scanned?.confidence != null && (
-            <Text style={{ color: C.sage }}>{' '}✦ confidence {Math.round(scanned.confidence * 100)}%</Text>
-          )}
         </Text>
+
+        {!editExpense && (scanned?.line_items?.length ?? 0) > 0 && (
+          <Card style={{ padding: 14, marginBottom: 12 }}>
+            <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.06, textTransform: 'uppercase', marginBottom: 8 }}>
+              Line items
+            </Text>
+            {scanned!.line_items.map((item, i) => (
+              <View key={`${item.name}-${i}`} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+                <Text style={{ flex: 1, fontSize: 14, color: C.cream }} numberOfLines={1}>{item.name}</Text>
+                {item.amount > 0 && (
+                  <Text style={{ fontSize: 13, color: C.muted, marginLeft: 8 }}>{item.amount.toFixed(2)}</Text>
+                )}
+              </View>
+            ))}
+          </Card>
+        )}
 
         {receiptUri && (
           <View style={{

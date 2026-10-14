@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   View, Text, ScrollView, TextInput, Modal, Pressable,
-  TouchableOpacity, StyleSheet, Alert,
+  TouchableOpacity, StyleSheet, Alert, ActivityIndicator,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useTheme } from '../theme';
@@ -15,6 +15,7 @@ import { fmt, dayLabel, parseLocalDate } from '../services/format';
 import { isUnbudgeted, lineActual } from '../services/budget';
 import { TxnDetailModal } from './TxnDetailModal';
 import { AddSheet } from '../flows/AddSheet';
+import { askTally, AiLimitError } from '../services/groq';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,6 +41,14 @@ function filtersActive(f: Filters) {
   return f.dateRange !== 'all' || f.categories.length > 0 || f.merchants.length > 0;
 }
 
+function matchesQuery(t: Expense, q: string) {
+  const needle = q.trim().toLowerCase();
+  if (!needle) return true;
+  if (t.merchant.toLowerCase().includes(needle)) return true;
+  if (t.note?.toLowerCase().includes(needle)) return true;
+  return (t.line_items ?? []).some(item => item.name.toLowerCase().includes(needle));
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export function ActivityScreen() {
@@ -56,6 +65,8 @@ export function ActivityScreen() {
   };
 
   const [q, setQ] = useState('');
+  const [asking, setAsking] = useState(false);
+  const [askedIds, setAskedIds] = useState<string[] | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [detailExpense, setDetailExpense] = useState<Expense | null>(null);
@@ -72,7 +83,9 @@ export function ActivityScreen() {
     const now = new Date();
     return expenses.filter(t => {
       // Text search
-      if (q && !t.merchant.toLowerCase().includes(q.toLowerCase())) return false;
+      if (askedIds) {
+        if (!askedIds.includes(t.id)) return false;
+      } else if (q && !matchesQuery(t, q)) return false;
 
       // Date range
       const d = parseLocalDate(t.date);
@@ -100,7 +113,23 @@ export function ActivityScreen() {
 
       return true;
     });
-  }, [expenses, q, filters]);
+  }, [expenses, q, filters, askedIds]);
+
+  const ask = async () => {
+    const question = q.trim();
+    if (!question || asking) return;
+    setAsking(true);
+    try {
+      const ids = await askTally(question, expenses);
+      setAskedIds(ids);
+    } catch (e) {
+      if (!(e instanceof AiLimitError)) {
+        Alert.alert('Could not ask Tally', 'Try again in a moment.');
+      }
+    } finally {
+      setAsking(false);
+    }
+  };
 
   const grouped = byDay(filtered);
   const active = filtersActive(filters);
@@ -131,13 +160,13 @@ export function ActivityScreen() {
             <Icon name="search" size={16} stroke={C.muted}/>
             <TextInput
               value={q}
-              onChangeText={setQ}
-              placeholder="Search merchants"
+              placeholder="Search merchants, notes, items"
+              onChangeText={(text) => { setQ(text); setAskedIds(null); }}
               placeholderTextColor={C.subtle}
               style={{ flex: 1, fontSize: 14, color: C.cream, fontFamily: C.fonts.regular }}
             />
             {q.length > 0 && (
-              <Tap onPress={() => setQ('')}>
+              <Tap onPress={() => { setQ(''); setAskedIds(null); }}>
                 <Icon name="x" size={14} stroke={C.muted}/>
               </Tap>
             )}
@@ -223,8 +252,27 @@ export function ActivityScreen() {
             );
           })}
           {grouped.length === 0 && (
-            <View style={{ padding: 60, alignItems: 'center' }}>
-              <Text style={{ fontFamily: C.fonts.serifItalic, fontSize: 20, color: C.muted }}>nothing matches.</Text>
+            <View style={{ padding: 48, alignItems: 'center' }}>
+              <Text style={{ fontFamily: C.fonts.serifItalic, fontSize: 20, color: C.muted }}>
+                {askedIds ? 'Tally didn’t find a match.' : 'nothing matches.'}
+              </Text>
+              {q.trim().length > 0 && !askedIds && (
+                <Tap
+                  onPress={ask}
+                  haptic
+                  style={{
+                    marginTop: 16, paddingVertical: 12, paddingHorizontal: 18, borderRadius: 14,
+                    backgroundColor: C.sage,
+                  }}
+                >
+                  {asking
+                    ? <ActivityIndicator color="#0E0E0C"/>
+                    : <Text style={{ color: '#0E0E0C', fontSize: 14, fontWeight: '600' }}>Ask Tally</Text>}
+                </Tap>
+              )}
+              {q.trim().length > 0 && !askedIds && (
+                <Text style={{ fontSize: 12, color: C.subtle, marginTop: 8 }}>Uses one AI action</Text>
+              )}
             </View>
           )}
         </View>

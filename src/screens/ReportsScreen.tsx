@@ -17,10 +17,11 @@ import { lineActual, summarizeMonth, sectionTotal } from '../services/budget';
 import { type BudgetSection } from '../store/budgetTypes';
 import { useLayout } from '../hooks/useLayout';
 import { ordinalDay } from '../services/notifications';
+import { exportMonthPdf } from '../services/export';
 
 interface Props { onOpenRecap?: () => void }
 
-export function ReportsScreen(_props: Props) {
+export function ReportsScreen({ onOpenRecap }: Props) {
   const C = useTheme();
   const { isWide } = useLayout();
   const { expenses } = useExpenses();
@@ -62,6 +63,22 @@ export function ReportsScreen(_props: Props) {
     const path = FileSystem.cacheDirectory + 'expnsify-budget.csv';
     await FileSystem.writeAsStringAsync(path, header + rows, { encoding: FileSystem.EncodingType.UTF8 });
     await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: 'Export budget' });
+  };
+
+  const exportPdf = async () => {
+    try {
+      await exportMonthPdf({
+        monthLabel,
+        expenses: monthExpenses,
+        lines,
+        currency: preferredCurrency,
+        leftToBudget: summary.leftToBudget,
+        spent: summary.spent,
+      });
+    } catch (e) {
+      console.error('pdf export', e);
+      Alert.alert('Could not export PDF', 'Please try again.');
+    }
   };
 
   const shift = (d: number) => {
@@ -190,9 +207,21 @@ export function ReportsScreen(_props: Props) {
         </>
       )}
 
+      <SectionHeader title="This week"/>
+      <Card style={{ padding: 4 }}>
+        <SettingsRow
+          icon={<Icon name="sparkles" size={18} stroke={C.sage}/>}
+          label="Weekly comparison"
+          detail="Your spending, side by side"
+          onPress={onOpenRecap}
+          isLast
+        />
+      </Card>
+
       <SectionHeader title="Export"/>
       <Card style={{ padding: 4 }}>
-        <SettingsRow icon={<Icon name="export" size={18} stroke={C.cream}/>} label="Export this month as .csv" detail="Budget + activity" onPress={exportCsv} isLast/>
+        <SettingsRow icon={<Icon name="export" size={18} stroke={C.cream}/>} label="Export this month as .csv" detail="Budget + activity" onPress={exportCsv}/>
+        <SettingsRow icon={<Icon name="export" size={18} stroke={C.cream}/>} label="Export this month as PDF" detail="Same month, for sharing" onPress={exportPdf} isLast/>
       </Card>
     </ScrollView>
   );

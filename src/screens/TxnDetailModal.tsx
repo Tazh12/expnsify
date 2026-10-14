@@ -89,7 +89,6 @@ export function TxnDetailModal({ expense: t, category, onClose }: Props) {
   const hasReceipt = !!displayUri && !imgError;
   const lostReceipt = !!t.receipt_uri && !displayUri;
   const isPdf = (displayUri ?? '').toLowerCase().includes('.pdf');
-  const confidencePct = t.confidence != null ? Math.round(t.confidence * 100) : null;
   const receiptLabel = hasReceipt
     ? (isPdf ? 'PDF attached' : 'Attached above')
     : RECEIPT_STORAGE_ENABLED
@@ -139,11 +138,6 @@ export function TxnDetailModal({ expense: t, category, onClose }: Props) {
                 <Text style={{ fontSize: 12, color: cat.color, fontFamily: C.fonts.regular, letterSpacing: 0.05 }}>
                   {cat.name}
                 </Text>
-                {confidencePct != null && (
-                  <View style={[sh.badge, { borderColor: C.hair, backgroundColor: C.surface }]}>
-                    <Text style={{ fontSize: 10, color: C.muted }}>AI {confidencePct}%</Text>
-                  </View>
-                )}
               </View>
 
               {/* Merchant + amount */}
@@ -176,6 +170,24 @@ export function TxnDetailModal({ expense: t, category, onClose }: Props) {
                 C={C}
                 valueColor={t.note ? C.cream : C.subtle}
               />
+
+              {(t.line_items?.length ?? 0) > 0 && (
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={{ fontSize: 12, color: C.muted, width: 80, marginBottom: 6 }}>Items</Text>
+                  {t.line_items.map((item, i) => (
+                    <View key={`${item.name}-${i}`} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
+                      <Text style={{ flex: 1, fontSize: 14, color: C.cream }} numberOfLines={1}>{item.name}</Text>
+                      {item.amount > 0 && (
+                        <Text style={{ fontSize: 13, color: C.muted, marginLeft: 8 }}>{item.amount.toFixed(2)}</Text>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {t.location?.address && (
+                <Row label="Near" value={t.location.address} C={C}/>
+              )}
 
               {/* Receipt */}
               <Tap

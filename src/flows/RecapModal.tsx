@@ -7,6 +7,7 @@ import { Card, Icon, Tap } from '../components';
 import { useExpenses, type Expense } from '../store/useExpenses';
 import { useCategories } from '../store/useCategories';
 import { fmt, parseLocalDate } from '../services/format';
+import { AiLimitError, fetchInsights } from '../services/groq';
 
 // ─── Shared type (mirrors ReportsScreen's DateFilter) ─────────────────────────
 
@@ -182,6 +183,39 @@ export function RecapModal({ open, onClose, dateFilter = DEFAULT_FILTER }: Props
   const topCatName  = topCatEntry ? (catMap[topCatEntry[0]]?.name ?? topCatEntry[0]) : null;
 
   const sparkPoints = buildSparkline(current, period);
+  const [insights, setInsights] = React.useState<string[]>([]);
+  const [insightState, setInsightState] = React.useState<'idle' | 'loading' | 'done'>('idle');
+
+  React.useEffect(() => {
+    if (!open) {
+      setInsights([]);
+      setInsightState('idle');
+    }
+  }, [open]);
+
+  const generateInsights = async () => {
+    if (insightState === 'loading') return;
+    setInsightState('loading');
+    try {
+      const lines = await fetchInsights(
+        current.map(t => ({
+          merchant: t.merchant,
+          amount: t.amount,
+          currency: t.currency,
+          date: t.date,
+          category_id: t.category_id,
+          note: t.note,
+          line_items: t.line_items,
+        })),
+        categories.map(c => ({ id: c.id, name: c.name })),
+      );
+      setInsights(lines);
+      setInsightState('done');
+    } catch (e) {
+      if (!(e instanceof AiLimitError)) setInsightState('idle');
+      else setInsightState('idle');
+    }
+  };
 
   // Date subtitle for week (Mon May 4 — Sun May 10)
   function ordinal(n: number) { const s=['th','st','nd','rd'],v=n%100; return n+(s[(v-20)%10]??s[v]??s[0]); }
@@ -259,6 +293,30 @@ export function RecapModal({ open, onClose, dateFilter = DEFAULT_FILTER }: Props
                 {period.bucketType === 'day' ? 'Daily flow' : period.bucketType === 'week' ? 'Weekly flow' : 'Monthly flow'}
               </Text>
               <Sparkline points={sparkPoints} xLabels={period.xLabels}/>
+            </Card>
+
+            <Card style={{ padding: 16, marginTop: 18 }}>
+              <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.04, textTransform: 'uppercase' }}>
+                Optional AI notes
+              </Text>
+              <Text style={{ fontSize: 13, color: C.muted, marginTop: 6, lineHeight: 18 }}>
+                The comparison above is calculated on this device. Generate insights sends this period to the model and uses one AI action.
+              </Text>
+              {insights.map((line, i) => (
+                <Text key={i} style={{ fontSize: 15, color: C.cream, marginTop: 12, lineHeight: 21 }}>{line}</Text>
+              ))}
+              {insightState === 'done' && insights.length === 0 && (
+                <Text style={{ fontSize: 14, color: C.muted, marginTop: 12 }}>No extra notes for this period.</Text>
+              )}
+              <Tap
+                onPress={generateInsights}
+                haptic
+                style={{ marginTop: 14, paddingVertical: 12, borderRadius: 12, backgroundColor: C.sage, alignItems: 'center' }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#0E0E0C' }}>
+                  {insightState === 'loading' ? 'Writing…' : 'Generate insights'}
+                </Text>
+              </Tap>
             </Card>
 
             <Tap onPress={onClose} haptic style={{ marginTop: 18, paddingVertical: 14, borderRadius: 14, backgroundColor: C.surface2, alignItems: 'center' }}>

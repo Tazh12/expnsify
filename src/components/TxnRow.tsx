@@ -161,8 +161,10 @@ export function TxnRow({
             <Text style={{ fontSize: 15, color: C.cream, fontWeight: '500' }} numberOfLines={1}>
               {t.merchant}
             </Text>
-            <Text style={{ fontSize: 12, color: warn ? C.rose : C.muted, marginTop: 2 }}>
+            <Text style={{ fontSize: 12, color: warn ? C.rose : C.muted, marginTop: 2 }} numberOfLines={1}>
               {warn ? (unbudgeted || t.unbudgeted ? 'Unbudgeted' : 'Over budget') : cat.name}
+              {(t.line_items?.length ?? 0) > 0 ? ` · ${t.line_items.length} item${t.line_items.length === 1 ? '' : 's'}` : ''}
+              {t.location?.address ? ` · near ${t.location.address}` : ''}
               {t.note && !warn ? ` · ${t.note}` : ''}
             </Text>
           </View>

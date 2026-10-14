@@ -150,11 +150,13 @@ const STATIC = {
 };
 
 export function buildTheme(paletteId: PaletteId, accentId: AccentId, fontId: FontId = 'default'): Theme {
+  const palette = PALETTES[paletteId] ?? PALETTES.midnight;
+  const accent = ACCENTS[accentId] ?? ACCENTS.sage;
   return {
-    id: paletteId,
-    isLight: paletteId === 'cream',
-    ...PALETTES[paletteId],
-    ...ACCENTS[accentId],
+    id: PALETTES[paletteId] ? paletteId : 'midnight',
+    isLight: (PALETTES[paletteId] ? paletteId : 'midnight') === 'cream',
+    ...palette,
+    ...accent,
     ...STATIC,
     fonts: FONTS[fontId] ?? FONTS.default,
   };
