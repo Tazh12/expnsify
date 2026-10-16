@@ -31,6 +31,7 @@ import { RecapModal } from './src/flows/RecapModal';
 import { UpgradeModal } from './src/flows/UpgradeModal';
 import { useAiUsage } from './src/store/useAiUsage';
 import { useViewMonth } from './src/store/useViewMonth';
+import { useNotificationSync } from './src/hooks/useNotificationSync';
 
 export default function App() {
   const [fontsLoaded, fontError] = useFonts({
@@ -55,6 +56,7 @@ export default function App() {
 
   const settings = useSettings();
   const { isWide } = useLayout();
+  useNotificationSync();
   const { setUser, setInitializing, initializing, user } = useAuth();
   const { subscribe: subCats, reset: resetCats } = useCategories();
   const { subscribe: subExp, reset: resetExp } = useExpenses();

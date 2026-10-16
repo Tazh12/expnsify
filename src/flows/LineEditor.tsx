@@ -25,6 +25,15 @@ function parseMoney(raw: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function lineHasSchedule(line: BudgetLine | null | undefined): boolean {
+  if (!line) return false;
+  return line.dueDay != null
+    || line.automated
+    || line.actualOverride != null
+    || !!line.observation
+    || line.recurring;
+}
+
 export function LineEditor({
   open, section: sectionProp, month, currency, initial, existing = [], onSave, onDelete, onClose,
 }: {
@@ -53,7 +62,8 @@ export function LineEditor({
   const [repeatEvery, setRepeatEvery] = useState<RepeatEvery>('month');
   const [observation, setObservation] = useState('');
   const [section, setSection] = useState<BudgetSection>(sectionProp);
-  const [sectionLocked, setSectionLocked] = useState(false);
+  const [sectionLocked, setSectionLocked] = useState(true);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -67,8 +77,9 @@ export function LineEditor({
     setRecurring(initial?.recurring ?? true);
     setRepeatEvery(parseRepeatEvery(initial?.repeatEvery));
     setObservation(initial?.observation ?? '');
-    setSection(initial?.section === 'income' || sectionProp === 'income' ? 'income' : (initial?.section ?? sectionProp));
-    setSectionLocked(!!initial || sectionProp === 'income');
+    setSection(initial?.section ?? sectionProp);
+    setSectionLocked(true);
+    setScheduleOpen(lineHasSchedule(initial));
     setSaving(false);
     // Only re-hydrate when opening or switching lines — not when the store
     // pushes a new object for the same line (that was wiping the amount).
@@ -80,14 +91,12 @@ export function LineEditor({
     return findLineByName(name, pool);
   }, [initial, name, existing, addingIncome]);
 
-  useEffect(() => {
-    if (!open || initial || sectionLocked) return;
-    if (addingIncome) {
-      setSection('income');
-      return;
-    }
-    setSection(match?.section ?? inferDestination(name, customGroups));
-  }, [name, open, initial, sectionLocked, addingIncome, match, customGroups]);
+  const guessed = useMemo(() => {
+    if (!open || initial || addingIncome || !name.trim()) return undefined;
+    const id = inferDestination(name, customGroups);
+    if (!id || id === section) return undefined;
+    return allMeta.find(s => s.id === id);
+  }, [open, initial, addingIncome, name, customGroups, section, allMeta]);
 
   const dest = allMeta.find(s => s.id === section);
   const isIncome = incomeFlow || section === 'income';
@@ -171,6 +180,9 @@ export function LineEditor({
                 </Tap>
               </View>
 
+              <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.06, textTransform: 'uppercase', marginBottom: 8 }}>
+                Basics
+              </Text>
               <Field
                 label="Name"
                 value={name}
@@ -186,27 +198,6 @@ export function LineEditor({
                 keyboard="decimal-pad"
                 C={C}
               />
-              {isIncome && (
-                <Field
-                  label="Actual"
-                  value={actual}
-                  onChange={setActual}
-                  placeholder="when it lands"
-                  keyboard="decimal-pad"
-                  C={C}
-                  action={canCopyActual ? {
-                    label: 'Use amount',
-                    onPress: () => setActual(expected),
-                  } : undefined}
-                />
-              )}
-              <DueField
-                month={month}
-                dueDay={dueDay}
-                onPress={() => setDatePickerOpen(true)}
-                C={C}
-              />
-              <Field label="Note" value={observation} onChange={setObservation} placeholder="optional" C={C}/>
 
               {!incomeFlow && (
                 <>
@@ -221,33 +212,81 @@ export function LineEditor({
                         ? `New line under ${dest.label}.`
                         : ''}
                   </Text>
+                  {guessed && (
+                    <Tap
+                      onPress={() => { setSectionLocked(true); setSection(guessed.id); }}
+                      accessibilityLabel={`Move to ${guessed.label}`}
+                      style={{ marginTop: -4, marginBottom: 14 }}
+                    >
+                      <Text style={{ fontSize: 13, color: C.sage }}>
+                        Looks like {guessed.label}, move it?
+                      </Text>
+                    </Tap>
+                  )}
                 </>
               )}
 
-              <Card style={{ padding: 4, marginTop: 4, marginBottom: 16 }}>
-                <Row
-                  label="Repeat"
-                  control={<Toggle on={recurring} onChange={setRecurring}/>}
-                  C={C}
-                  last={!recurring && isIncome}
-                />
-                {recurring && (
-                  <View style={{
-                    paddingHorizontal: 12, paddingTop: 4, paddingBottom: isIncome ? 12 : 14,
-                    borderBottomWidth: isIncome ? 0 : 0.5, borderBottomColor: C.hair,
-                  }}>
-                    <FrequencySeg value={repeatEvery} onChange={setRepeatEvery} C={C}/>
-                    {occurCount > 1 && (
-                      <Text style={{ fontSize: 12, color: C.muted, marginTop: 10, textAlign: 'center' }}>
-                        Lands {occurCount} times this month
-                      </Text>
+              <Tap
+                onPress={() => setScheduleOpen(o => !o)}
+                accessibilityLabel={scheduleOpen ? 'Collapse schedule' : 'Expand schedule'}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, marginBottom: 8 }}
+              >
+                <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.06, textTransform: 'uppercase' }}>
+                  Schedule
+                </Text>
+                <Icon name={scheduleOpen ? 'chev-d' : 'chev-r'} size={14} stroke={C.muted}/>
+              </Tap>
+
+              {scheduleOpen && (
+                <>
+                  {isIncome && (
+                    <Field
+                      label="Actual"
+                      value={actual}
+                      onChange={setActual}
+                      placeholder="when it lands"
+                      keyboard="decimal-pad"
+                      C={C}
+                      action={canCopyActual ? {
+                        label: 'Use amount',
+                        onPress: () => setActual(expected),
+                      } : undefined}
+                    />
+                  )}
+                  <DueField
+                    month={month}
+                    dueDay={dueDay}
+                    onPress={() => setDatePickerOpen(true)}
+                    C={C}
+                  />
+                  <Field label="Note" value={observation} onChange={setObservation} placeholder="optional" C={C}/>
+
+                  <Card style={{ padding: 4, marginTop: 4, marginBottom: 16 }}>
+                    <Row
+                      label="Repeat"
+                      control={<Toggle on={recurring} onChange={setRecurring}/>}
+                      C={C}
+                      last={!recurring && isIncome}
+                    />
+                    {recurring && (
+                      <View style={{
+                        paddingHorizontal: 12, paddingTop: 4, paddingBottom: isIncome ? 12 : 14,
+                        borderBottomWidth: isIncome ? 0 : 0.5, borderBottomColor: C.hair,
+                      }}>
+                        <FrequencySeg value={repeatEvery} onChange={setRepeatEvery} C={C}/>
+                        {occurCount > 1 && (
+                          <Text style={{ fontSize: 12, color: C.muted, marginTop: 10, textAlign: 'center' }}>
+                            Lands {occurCount} times this month
+                          </Text>
+                        )}
+                      </View>
                     )}
-                  </View>
-                )}
-                {!isIncome && (
-                  <Row label="Auto-pay" control={<Toggle on={automated} onChange={setAutomated}/>} C={C} last/>
-                )}
-              </Card>
+                    {!isIncome && (
+                      <Row label="Auto-pay" control={<Toggle on={automated} onChange={setAutomated}/>} C={C} last/>
+                    )}
+                  </Card>
+                </>
+              )}
 
               <Tap onPress={handleSave} haptic disabled={saving || !name.trim()}>
                 <LinearGradient

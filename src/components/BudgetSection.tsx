@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../theme';
 import { Card } from './Card';
 import { Tap } from './Tap';
@@ -8,6 +9,36 @@ import { BudgetRow } from './BudgetRow';
 import { fmt } from '../services/format';
 import type { BudgetLine, BudgetSection } from '../store/budgetTypes';
 import { SECTIONS } from '../store/budgetTypes';
+
+const OPEN_KEY = '@tally:plan-sections-open';
+const openCache = new Map<string, boolean>();
+let openLoaded = false;
+let openLoading: Promise<void> | null = null;
+
+function loadOpenMap(): Promise<void> {
+  if (openLoaded) return Promise.resolve();
+  if (!openLoading) {
+    openLoading = AsyncStorage.getItem(OPEN_KEY).then(raw => {
+      if (raw) {
+        const parsed = JSON.parse(raw) as Record<string, boolean>;
+        for (const [id, value] of Object.entries(parsed)) {
+          if (typeof value === 'boolean') openCache.set(id, value);
+        }
+      }
+      openLoaded = true;
+    }).catch(() => {
+      openLoaded = true;
+    });
+  }
+  return openLoading;
+}
+
+function rememberOpen(section: string, open: boolean) {
+  openCache.set(section, open);
+  const saved: Record<string, boolean> = {};
+  openCache.forEach((value, id) => { saved[id] = value; });
+  AsyncStorage.setItem(OPEN_KEY, JSON.stringify(saved)).catch(() => {});
+}
 
 export function BudgetSection({
   section, label, hint, lines, actuals, preferredCurrency, onPressLine, onTogglePaid, wide, onAddLine,
@@ -27,13 +58,31 @@ export function BudgetSection({
   const meta = SECTIONS.find(s => s.id === section);
   const title = label ?? meta?.label ?? section;
   const subtitle = hint ?? meta?.hint ?? '';
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(() => openCache.get(section) ?? true);
+
+  useEffect(() => {
+    let active = true;
+    loadOpenMap().then(() => {
+      if (!active) return;
+      const saved = openCache.get(section);
+      if (typeof saved === 'boolean') setOpen(saved);
+    });
+    return () => { active = false; };
+  }, [section]);
+
+  const toggle = () => {
+    setOpen(current => {
+      const next = !current;
+      rememberOpen(section, next);
+      return next;
+    });
+  };
   const expected = lines.reduce((s, l) => s + l.expected, 0);
   const actual = lines.reduce((s, l) => s + (actuals[l.id] ?? 0), 0);
 
   return (
     <View style={{ marginBottom: 8 }}>
-      <Tap onPress={() => setOpen(o => !o)} style={{
+      <Tap onPress={toggle} style={{
         flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between',
         paddingTop: 20, paddingBottom: 10, paddingHorizontal: 4,
       }}>
@@ -106,9 +155,7 @@ export function BudgetSection({
               }}>
                 <Icon name="plus" size={10} stroke={C.muted} sw={2}/>
               </View>
-              <Text style={{ fontSize: 14, color: C.muted, fontWeight: '500' }}>
-                {section === 'income' ? 'Add income' : 'Add budget'}
-              </Text>
+              <Text style={{ fontSize: 14, color: C.muted, fontWeight: '500' }}>Add</Text>
             </Tap>
           )}
         </Card>
