@@ -113,7 +113,7 @@ Letters match the brief: A shell, B capture, C plan, D activity, E reports, F se
 |---|---|---|---|
 | G1 | Categories screen: add, rename, recolor, archive, delete. Seed categories cannot be deleted. Delete moves expenses to "Other". Counts are this calendar month, unconverted | `CategoriesScreen`, `CategoryEditor` | [x] Removed from the UI by design. The categories collection is untouched. |
 | G2 | Custom budget groups can be created from the line editor's "Goes to" picker. Creating writes `users/{uid}/budgetGroups` | `GoesToPicker`, `useBudgetGroups.add` | [x] `GoesToPicker` still creates groups and uses `BottomSheet`. |
-| G3 | Gap, not a current feature: there is no UI to rename or delete a custom group. `useBudgetGroups.remove` exists and has no caller. There is no rename method | `src/store/useBudgetGroups.ts` | n/a |
+| G3 | Gap, not a current feature: there is no UI to rename or delete a custom group. `useBudgetGroups.remove` exists and has no caller. There is no rename method | `src/store/useBudgetGroups.ts` | [x] Rename and delete exist on Lines and Groups. Delete asks where to move this month and later months. Default is Variable. |
 
 ## M. Present because of `e42d006`
 
