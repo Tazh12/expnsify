@@ -8,21 +8,31 @@ function escapeCsv(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
 }
 
-export function expensesToCsv(expenses: Expense[], lines: BudgetLine[]): string {
-  const header = 'Date,Merchant,Line,Type,Amount,Currency,Unbudgeted,Note\n';
+export function expensesToCsv(
+  expenses: Expense[],
+  lines: BudgetLine[],
+  convert?: (amount: number, currency: string) => number,
+  preferredCurrency = 'USD',
+): string {
+  const header = convert
+    ? 'Date,Merchant,Line,Type,Amount,Currency,ConvertedAmount,PreferredCurrency,Unbudgeted,Note\n'
+    : 'Date,Merchant,Line,Type,Amount,Currency,Unbudgeted,Note\n';
   const rows = expenses.map(t => {
     const line = lines.find(l => l.id === t.line_id)
       ?? lines.find(l => l.month === t.date.slice(0, 7) && l.templateKey === t.category_id);
-    return [
+    const cells = [
       t.date,
       t.merchant,
       line?.name ?? t.category_id,
       t.type,
       String(t.amount),
       t.currency,
-      String(t.unbudgeted),
-      t.note ?? '',
-    ].map(escapeCsv).join(',');
+    ];
+    if (convert) {
+      cells.push(convert(t.amount, t.currency || 'USD').toFixed(2), preferredCurrency);
+    }
+    cells.push(String(t.unbudgeted), t.note ?? '');
+    return cells.map(escapeCsv).join(',');
   }).join('\n');
   return header + rows;
 }
@@ -34,16 +44,19 @@ export async function exportMonthPdf(args: {
   currency: string;
   leftToBudget: number;
   spent: number;
+  convert?: (amount: number, currency: string) => number;
 }): Promise<void> {
-  const { monthLabel, expenses, lines, currency, leftToBudget, spent } = args;
+  const { monthLabel, expenses, lines, currency, leftToBudget, spent, convert } = args;
   const rows = expenses.map(t => {
     const line = lines.find(l => l.id === t.line_id);
     const items = (t.line_items ?? []).map(i => escapeHtml(i.name)).join(', ');
+    const converted = convert ? fmt(convert(t.amount, t.currency || 'USD'), currency) : '';
     return `<tr>
       <td>${escapeHtml(t.date.slice(0, 10))}</td>
       <td>${escapeHtml(t.merchant)}</td>
       <td>${escapeHtml(line?.name ?? t.category_id)}</td>
       <td>${escapeHtml(fmt(t.amount, t.currency))}</td>
+      <td>${escapeHtml(converted)}</td>
       <td>${escapeHtml(items || t.note || '')}</td>
     </tr>`;
   }).join('');
@@ -67,8 +80,8 @@ export async function exportMonthPdf(args: {
   <p>${escapeHtml(monthLabel)}</p>
   <div class="total">${escapeHtml(fmt(spent, currency))} spent · ${escapeHtml(fmt(leftToBudget, currency))} left to budget</div>
   <table>
-    <thead><tr><th>Date</th><th>Merchant</th><th>Line</th><th>Amount</th><th>Items</th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="5">No activity this month.</td></tr>'}</tbody>
+    <thead><tr><th>Date</th><th>Merchant</th><th>Line</th><th>Original</th><th>Converted</th><th>Items</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="6">No activity this month.</td></tr>'}</tbody>
   </table>
 </body>
 </html>`;

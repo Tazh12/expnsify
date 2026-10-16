@@ -400,7 +400,7 @@ export function SettingsScreen({ onClose }: Props) {
       <Card style={{ padding: 4 }}>
         <SettingsRow icon={<Icon name="export" size={18} stroke={C.cream}/>} label="Export all data" detail="Every month, as CSV" onPress={async () => {
           const path = FileSystem.cacheDirectory + 'expnsify-all.csv';
-          await FileSystem.writeAsStringAsync(path, expensesToCsv(expenses, lines), { encoding: FileSystem.EncodingType.UTF8 });
+          await FileSystem.writeAsStringAsync(path, expensesToCsv(expenses, lines, useRates.getState().convert, settings.preferredCurrency), { encoding: FileSystem.EncodingType.UTF8 });
           await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: 'Export all data' });
         }} isLast/>
       </Card>

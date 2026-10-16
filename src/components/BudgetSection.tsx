@@ -7,6 +7,7 @@ import { Tap } from './Tap';
 import { Icon } from './Icon';
 import { BudgetRow } from './BudgetRow';
 import { fmt } from '../services/format';
+import { useRates } from '../store/useRates';
 import type { BudgetLine, BudgetSection } from '../store/budgetTypes';
 import { SECTIONS } from '../store/budgetTypes';
 
@@ -55,6 +56,7 @@ export function BudgetSection({
   onAddLine?: () => void;
 }) {
   const C = useTheme();
+  const { convert } = useRates();
   const meta = SECTIONS.find(s => s.id === section);
   const title = label ?? meta?.label ?? section;
   const subtitle = hint ?? meta?.hint ?? '';
@@ -77,7 +79,7 @@ export function BudgetSection({
       return next;
     });
   };
-  const expected = lines.reduce((s, l) => s + l.expected, 0);
+  const expected = lines.reduce((s, l) => s + convert(l.expected, l.currency || 'USD'), 0);
   const actual = lines.reduce((s, l) => s + (actuals[l.id] ?? 0), 0);
 
   return (
@@ -119,8 +121,9 @@ export function BudgetSection({
           )}
           {lines.map(line => {
             const act = actuals[line.id] ?? 0;
-            const remaining = line.expected - act;
-            const overspend = !!(line.section !== 'income' && act > line.expected && line.expected > 0);
+            const planned = convert(line.expected, line.currency || 'USD');
+            const remaining = planned - act;
+            const overspend = !!(line.section !== 'income' && act > planned && planned > 0);
             return (
               <BudgetRow
                 key={line.id}

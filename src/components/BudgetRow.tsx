@@ -4,6 +4,7 @@ import { useTheme } from '../theme';
 import { Tap } from './Tap';
 import { Icon } from './Icon';
 import { fmt } from '../services/format';
+import { useRates } from '../store/useRates';
 import { ordinalDay } from '../services/notifications';
 import { repeatHint, type BudgetLine } from '../store/budgetTypes';
 
@@ -20,8 +21,11 @@ export function BudgetRow({
   wide?: boolean;
 }) {
   const C = useTheme();
+  const { convert } = useRates();
   const isIncome = line.section === 'income';
-  const leftColor = overspend ? C.rose : remaining === 0 && !isIncome ? C.muted : C.cream;
+  const planned = convert(line.expected, line.currency || 'USD');
+  const left = isIncome ? actual - planned : planned - actual;
+  const leftColor = overspend ? C.rose : left === 0 && !isIncome ? C.muted : C.cream;
   const due = line.dueDay != null ? ordinalDay(line.dueDay) : null;
   const cadence = line.recurring ? repeatHint(line.repeatEvery ?? 'month') : null;
 
@@ -46,13 +50,13 @@ export function BudgetRow({
           </View>
         </View>
         <Text style={{ flex: 1, textAlign: 'right', fontSize: 14, color: C.muted, fontVariant: ['tabular-nums'] }}>
-          {fmt(line.expected, preferredCurrency)}
+          {fmt(planned, preferredCurrency)}
         </Text>
         <Text style={{ flex: 1, textAlign: 'right', fontSize: 14, color: C.cream, fontVariant: ['tabular-nums'] }}>
           {fmt(actual, preferredCurrency)}
         </Text>
         <Text style={{ flex: 1, textAlign: 'right', fontSize: 14, color: leftColor, fontVariant: ['tabular-nums'] }}>
-          {isIncome ? fmt(actual - line.expected, preferredCurrency) : fmt(remaining, preferredCurrency)}
+          {fmt(left, preferredCurrency)}
         </Text>
         <Text style={{ width: 72, textAlign: 'right', fontSize: 12, color: C.muted }}>
           {due ?? '—'}
@@ -87,10 +91,10 @@ export function BudgetRow({
       </View>
       <View style={{ alignItems: 'flex-end' }}>
         <Text style={{ fontSize: 15, color: leftColor, fontWeight: '500', fontVariant: ['tabular-nums'] }}>
-          {fmt(isIncome ? actual : remaining, preferredCurrency)}
+          {fmt(isIncome ? actual : left, preferredCurrency)}
         </Text>
         <Text style={{ fontSize: 11, color: C.muted, marginTop: 2, fontVariant: ['tabular-nums'] }}>
-          {fmt(actual, preferredCurrency)} / {fmt(line.expected, preferredCurrency)}
+          {fmt(actual, preferredCurrency)} / {fmt(planned, preferredCurrency)}
         </Text>
       </View>
     </Tap>

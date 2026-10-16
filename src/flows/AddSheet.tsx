@@ -696,7 +696,10 @@ function ReviewPhase({
   const saveMonth = expenseMonthKey(dateISO) || monthKey(new Date());
   const monthLines = budget.forMonth(saveMonth);
   const selectedLine = monthLines.find(l => l.id === selectedLineId) ?? null;
-  const overspend = !!(selectedLine && selectedLine.section !== 'income' && (parseFloat(amount) || 0) + 0 > selectedLine.expected);
+  const overspend = !!(selectedLine && selectedLine.section !== 'income' && (() => {
+    const planned = convert(selectedLine.expected, selectedLine.currency || 'USD');
+    return planned > 0 && convert(parseFloat(amount) || 0, currencyCode) > planned;
+  })());
 
   useEffect(() => {
     if (selectedLine?.section === 'income') setTxnType('income');

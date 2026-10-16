@@ -140,14 +140,15 @@ export function InsightsScreen() {
   }, [comparison.current, allLines, convert]);
 
   const overspent = lines.filter(l => {
-    if (l.section === 'income' || l.expected <= 0) return false;
-    return lineActual(l, monthExpenses, convert) > l.expected;
+    const planned = convert(l.expected, l.currency || 'USD');
+    if (l.section === 'income' || planned <= 0) return false;
+    return lineActual(l, monthExpenses, convert) > planned;
   });
   const monthLabel = month.toLocaleString('en-US', { month: 'long', year: 'numeric' });
 
   const exportCsv = async () => {
     const path = FileSystem.cacheDirectory + 'expnsify-budget.csv';
-    await FileSystem.writeAsStringAsync(path, expensesToCsv(monthExpenses, lines), { encoding: FileSystem.EncodingType.UTF8 });
+    await FileSystem.writeAsStringAsync(path, expensesToCsv(monthExpenses, lines, convert, preferredCurrency), { encoding: FileSystem.EncodingType.UTF8 });
     await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: 'Export budget' });
   };
 
@@ -160,6 +161,7 @@ export function InsightsScreen() {
         currency: preferredCurrency,
         leftToBudget: summary.leftToBudget,
         spent: summary.spent,
+        convert,
       });
     } catch (e) {
       console.error('pdf export', e);
@@ -301,7 +303,7 @@ export function InsightsScreen() {
                 }}>
                   <Text style={{ fontSize: 15, color: C.rose }}>{l.name}</Text>
                   <Text style={{ fontSize: 14, color: C.rose }}>
-                    {fmt(actual, preferredCurrency)} / {fmt(l.expected, preferredCurrency)}
+                    {fmt(actual, preferredCurrency)} / {fmt(convert(l.expected, l.currency || 'USD'), preferredCurrency)}
                   </Text>
                 </View>
               );

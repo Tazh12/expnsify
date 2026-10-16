@@ -264,7 +264,8 @@ export function ActivityScreen() {
                       overspend={(() => {
                         const line = lines.find(l => l.id === t.line_id);
                         if (!line || line.section === 'income') return false;
-                        return lineActual(line, expenses, convert) > line.expected && line.expected > 0;
+                        const planned = convert(line.expected, line.currency || 'USD');
+                        return lineActual(line, expenses, convert) > planned && planned > 0;
                       })()}
                       onViewDetail={(exp) => setDetailExpense(exp)}
                       onEdit={() => setEditTarget(t)}

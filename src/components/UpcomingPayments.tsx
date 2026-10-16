@@ -5,6 +5,7 @@ import { Card } from './Card';
 import { Tap } from './Tap';
 import { Icon } from './Icon';
 import { fmt } from '../services/format';
+import { useRates } from '../store/useRates';
 import { ordinalDay } from '../services/notifications';
 import { upcomingLines } from '../services/budget';
 import type { BudgetLine } from '../store/budgetTypes';
@@ -17,6 +18,7 @@ export function UpcomingPayments({
   preferredCurrency: string;
 }) {
   const C = useTheme();
+  const { convert } = useRates();
   const upcoming = upcomingLines(lines, 4);
   if (upcoming.length === 0) return null;
 
@@ -47,7 +49,7 @@ export function UpcomingPayments({
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 15, color: C.cream, fontWeight: '500' }}>{line.name}</Text>
               <Text style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
-                {line.automated ? 'Auto-pay' : 'You pay'} · {fmt(line.expected, preferredCurrency)}
+                {line.automated ? 'Auto-pay' : 'You pay'} · {fmt(convert(line.expected, line.currency || 'USD'), preferredCurrency)}
               </Text>
             </View>
             <Icon name="chev-r" size={14} stroke={C.subtle}/>

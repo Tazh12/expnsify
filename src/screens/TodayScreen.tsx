@@ -70,8 +70,9 @@ export function TodayScreen({
   const unbudgeted = monthExpenses.filter(e => isUnbudgeted(e, lines));
   const dueSoon = lines.filter(l => dueWithinWeek(l, key));
   const overLines = lines.filter(l => {
-    if (l.section === 'income' || l.expected <= 0) return false;
-    return lineActual(l, monthExpenses, convert) > l.expected;
+    const planned = convert(l.expected, l.currency || 'USD');
+    if (l.section === 'income' || planned <= 0) return false;
+    return lineActual(l, monthExpenses, convert) > planned;
   });
   const attention = unbudgeted.length + dueSoon.length + overLines.length;
   const recent = [...monthExpenses].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
@@ -184,7 +185,7 @@ export function TodayScreen({
                 <AttentionRow
                   key={`over-${line.id}`}
                   title={line.name}
-                  detail={`${fmt(lineActual(line, monthExpenses, convert), preferredCurrency)} of ${fmt(line.expected, preferredCurrency)}`}
+                  detail={`${fmt(lineActual(line, monthExpenses, convert), preferredCurrency)} of ${fmt(convert(line.expected, line.currency || 'USD'), preferredCurrency)}`}
                   action="Adjust"
                   onPress={() => setEditor(line)}
                 />
