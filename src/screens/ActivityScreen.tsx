@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { BottomSheet } from '../components/BottomSheet';
 import { useTheme } from '../theme';
-import { Card, Icon, Tap, TxnRow, PageHeader } from '../components';
+import { Card, Icon, Tap, TxnRow, PageHeader, EmptyState } from '../components';
 import { useExpenses, type Expense } from '../store/useExpenses';
 import { useCategories } from '../store/useCategories';
 import { useBudget } from '../store/useBudget';
@@ -13,7 +13,7 @@ import { useRates } from '../store/useRates';
 import { useSettings } from '../store/useSettings';
 import { fmt, dayLabel, parseLocalDate, toLocalDateISO } from '../services/format';
 import { isUnbudgeted, lineActual, expenseMatchesLine } from '../services/budget';
-import { monthKey } from '../services/month';
+import { monthKey, monthTitle } from '../services/month';
 import { useViewMonth } from '../store/useViewMonth';
 import { useBudgetGroups } from '../store/useBudgetGroups';
 import { DatePicker } from '../components/DatePicker';
@@ -57,7 +57,7 @@ function matchesQuery(t: Expense, q: string) {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
-export function ActivityScreen() {
+export function ActivityScreen({ onScan }: { onScan?: () => void }) {
   const C = useTheme();
   const { expenses, byDay, remove } = useExpenses();
   const { categories } = useCategories();
@@ -167,13 +167,7 @@ export function ActivityScreen() {
       >
         <PageHeader title="Activity"/>
 
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
-          <QuickChip label="All time" on={allTime} onPress={() => setAllTime(v => !v)} C={C}/>
-          <QuickChip label="Needs a line" on={quick === 'needs'} onPress={() => setQuick(q => q === 'needs' ? null : 'needs')} C={C}/>
-          <QuickChip label="Expenses" on={quick === 'expense'} onPress={() => setQuick(q => q === 'expense' ? null : 'expense')} C={C}/>
-          <QuickChip label="Income" on={quick === 'income'} onPress={() => setQuick(q => q === 'income' ? null : 'income')} C={C}/>
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 18 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 }}>
           <View style={{
             flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10,
             backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
@@ -184,7 +178,7 @@ export function ActivityScreen() {
               value={q}
               placeholder="Search merchants, notes, items"
               onChangeText={(text) => { setQ(text); setAskedIds(null); }}
-              placeholderTextColor={C.subtle}
+              placeholderTextColor={C.muted}
               style={{ flex: 1, fontSize: 14, color: C.cream, fontFamily: C.fonts.regular }}
             />
             {q.length > 0 && (
@@ -215,6 +209,13 @@ export function ActivityScreen() {
             )}
           </Tap>
         </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 12 }} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
+          <QuickChip label={allTime ? 'All time' : monthTitle(monthKeyValue)} on={allTime} onPress={() => setAllTime(v => !v)} C={C}/>
+          <QuickChip label="Needs a line" on={quick === 'needs'} onPress={() => setQuick(q => q === 'needs' ? null : 'needs')} C={C}/>
+          <QuickChip label="Expenses" on={quick === 'expense'} onPress={() => setQuick(q => q === 'expense' ? null : 'expense')} C={C}/>
+          <QuickChip label="Income" on={quick === 'income'} onPress={() => setQuick(q => q === 'income' ? null : 'income')} C={C}/>
+        </ScrollView>
 
         {/* Active filter chips */}
         {active && (
@@ -284,28 +285,41 @@ export function ActivityScreen() {
             );
           })}
           {grouped.length === 0 && (
-            <View style={{ padding: 48, alignItems: 'center' }}>
-              <Text style={{ fontFamily: C.fonts.serifItalic, fontSize: 20, color: C.muted }}>
-                {askedIds ? 'Tally didn’t find a match.' : 'nothing matches.'}
-              </Text>
-              {q.trim().length > 0 && !askedIds && (
-                <Tap
-                  onPress={ask}
-                  haptic
-                  style={{
-                    marginTop: 16, paddingVertical: 12, paddingHorizontal: 18, borderRadius: 14,
-                    backgroundColor: C.sage,
-                  }}
-                >
-                  {asking
-                    ? <ActivityIndicator color="#0E0E0C"/>
-                    : <Text style={{ color: '#0E0E0C', fontSize: 14, fontWeight: '600' }}>Ask Tally</Text>}
-                </Tap>
-              )}
-              {q.trim().length > 0 && !askedIds && (
-                <Text style={{ fontSize: 12, color: C.subtle, marginTop: 8 }}>Uses one AI action</Text>
-              )}
-            </View>
+            expenses.length === 0 && !q.trim() && !active && !quick ? (
+              <EmptyState
+                icon="receipt"
+                title="No activity yet"
+                line="Scan a receipt or add an expense, and it'll show up here."
+                actionLabel="Scan a receipt"
+                onAction={onScan}
+              />
+            ) : (q.trim() || active || quick || askedIds) ? (
+              <View>
+                <EmptyState
+                  icon="search"
+                  title={q.trim() ? `No matches for “${q.trim()}”` : 'No matches for these filters'}
+                  line="Try a different word or clear the filters."
+                  actionLabel="Clear filters"
+                  onAction={() => { setQ(''); setAskedIds(null); setQuick(null); setFilters(EMPTY_FILTERS); }}
+                />
+                {q.trim().length > 0 && !askedIds && (
+                  <View style={{ alignItems: 'center', marginTop: -12 }}>
+                    <Tap onPress={ask} haptic style={{ minHeight: 44, paddingHorizontal: 18, borderRadius: 14, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }}>
+                      {asking ? <ActivityIndicator color={C.cream}/> : <Text style={{ color: C.cream, fontSize: 14, fontWeight: '600' }}>Ask Tally</Text>}
+                    </Tap>
+                    <Text style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>Uses one AI action</Text>
+                  </View>
+                )}
+              </View>
+            ) : (
+              <EmptyState
+                icon="cal"
+                title={`Nothing in ${monthTitle(monthKeyValue)} yet`}
+                line="Expenses you add this month will show up here."
+                actionLabel="See all time"
+                onAction={() => setAllTime(true)}
+              />
+            )
           )}
         </View>
       </ScrollView>
@@ -514,7 +528,7 @@ function QuickChip({ label, on, onPress, C }: { label: string; on: boolean; onPr
     <Tap
       onPress={onPress}
       style={{
-        minHeight: 44, paddingHorizontal: 14, borderRadius: 22, justifyContent: 'center',
+        height: 36, paddingHorizontal: 14, borderRadius: 18, justifyContent: 'center',
         backgroundColor: on ? C.sage : C.surface,
         borderWidth: 0.5, borderColor: on ? C.sage : C.hair,
       }}

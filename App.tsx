@@ -182,7 +182,7 @@ export default function App() {
       case 'plan':
         return <PlanScreen />;
       case 'activity':
-        return <ActivityScreen />;
+        return <ActivityScreen onScan={() => setAddOpen(true)} />;
       case 'insights':
         return <InsightsScreen />;
     }

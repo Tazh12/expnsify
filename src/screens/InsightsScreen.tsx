@@ -6,7 +6,7 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import Svg, { Path, Circle, Defs, LinearGradient as SvgGrad, Stop } from 'react-native-svg';
 import { useTheme } from '../theme';
-import { Card, PageHeader, SectionHeader, SettingsRow, Icon, Tap } from '../components';
+import { Card, PageHeader, SectionHeader, SettingsRow, Icon, Tap, EmptyState } from '../components';
 import { useExpenses, type Expense } from '../store/useExpenses';
 import { useBudget } from '../store/useBudget';
 import { useRates } from '../store/useRates';
@@ -226,9 +226,13 @@ export function InsightsScreen() {
       {topLine && (
         <Text style={{ marginTop: 8, color: C.muted, fontSize: 15 }}>Most spent on {topLine}</Text>
       )}
-      <Card style={{ padding: 16, marginTop: 16 }}>
-        <Sparkline points={comparison.points} xLabels={comparison.labels}/>
-      </Card>
+      {spent <= 0 ? (
+        <EmptyState icon="cal" title="Nothing to compare yet" line="Add an expense and this comparison will fill in."/>
+      ) : (
+        <Card style={{ padding: 16, marginTop: 16 }}>
+          <Sparkline points={comparison.points} xLabels={comparison.labels}/>
+        </Card>
+      )}
 
       <Card style={{ padding: 16, marginTop: 16 }}>
         <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.04, textTransform: 'uppercase' }}>

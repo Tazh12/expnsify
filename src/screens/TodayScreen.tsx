@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import { useTheme } from '../theme';
-import { Card, Tap, BottomSheet } from '../components';
+import { Card, Tap, BottomSheet, EmptyState } from '../components';
 import { useLayout } from '../hooks/useLayout';
 import { useViewMonth } from '../store/useViewMonth';
 import { useBudget } from '../store/useBudget';
@@ -194,7 +194,9 @@ export function TodayScreen({
           </View>
         )}
 
-        {recent.length > 0 && (
+        {recent.length === 0 ? (
+          <EmptyState icon="receipt" title="No activity yet" line="Scan a receipt or add an expense, and the latest ones will show up here."/>
+        ) : (
           <View style={{ marginTop: 28 }}>
             <Text style={{ fontFamily: C.fonts.serif, fontSize: 22, color: C.cream, marginBottom: 10 }}>
               Recent

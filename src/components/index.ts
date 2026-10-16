@@ -17,4 +17,5 @@ export { PageHeader } from './PageHeader';
 export { SectionHeader } from './SectionHeader';
 export { SettingsRow } from './SettingsRow';
 export { BottomSheet } from './BottomSheet';
+export { EmptyState } from './EmptyState';
 export { TabBar, type TabId } from './TabBar';

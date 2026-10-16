@@ -3,7 +3,7 @@ import {
   View, Text, ScrollView, TextInput, Alert, Modal,
 } from 'react-native';
 import { useTheme } from '../theme';
-import { Card, Icon, Tap } from '../components';
+import { Card, Icon, Tap, EmptyState } from '../components';
 import { useBudget } from '../store/useBudget';
 import { useBudgetGroups } from '../store/useBudgetGroups';
 import { useExpenses } from '../store/useExpenses';
@@ -78,6 +78,9 @@ export function LinesGroupsScreen({ onClose }: { onClose: () => void }) {
             </View>
           ))}
         </Card>
+        {groups.every(g => g.builtin) && (
+          <EmptyState icon="tag" title="No custom groups" line="Create one from a line's Goes to picker when you want a section of your own."/>
+        )}
 
         <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.06, textTransform: 'uppercase', marginBottom: 8 }}>This month</Text>
         {groups.map(group => {
