@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useTheme } from '../theme';
-import { Card, Icon, Tap, TxnRow } from '../components';
+import { Card, Icon, Tap, TxnRow, PageHeader } from '../components';
 import { useExpenses, type Expense } from '../store/useExpenses';
 import { useCategories } from '../store/useCategories';
 import { useBudget } from '../store/useBudget';
@@ -141,14 +141,7 @@ export function ActivityScreen() {
         contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ paddingTop: 8, paddingBottom: 6 }}>
-          <Text style={{ fontFamily: C.fonts.serif, fontSize: 38, color: C.cream, lineHeight: 40, letterSpacing: -0.5 }}>
-            Transactions
-          </Text>
-          <Text style={{ fontFamily: C.fonts.serifItalic, color: C.muted, marginTop: 6, fontSize: 18 }}>
-            everything, in order
-          </Text>
-        </View>
+        <PageHeader title="Transactions" tagline="everything, in order"/>
 
         {/* Search + Filter row */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 18 }}>

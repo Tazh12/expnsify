@@ -1,11 +1,11 @@
 import React, { useMemo } from 'react';
 import {
-  View, Text, ScrollView, Alert, TouchableOpacity,
+  View, Text, ScrollView, Alert,
 } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '../theme';
-import { Card, Icon, Tap } from '../components';
+import { Card, Icon, Tap, PageHeader, SectionHeader, SettingsRow } from '../components';
 import { useExpenses } from '../store/useExpenses';
 import { useBudget } from '../store/useBudget';
 import { useRates } from '../store/useRates';
@@ -89,14 +89,7 @@ export function ReportsScreen({ onOpenRecap }: Props) {
       contentContainerStyle={{ padding: isWide ? 32 : 20, paddingBottom: isWide ? 48 : 120, maxWidth: isWide ? 900 : undefined, width: '100%' as any, alignSelf: isWide ? 'center' : undefined }}
       showsVerticalScrollIndicator={false}
     >
-      <View style={{ paddingTop: 8, paddingBottom: 6 }}>
-        <Text style={{ fontFamily: C.fonts.serif, fontSize: 38, color: C.cream, letterSpacing: -0.5 }}>
-          Reports
-        </Text>
-        <Text style={{ fontFamily: C.fonts.serifItalic, color: C.muted, marginTop: 6, fontSize: 18 }}>
-          plan versus reality
-        </Text>
-      </View>
+      <PageHeader title="Reports" tagline="plan versus reality"/>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, marginBottom: 8 }}>
         <Tap onPress={() => shiftMonth(-1)} style={{
@@ -229,45 +222,5 @@ function Stat({ label, value, C }: { label: string; value: string; C: ReturnType
       <Text style={{ fontSize: 11, color: C.muted }}>{label}</Text>
       <Text style={{ fontSize: 14, color: C.cream, marginTop: 2 }}>{value}</Text>
     </View>
-  );
-}
-
-export function SectionHeader({ title, action }: { title: string; action?: string }) {
-  const C = useTheme();
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingTop: 24, paddingBottom: 12 }}>
-      <Text style={{ fontFamily: C.fonts.serif, fontSize: 22, color: C.cream, letterSpacing: -0.2 }}>{title}</Text>
-      {action && <Text style={{ fontSize: 13, color: C.muted }}>{action}</Text>}
-    </View>
-  );
-}
-
-export function SettingsRow({
-  icon, label, detail, isLast, onPress, control,
-}: {
-  icon?: React.ReactNode;
-  label: string;
-  detail?: string;
-  isLast?: boolean;
-  onPress?: () => void;
-  control?: React.ReactNode;
-}) {
-  const C = useTheme();
-  return (
-    <TouchableOpacity onPress={onPress} activeOpacity={onPress ? 0.6 : 1} style={{
-      flexDirection: 'row', alignItems: 'center', gap: 14,
-      padding: 14, paddingHorizontal: 16,
-      borderBottomWidth: isLast ? 0 : 0.5, borderBottomColor: C.hair,
-    }}>
-      {icon && (
-        <View style={{ width: 32, height: 32, borderRadius: 9, backgroundColor: C.surface2, alignItems: 'center', justifyContent: 'center' }}>
-          {icon}
-        </View>
-      )}
-      <Text style={{ flex: 1, fontSize: 14, color: C.cream }}>{label}</Text>
-      {detail && <Text style={{ fontSize: 13, color: C.muted }}>{detail}</Text>}
-      {control}
-      {onPress && !control && <Icon name="chev-r" size={14} stroke={C.subtle}/>}
-    </TouchableOpacity>
   );
 }

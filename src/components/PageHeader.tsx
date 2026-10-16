@@ -1,0 +1,19 @@
+import React from 'react';
+import { View, Text } from 'react-native';
+import { useTheme } from '../theme';
+
+export function PageHeader({ title, tagline }: { title: string; tagline?: string }) {
+  const C = useTheme();
+  return (
+    <View style={{ paddingTop: 8, paddingBottom: 6 }}>
+      <Text style={{ fontFamily: C.fonts.serif, fontSize: 38, color: C.cream, lineHeight: 40, letterSpacing: -0.5 }}>
+        {title}
+      </Text>
+      {tagline ? (
+        <Text style={{ fontFamily: C.fonts.serifItalic, color: C.muted, marginTop: 6, fontSize: 18 }}>
+          {tagline}
+        </Text>
+      ) : null}
+    </View>
+  );
+}

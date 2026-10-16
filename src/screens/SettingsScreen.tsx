@@ -2,12 +2,11 @@ import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, ScrollView, Alert, Modal, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useTheme, PALETTES, ACCENTS, type PaletteId, type AccentId } from '../theme';
-import { Card, Icon, Tap, Toggle } from '../components';
+import { Card, Icon, Tap, Toggle, PageHeader, SectionHeader, SettingsRow } from '../components';
 import { useSettings } from '../store/useSettings';
 import { FONTS, type FontId } from '../theme';
 import { useCategories } from '../store/useCategories';
 import { useAuth } from '../store/useAuth';
-import { SectionHeader, SettingsRow } from './ReportsScreen';
 import { useRates } from '../store/useRates';
 import { CurrencyPickerSheet } from '../components/CurrencyPicker';
 import { requestNotificationPermission, syncNotifications, ordinalDay } from '../services/notifications';
@@ -94,10 +93,7 @@ export function SettingsScreen({ onOpenCategories }: Props) {
       contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
       showsVerticalScrollIndicator={false}
     >
-      <View style={{ paddingTop: 8 }}>
-        <Text style={{ fontFamily: C.fonts.serif, fontSize: 38, color: C.cream, letterSpacing: -0.5 }}>Settings</Text>
-        <Text style={{ fontFamily: C.fonts.serifItalic, color: C.muted, marginTop: 6, fontSize: 18 }}>your space</Text>
-      </View>
+      <PageHeader title="Settings" tagline="your space"/>
 
       {/* Profile */}
       <Card style={{ marginTop: 20, padding: 20, flexDirection: 'row', alignItems: 'center', gap: 14 }}>

@@ -16,4 +16,7 @@ export { BudgetRing } from './BudgetRing';
 export { GoesToPicker } from './GoesToPicker';
 export { CarryIncomeCard } from './CarryIncome';
 export { AppHeader } from './AppHeader';
+export { PageHeader } from './PageHeader';
+export { SectionHeader } from './SectionHeader';
+export { SettingsRow } from './SettingsRow';
 export { TabBar, type TabId } from './TabBar';
