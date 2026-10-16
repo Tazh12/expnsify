@@ -123,10 +123,11 @@ export function InsightsScreen() {
 
   const spent = spendOf(comparison.current, convert);
   const prevSpent = spendOf(comparison.previous, convert);
-  const pct = prevSpent > 0 ? Math.round(((spent - prevSpent) / prevSpent) * 100) : null;
-  const change = pct == null || pct === 0
-    ? ''
-    : `, ${Math.abs(pct)}% ${pct < 0 ? 'less' : 'more'} than ${comparison.comparedWith}`;
+  const pct = spent > 0 && prevSpent > 0 ? Math.round(((spent - prevSpent) / prevSpent) * 100) : null;
+  const periodWord = span === 'week' ? 'this week' : 'this month';
+  const headline = spent <= 0
+    ? `Nothing logged yet ${periodWord}`
+    : `You spent ${fmt(spent, preferredCurrency)}${pct == null || pct === 0 ? '' : `, ${Math.abs(pct)}% ${pct < 0 ? 'less' : 'more'} than ${comparison.comparedWith}`}.`;
 
   const topLine = useMemo(() => {
     const totals = new Map<string, number>();
@@ -220,7 +221,7 @@ export function InsightsScreen() {
       </View>
 
       <Text style={{ fontFamily: C.fonts.serif, fontSize: 28, color: C.cream, marginTop: 16, letterSpacing: -0.3, lineHeight: 34 }}>
-        You spent {fmt(spent, preferredCurrency)}{change}.
+        {headline}
       </Text>
       {topLine && (
         <Text style={{ marginTop: 8, color: C.muted, fontSize: 15 }}>Most spent on {topLine}</Text>
