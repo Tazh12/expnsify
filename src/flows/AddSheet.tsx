@@ -26,7 +26,8 @@ import { uid, fmt, currencySymbol, parseLocalDate, toLocalDateISO } from '../ser
 import { CurrencyPickerSheet } from '../components/CurrencyPicker';
 import { CompletePaymentSheet } from './CompletePaymentSheet';
 import { matchLine } from '../services/budget';
-import { monthKey, expenseMonthKey, slugKey, uniqueTemplateKey } from '../services/month';
+import { monthKey, expenseMonthKey, slugKey, uniqueTemplateKey, monthTitle } from '../services/month';
+import { useViewMonth } from '../store/useViewMonth';
 import { uploadReceipt } from '../services/receipts';
 import { RECEIPT_STORAGE_ENABLED, resolveReceiptUriToPersist } from '../services/receiptUri';
 import { DEFAULT_CATEGORIES } from '../store/defaults';
@@ -168,18 +169,25 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
   const slideY = useRef(new Animated.Value(600)).current;
   const doneScale = useRef(new Animated.Value(0.6)).current;
 
+  const launchedCamera = useRef(false);
+
   useEffect(() => {
-    if (open) {
-      setPhase(editExpense ? 'review' : 'pick');
-      setMethod(null);
-      setScanned(null);
-      setReceiptUri(null);
-      setSaveState('idle');
-      setCompleteOpen(false);
-      setMatchedLine(null);
-      Animated.spring(slideY, { toValue: 0, useNativeDriver: true, speed: 18, bounciness: 2 }).start();
-    } else {
+    if (!open) {
+      launchedCamera.current = false;
       Animated.timing(slideY, { toValue: 600, duration: 280, useNativeDriver: true }).start();
+      return;
+    }
+    setPhase(editExpense ? 'review' : 'pick');
+    setMethod(null);
+    setScanned(null);
+    setReceiptUri(null);
+    setSaveState('idle');
+    setCompleteOpen(false);
+    setMatchedLine(null);
+    Animated.spring(slideY, { toValue: 0, useNativeDriver: true, speed: 18, bounciness: 2 }).start();
+    if (Platform.OS !== 'web' && !editExpense && !pendingShare?.uri && !launchedCamera.current) {
+      launchedCamera.current = true;
+      startScan('photo');
     }
   }, [open]);
 
@@ -508,44 +516,63 @@ function PickPhase({
     <View {...dropProps as object}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16 }}>
         <View>
-          <Text style={{ fontFamily: C.fonts.serif, fontSize: 28, color: C.cream, lineHeight: 30, letterSpacing: -0.3 }}>
-            Log <Text style={{ fontStyle: 'italic' }}>money</Text>
+          <Text style={{ fontFamily: C.fonts.serif, fontSize: 28, color: C.cream, lineHeight: 32, letterSpacing: -0.3 }}>
+            Scan or add an expense
           </Text>
           <Text style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>
-            {Platform.OS === 'web' ? 'Type, upload, or drop a receipt here' : 'How do you want to capture it?'}
+            {Platform.OS === 'web' ? 'Drop a receipt or PDF, or type it in' : 'Take a photo, or add it another way'}
           </Text>
         </View>
-        <Tap onPress={onClose} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }}>
+        <Tap onPress={onClose} accessibilityLabel="Close" style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }}>
           <Icon name="x" size={16} stroke={C.muted}/>
         </Tap>
       </View>
 
-      {!RECEIPT_STORAGE_ENABLED && (
+      {Platform.OS === 'web' && (
         <View style={{
-          marginBottom: 12, padding: 12, borderRadius: 14,
-          backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
+          marginBottom: 14, paddingVertical: 28, borderRadius: 16,
+          borderWidth: 1, borderStyle: 'dashed', borderColor: C.hair,
+          alignItems: 'center',
         }}>
-          <Text style={{ fontSize: 13, color: C.muted, lineHeight: 18 }}>
-            I can read a photo or PDF to fill the expense. The file itself won't be stored.
-          </Text>
+          <Text style={{ fontSize: 15, color: C.cream }}>Drop a receipt or PDF</Text>
         </View>
       )}
 
-      <View style={{ gap: 8, marginTop: 8 }}>
-        {opts.filter(o => !(Platform.OS === 'web' && o.id === 'photo')).map(o => (
-          <Tap key={o.id} onPress={() => onPick(o.id)} haptic style={{
-            flexDirection: 'row', alignItems: 'center', gap: 14,
-            padding: 16, borderRadius: 16,
-            backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
-          }}>
-            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${o.color}2e`, alignItems: 'center', justifyContent: 'center' }}>
-              <Icon name={o.icon} size={20} stroke={o.color} sw={1.6}/>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 15, color: C.cream, fontWeight: '500' }}>{o.label}</Text>
-              <Text style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{o.hint}</Text>
-            </View>
-            <Icon name="chev-r" size={16} stroke={C.subtle}/>
+      {Platform.OS !== 'web' && (
+        <Tap onPress={() => onPick('photo')} haptic style={{
+          marginBottom: 12, minHeight: 72, borderRadius: 16, backgroundColor: C.sage,
+          alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Text style={{ fontSize: 17, fontWeight: '600', color: '#0E0E0C' }}>Take photo</Text>
+        </Tap>
+      )}
+
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        {(Platform.OS === 'web'
+          ? [
+              { id: 'image' as Method, label: 'Upload' },
+              { id: 'file' as Method, label: 'File' },
+              { id: 'manual' as Method, label: 'Type' },
+            ]
+          : [
+              { id: 'image' as Method, label: 'Library' },
+              { id: 'file' as Method, label: 'File' },
+              { id: 'voice' as Method, label: 'Voice' },
+              { id: 'manual' as Method, label: 'Type' },
+            ]
+        ).map(item => (
+          <Tap
+            key={item.id}
+            onPress={() => onPick(item.id)}
+            haptic
+            accessibilityLabel={item.label}
+            style={{
+              flex: 1, minHeight: 44, borderRadius: 14,
+              backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
+              alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <Text style={{ fontSize: 13, color: C.cream, fontWeight: '600' }}>{item.label}</Text>
           </Tap>
         ))}
       </View>
@@ -679,9 +706,12 @@ function ReviewPhase({
     return null;
   });
   const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [txnType, setTxnType] = useState<'expense' | 'income'>(editExpense?.type ?? 'expense');
+  const viewMonth = monthKey(useViewMonth(s => s.month));
 
-  const monthLines = budget.forMonth(expenseMonthKey(dateISO) || monthKey(new Date()));
+  const saveMonth = expenseMonthKey(dateISO) || monthKey(new Date());
+  const monthLines = budget.forMonth(saveMonth);
   const selectedLine = monthLines.find(l => l.id === selectedLineId) ?? null;
   const overspend = !!(selectedLine && selectedLine.section !== 'income' && (parseFloat(amount) || 0) + 0 > selectedLine.expected);
 
@@ -739,58 +769,8 @@ function ReviewPhase({
         </View>
         <Text style={{ fontSize: 12, color: C.muted, marginBottom: 18 }}>
           {editExpense ? 'Edit any field.' : 'Tap any field to fix it.'}
+          {scanned?.confidence != null ? `  ✦ ${Math.round(scanned.confidence * 100)}% sure` : ''}
         </Text>
-
-        {!editExpense && (scanned?.line_items?.length ?? 0) > 0 && (
-          <Card style={{ padding: 14, marginBottom: 12 }}>
-            <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.06, textTransform: 'uppercase', marginBottom: 8 }}>
-              Line items
-            </Text>
-            {scanned!.line_items.map((item, i) => (
-              <View key={`${item.name}-${i}`} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
-                <Text style={{ flex: 1, fontSize: 14, color: C.cream }} numberOfLines={1}>{item.name}</Text>
-                {item.amount > 0 && (
-                  <Text style={{ fontSize: 13, color: C.muted, marginLeft: 8 }}>{item.amount.toFixed(2)}</Text>
-                )}
-              </View>
-            ))}
-          </Card>
-        )}
-
-        {receiptUri && (
-          <View style={{
-            marginBottom: 12, padding: 10, borderRadius: 16,
-            backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
-          }}>
-            {!(method === 'file' || receiptUri.toLowerCase().includes('.pdf')) && (
-              <Image
-                source={{ uri: receiptUri }}
-                style={{ width: '100%', height: 148, borderRadius: 12, marginBottom: 10, backgroundColor: C.surface2 }}
-                resizeMode="cover"
-              />
-            )}
-            <Text style={{ fontSize: 13, color: C.muted, lineHeight: 18, paddingHorizontal: 4, paddingBottom: 2 }}>
-              {RECEIPT_STORAGE_ENABLED
-                ? 'This file will be saved with the expense.'
-                : method === 'file' || receiptUri.toLowerCase().includes('.pdf')
-                  ? "I used this file to fill the fields. It won't be stored."
-                  : "I used this photo to fill the fields. The image won't be stored."}
-            </Text>
-          </View>
-        )}
-
-        {(!selectedLineId || overspend) && txnType === 'expense' && (
-          <View style={{
-            marginBottom: 12, padding: 12, borderRadius: 14,
-            backgroundColor: `${C.rose}18`, borderWidth: 0.5, borderColor: C.rose,
-          }}>
-            <Text style={{ fontSize: 13, color: C.rose }}>
-              {!selectedLineId
-                ? 'This is not on the budget. Pick a line or it stays red.'
-                : 'This would go over what you budgeted for that line.'}
-            </Text>
-          </View>
-        )}
 
         <Card style={{ padding: 20, marginBottom: 12 }}>
           <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.06, textTransform: 'uppercase' }}>Amount</Text>
@@ -806,26 +786,24 @@ function ReviewPhase({
               placeholderTextColor={C.muted}
               placeholder="0.00"
             />
-            <Tap onPress={() => setCurrencyPickerOpen(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 8 }}>
+            <Tap onPress={() => setCurrencyPickerOpen(true)} accessibilityLabel="Change currency" style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 8, minHeight: 44 }}>
               <Text style={{ fontSize: 13, color: C.muted }}>{currencyCode}</Text>
               <Icon name="chev-r" size={11} stroke={C.muted}/>
             </Tap>
           </View>
           {currencyCode !== preferredCurrency && !!amount && parseFloat(amount) > 0 && (
             <Text style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>
-              ≈ {fmt(convert(parseFloat(amount) || 0, currencyCode), preferredCurrency)}
+              ≈ {fmt(convert(parseFloat(amount) || 0, currencyCode), preferredCurrency)} converted
             </Text>
           )}
         </Card>
 
         <Card style={{ overflow: 'hidden', marginBottom: 12 }}>
-          <ReviewRow label="Merchant" value={merchant} onEdit={setMerchant}/>
-          <ReviewRow label="Date" value={dateDisplay} onPress={() => setDatePickerVisible(true)}/>
-          <ReviewRow label="Notes" value={note} onEdit={setNote} muted last/>
+          <ReviewRow label="Merchant" value={merchant} onEdit={setMerchant} last/>
         </Card>
 
         <BudgetLinePicker
-          month={expenseMonthKey(dateISO) || monthKey(new Date())}
+          month={saveMonth}
           monthLines={monthLines}
           selectedLineId={selectedLineId}
           selectedCategoryId={selectedCategoryId}
@@ -845,6 +823,25 @@ function ReviewPhase({
           }}
         />
 
+        {(!selectedLineId || overspend) && txnType === 'expense' && (
+          <View style={{
+            marginTop: -8, marginBottom: 12, padding: 12, borderRadius: 14,
+            backgroundColor: `${C.rose}18`, borderWidth: 0.5, borderColor: C.rose,
+          }}>
+            <Text style={{ fontSize: 13, color: C.rose }}>
+              {!selectedLineId
+                ? 'This is not on the budget. Pick a line or it stays red.'
+                : 'This would go over what you budgeted for that line.'}
+            </Text>
+          </View>
+        )}
+
+        {saveMonth !== viewMonth && (
+          <Text style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>
+            Saves to {monthTitle(saveMonth)} (receipt date)
+          </Text>
+        )}
+
         <Tap onPress={handleSave} haptic style={{ marginBottom: 8 }}>
           <LinearGradient
             colors={[C.sage, C.sageDeep]}
@@ -857,6 +854,50 @@ function ReviewPhase({
             </Text>
           </LinearGradient>
         </Tap>
+
+        <Tap
+          onPress={() => setMoreOpen(o => !o)}
+          accessibilityLabel={moreOpen ? 'Hide more details' : 'More details'}
+          style={{ minHeight: 44, justifyContent: 'center', marginBottom: 8 }}
+        >
+          <Text style={{ fontSize: 14, color: C.sage, fontWeight: '600' }}>{moreOpen ? 'Hide details' : 'More details'}</Text>
+        </Tap>
+
+        {moreOpen && (
+          <>
+            <Card style={{ overflow: 'hidden', marginBottom: 12 }}>
+              <ReviewRow label="Date" value={dateDisplay} onPress={() => setDatePickerVisible(true)}/>
+              <ReviewRow label="Notes" value={note} onEdit={setNote} muted last/>
+            </Card>
+            {(scanned?.line_items?.length ?? 0) > 0 && (
+              <Card style={{ padding: 14, marginBottom: 12 }}>
+                <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.06, textTransform: 'uppercase', marginBottom: 8 }}>
+                  Line items
+                </Text>
+                {scanned!.line_items.map((item, i) => (
+                  <View key={`${item.name}-${i}`} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+                    <Text style={{ flex: 1, fontSize: 14, color: C.cream }} numberOfLines={1}>{item.name}</Text>
+                    {item.amount > 0 && (
+                      <Text style={{ fontSize: 13, color: C.muted, marginLeft: 8 }}>{item.amount.toFixed(2)}</Text>
+                    )}
+                  </View>
+                ))}
+              </Card>
+            )}
+            {receiptUri && !(method === 'file' || receiptUri.toLowerCase().includes('.pdf')) && (
+              <Image
+                source={{ uri: receiptUri }}
+                style={{ width: '100%', height: 148, borderRadius: 12, marginBottom: 10, backgroundColor: C.surface2 }}
+                resizeMode="cover"
+              />
+            )}
+            {!RECEIPT_STORAGE_ENABLED && (
+              <Text style={{ fontSize: 13, color: C.muted, lineHeight: 18, marginBottom: 12 }}>
+                I can read a photo or PDF to fill the expense. The file itself won't be stored.
+              </Text>
+            )}
+          </>
+        )}
       </ScrollView>
 
       <DatePicker
