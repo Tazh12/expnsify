@@ -24,7 +24,7 @@ import { PlanScreen } from './src/screens/PlanScreen';
 import { ActivityScreen } from './src/screens/ActivityScreen';
 import { InsightsScreen } from './src/screens/InsightsScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
-import { CategoriesScreen } from './src/screens/CategoriesScreen';
+import { LinesGroupsScreen } from './src/screens/LinesGroupsScreen';
 import AuthScreen from './src/screens/AuthScreen';
 import { AddSheet } from './src/flows/AddSheet';
 import { UpgradeModal } from './src/flows/UpgradeModal';
@@ -232,7 +232,7 @@ export default function App() {
           <ThemeContext.Provider value={theme}>
             <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
               <SettingsScreen
-                onOpenCategories={() => setCatsOpen(true)}
+                onOpenLines={() => setCatsOpen(true)}
                 onClose={() => setSettingsOpen(false)}
               />
             </SafeAreaView>
@@ -241,7 +241,7 @@ export default function App() {
 
         <Modal visible={catsOpen} animationType="slide" presentationStyle="fullScreen">
           <ThemeContext.Provider value={theme}>
-            <CategoriesScreen onClose={() => setCatsOpen(false)} />
+            <LinesGroupsScreen onClose={() => setCatsOpen(false)} />
           </ThemeContext.Provider>
         </Modal>
       </View>

@@ -24,6 +24,9 @@ interface BudgetState {
   forMonth: (month: string) => BudgetLine[];
   dedupeRepeats: (month: string) => Promise<void>;
   carryIncome: (month: string, templateKeys: string[]) => Promise<void>;
+  renameForward: (templateKey: string, fromMonth: string, name: string) => Promise<void>;
+  stopFrom: (templateKey: string, fromMonth: string) => Promise<void>;
+  moveSectionFrom: (fromSection: string, toSection: string, fromMonth: string) => Promise<void>;
 }
 
 function linesCol(uid: string) {
@@ -362,4 +365,21 @@ export const useBudget = create<BudgetState>((set, get) => ({
     get().lines
       .filter(l => l.month === month)
       .sort((a, b) => a.sortOrder - b.sortOrder || (a.dueDay ?? 99) - (b.dueDay ?? 99) || a.name.localeCompare(b.name)),
+
+  renameForward: async (templateKey, fromMonth, name) => {
+    const targets = get().lines.filter(l => l.templateKey === templateKey && l.month >= fromMonth);
+    for (const line of targets) await get().update(line.id, { name });
+  },
+
+  stopFrom: async (templateKey, fromMonth) => {
+    const ids = get().lines
+      .filter(l => l.templateKey === templateKey && l.month >= fromMonth)
+      .map(l => l.id);
+    await get().removeMany(ids);
+  },
+
+  moveSectionFrom: async (fromSection, toSection, fromMonth) => {
+    const targets = get().lines.filter(l => l.section === fromSection && l.month >= fromMonth);
+    for (const line of targets) await get().update(line.id, { section: toSection });
+  },
 }));

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { slugKey } from '../services/month';
 import { SWATCHES } from '../theme';
@@ -22,6 +22,7 @@ interface GroupsState {
   subscribe: (uid: string) => () => void;
   reset: () => void;
   add: (label: string) => Promise<string>;
+  rename: (id: string, label: string) => Promise<void>;
   remove: (id: string) => Promise<void>;
 }
 
@@ -80,6 +81,13 @@ export const useBudgetGroups = create<GroupsState>((set, get) => ({
       sortOrder: get().groups.length,
     });
     return id;
+  },
+
+  rename: async (id, label) => {
+    const uid = get().uid;
+    const name = label.trim();
+    if (!uid || !name) return;
+    await updateDoc(doc(groupsCol(uid), id), { label: name });
   },
 
   remove: async (id) => {

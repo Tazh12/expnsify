@@ -5,7 +5,7 @@ import { useTheme, PALETTES, ACCENTS, type PaletteId, type AccentId } from '../t
 import { Card, Icon, Tap, Toggle, PageHeader, SectionHeader, SettingsRow } from '../components';
 import { useSettings } from '../store/useSettings';
 import { FONTS, type FontId } from '../theme';
-import { useCategories } from '../store/useCategories';
+import { useExpenses } from '../store/useExpenses';
 import { useAuth } from '../store/useAuth';
 import { useRates } from '../store/useRates';
 import { CurrencyPickerSheet } from '../components/CurrencyPicker';
@@ -15,6 +15,10 @@ import { monthKey } from '../services/month';
 import { useAiUsage } from '../store/useAiUsage';
 import { aiRemainingLabel } from '../flows/UpgradeModal';
 import { deleteAccount } from '../services/account';
+import { expensesToCsv } from '../services/export';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
+import Constants from 'expo-constants';
 
 function ratesAge(fetchedAt: number): string {
   const mins = Math.round((Date.now() - fetchedAt) / 60000);
@@ -24,7 +28,7 @@ function ratesAge(fetchedAt: number): string {
 }
 
 interface Props {
-  onOpenCategories: () => void;
+  onOpenLines: () => void;
   onClose: () => void;
 }
 
@@ -41,10 +45,11 @@ const ACCENT_DATA: { id: AccentId; color: string }[] = [
   { id: 'blue',  color: '#9FB8D4' },
 ];
 
-export function SettingsScreen({ onOpenCategories, onClose }: Props) {
+export function SettingsScreen({ onOpenLines, onClose }: Props) {
   const C = useTheme();
   const settings = useSettings();
-  const { categories } = useCategories();
+  const { expenses } = useExpenses();
+  const { lines } = useBudget();
   const { user, signOut, updateDisplayName } = useAuth();
 
   const rates = useRates();
@@ -55,6 +60,7 @@ export function SettingsScreen({ onOpenCategories, onClose }: Props) {
   const [currencyPickerOpen, setCurrencyPickerOpen] = useState(false);
   const [editNameOpen, setEditNameOpen] = useState(false);
   const [notifyOpen, setNotifyOpen] = useState(false);
+  const [panel, setPanel] = useState<'main' | 'appearance'>('main');
   const [nameInput, setNameInput] = useState('');
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<TextInput>(null);
@@ -148,6 +154,33 @@ export function SettingsScreen({ onOpenCategories, onClose }: Props) {
         </Tap>
       </Card>
 
+      {panel === 'main' && (
+        <Card style={{ padding: 4, marginTop: 12 }}>
+          <SettingsRow
+            icon={<Icon name="trash" size={18} stroke={C.rose}/>}
+            label="Delete account"
+            onPress={() => Alert.alert(
+              'Delete account',
+              'This permanently deletes your expenses, budget, and sign-in. This cannot be undone.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: () => {
+                    deleteAccount().catch(e => {
+                      const msg = e instanceof Error ? e.message : 'Please try again.';
+                      Alert.alert('Could not delete account', msg.includes('recent') ? 'Sign out, sign back in, and try again.' : msg);
+                    });
+                  },
+                },
+              ],
+            )}
+            isLast
+          />
+        </Card>
+      )}
+
       {/* Name edit sheet */}
       <Modal visible={editNameOpen} transparent animationType="slide" onRequestClose={() => setEditNameOpen(false)}>
         <BlurView intensity={50} tint="dark" style={{ flex: 1, justifyContent: 'flex-end' }}>
@@ -231,7 +264,12 @@ export function SettingsScreen({ onOpenCategories, onClose }: Props) {
         </BlurView>
       </Modal>
 
-      <SectionHeader title="Appearance"/>
+      {panel === 'appearance' && (
+        <Tap onPress={() => setPanel('main')} accessibilityLabel="Back" style={{ marginTop: 12, minHeight: 44, justifyContent: 'center' }}>
+          <Text style={{ color: C.sage, fontSize: 15 }}>← Back</Text>
+        </Tap>
+      )}
+      {panel === 'appearance' && (
       <Card style={{ padding: 16 }}>
 
         {/* ── Theme ── */}
@@ -326,8 +364,11 @@ export function SettingsScreen({ onOpenCategories, onClose }: Props) {
         </View>
 
       </Card>
+      )}
 
-      <SectionHeader title="Preferences"/>
+      {panel === 'main' && (
+      <>
+      <SectionHeader title="Budget"/>
       <Card style={{ padding: 4 }}>
         <SettingsRow icon={<Icon name="wallet" size={18} stroke={C.cream}/>} label="Base currency" detail={settings.preferredCurrency} onPress={() => setCurrencyPickerOpen(true)}/>
         {rates.fetchedAt && (
@@ -337,7 +378,7 @@ export function SettingsScreen({ onOpenCategories, onClose }: Props) {
             </Text>
           </View>
         )}
-        <SettingsRow icon={<Icon name="tag" size={18} stroke={C.cream}/>} label="Categories" detail={`${categories.filter(c => !c.archived).length}`} onPress={onOpenCategories}/>
+        <SettingsRow icon={<Icon name="tag" size={18} stroke={C.cream}/>} label="Lines & Groups" onPress={onOpenLines}/>
         <SettingsRow
           icon={<Icon name="bell" size={18} stroke={C.cream}/>}
           label="Notifications"
@@ -349,55 +390,35 @@ export function SettingsScreen({ onOpenCategories, onClose }: Props) {
           label="Save purchase location"
           detail="Off unless you turn this on"
           control={<Toggle on={settings.captureLocation} onChange={v => settings.set('captureLocation', v)}/>}
-          isLast
         />
-      </Card>
-
-      <SectionHeader title="AI"/>
-      <Card style={{ padding: 4 }}>
         <SettingsRow
           icon={<Icon name="sparkles" size={18} stroke={C.sage}/>}
           label="AI actions"
           detail={aiRemainingLabel(aiUsed, aiLimit, aiLoaded)}
-        />
-        <SettingsRow
-          icon={<Icon name="sparkles" size={18} stroke={C.sage}/>}
-          label="Auto-categorize"
-          control={<Toggle on={settings.autoCategories} onChange={v => settings.set('autoCategories', v)}/>}
-        />
-        <SettingsRow
-          icon={<Icon name="cam" size={18} stroke={C.cream}/>}
-          label="Receipt OCR"
-          control={<Toggle on={settings.receiptOcr} onChange={v => settings.set('receiptOcr', v)}/>}
           isLast
         />
       </Card>
 
-      <SectionHeader title="Data"/>
+      <SectionHeader title="Appearance"/>
       <Card style={{ padding: 4 }}>
-        <SettingsRow icon={<Icon name="export" size={18} stroke={C.cream}/>} label="Export all data" onPress={() => Alert.alert('Use the Reports screen to export.')}/>
-        <SettingsRow icon={<Icon name="trash" size={18} stroke={C.rose}/>} label="Delete account" onPress={() => Alert.alert(
-          'Delete account',
-          'This permanently deletes your expenses, budget, and sign-in. This cannot be undone.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Delete',
-              style: 'destructive',
-              onPress: () => {
-                deleteAccount().catch(e => {
-                  const msg = e instanceof Error ? e.message : 'Please try again.';
-                  Alert.alert('Could not delete account', msg.includes('recent') ? 'Sign out, sign back in, and try again.' : msg);
-                });
-              },
-            },
-          ],
-        )} isLast/>
+        <SettingsRow icon={<Icon name="sparkles" size={18} stroke={C.cream}/>} label="Theme, accent, and font" onPress={() => setPanel('appearance')} isLast/>
       </Card>
 
-      <Text style={{ textAlign: 'center', marginTop: 28, color: C.subtle, fontSize: 12 }}>
-        <Text style={{ fontFamily: C.fonts.serifItalic }}>expnsify</Text> · v1.0.0
+      <SectionHeader title="Data"/>
+      <Card style={{ padding: 4 }}>
+        <SettingsRow icon={<Icon name="export" size={18} stroke={C.cream}/>} label="Export all data" detail="Every month, as CSV" onPress={async () => {
+          const path = FileSystem.cacheDirectory + 'expnsify-all.csv';
+          await FileSystem.writeAsStringAsync(path, expensesToCsv(expenses, lines), { encoding: FileSystem.EncodingType.UTF8 });
+          await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: 'Export all data' });
+        }} isLast/>
+      </Card>
+
+      <SectionHeader title="About"/>
+      <Text style={{ textAlign: 'center', marginTop: 8, color: C.subtle, fontSize: 12 }}>
+        <Text style={{ fontFamily: C.fonts.serifItalic }}>expnsify</Text> · v{Constants.expoConfig?.version ?? '1.0.0'}
       </Text>
+      </>
+      )}
     </ScrollView>
     <CurrencyPickerSheet
       visible={currencyPickerOpen}

@@ -19,7 +19,7 @@ import { useViewMonth } from '../store/useViewMonth';
 import { lineActual, summarizeMonth, sectionTotal } from '../services/budget';
 import { type BudgetLine, type BudgetSection } from '../store/budgetTypes';
 import { useLayout } from '../hooks/useLayout';
-import { exportMonthPdf } from '../services/export';
+import { exportMonthPdf, expensesToCsv } from '../services/export';
 import { AiLimitError, fetchInsights } from '../services/groq';
 
 type Span = 'week' | 'month';
@@ -146,13 +146,8 @@ export function InsightsScreen() {
   const monthLabel = month.toLocaleString('en-US', { month: 'long', year: 'numeric' });
 
   const exportCsv = async () => {
-    const header = 'Date,Merchant,Line,Type,Amount,Currency,Unbudgeted,Note\n';
-    const rows = monthExpenses.map(t => {
-      const line = lines.find(l => l.id === t.line_id);
-      return `"${t.date}","${t.merchant}","${line?.name ?? t.category_id}","${t.type}","${t.amount}","${t.currency}","${t.unbudgeted}","${t.note ?? ''}"`;
-    }).join('\n');
     const path = FileSystem.cacheDirectory + 'expnsify-budget.csv';
-    await FileSystem.writeAsStringAsync(path, header + rows, { encoding: FileSystem.EncodingType.UTF8 });
+    await FileSystem.writeAsStringAsync(path, expensesToCsv(monthExpenses, lines), { encoding: FileSystem.EncodingType.UTF8 });
     await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: 'Export budget' });
   };
 

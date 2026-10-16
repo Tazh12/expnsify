@@ -4,6 +4,29 @@ import type { Expense } from '../store/useExpenses';
 import type { BudgetLine } from '../store/budgetTypes';
 import { fmt } from './format';
 
+function escapeCsv(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+export function expensesToCsv(expenses: Expense[], lines: BudgetLine[]): string {
+  const header = 'Date,Merchant,Line,Type,Amount,Currency,Unbudgeted,Note\n';
+  const rows = expenses.map(t => {
+    const line = lines.find(l => l.id === t.line_id)
+      ?? lines.find(l => l.month === t.date.slice(0, 7) && l.templateKey === t.category_id);
+    return [
+      t.date,
+      t.merchant,
+      line?.name ?? t.category_id,
+      t.type,
+      String(t.amount),
+      t.currency,
+      String(t.unbudgeted),
+      t.note ?? '',
+    ].map(escapeCsv).join(',');
+  }).join('\n');
+  return header + rows;
+}
+
 export async function exportMonthPdf(args: {
   monthLabel: string;
   expenses: Expense[];
