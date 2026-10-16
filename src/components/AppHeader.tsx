@@ -45,7 +45,7 @@ export function AppHeader({
           onPress={() => onChangeMonth(-1)}
           accessibilityLabel="Previous month"
           style={{
-            width: 36, height: 36, borderRadius: 18,
+            width: 44, height: 44, borderRadius: 22,
             backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
             alignItems: 'center', justifyContent: 'center',
           }}
@@ -63,7 +63,7 @@ export function AppHeader({
           onPress={() => onChangeMonth(1)}
           accessibilityLabel="Next month"
           style={{
-            width: 36, height: 36, borderRadius: 18,
+            width: 44, height: 44, borderRadius: 22,
             backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
             alignItems: 'center', justifyContent: 'center',
           }}
@@ -76,7 +76,7 @@ export function AppHeader({
         onPress={onOpenSettings}
         accessibilityLabel="Settings"
         style={{
-          width: 36, height: 36, borderRadius: 18,
+          width: 44, height: 44, borderRadius: 22,
           backgroundColor: C.sage, alignItems: 'center', justifyContent: 'center', flexShrink: 0,
         }}
       >

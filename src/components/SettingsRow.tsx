@@ -17,7 +17,7 @@ export function SettingsRow({
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={onPress ? 0.6 : 1} style={{
       flexDirection: 'row', alignItems: 'center', gap: 14,
-      padding: 14, paddingHorizontal: 16,
+      paddingVertical: 12, paddingHorizontal: 16, minHeight: 44,
       borderBottomWidth: isLast ? 0 : 0.5, borderBottomColor: C.hair,
     }}>
       {icon && (
@@ -25,8 +25,8 @@ export function SettingsRow({
           {icon}
         </View>
       )}
-      <Text style={{ flex: 1, fontSize: 14, color: C.cream }}>{label}</Text>
-      {detail && <Text style={{ fontSize: 13, color: C.muted }}>{detail}</Text>}
+      <Text style={{ flex: 1, fontSize: 14, color: C.cream }} numberOfLines={2}>{label}</Text>
+      {detail ? <Text style={{ flexShrink: 1, fontSize: 13, color: C.muted, textAlign: 'right' }} numberOfLines={2}>{detail}</Text> : null}
       {control}
       {onPress && !control && <Icon name="chev-r" size={14} stroke={C.subtle}/>}
     </TouchableOpacity>

@@ -15,6 +15,3 @@ export const DEFAULT_CATEGORIES = [
 export function currentMonthKey(): string {
   return monthKey(new Date());
 }
-
-/** @deprecated Demo transactions are no longer seeded. Kept empty so old imports don't break. */
-export const DEMO_TXNS: never[] = [];

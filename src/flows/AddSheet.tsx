@@ -30,11 +30,9 @@ import { monthKey, expenseMonthKey, slugKey, uniqueTemplateKey, monthTitle } fro
 import { useViewMonth } from '../store/useViewMonth';
 import { uploadReceipt } from '../services/receipts';
 import { RECEIPT_STORAGE_ENABLED, resolveReceiptUriToPersist } from '../services/receiptUri';
-import { DEFAULT_CATEGORIES } from '../store/defaults';
 import type { BudgetLine, SectionMeta } from '../store/budgetTypes';
 import { sectionColor } from '../store/budgetTypes';
 
-const GENERAL_VARIABLE_IDS = ['groceries', 'coffee', 'dining', 'transport', 'travel', 'home', 'software', 'health'] as const;
 const PICKER_SECTION_ORDER = ['bills', 'variable', 'investments'] as const;
 
 function normName(s: string): string {
@@ -71,14 +69,6 @@ function uniqueByTemplate(lines: BudgetLine[]): BudgetLine[] {
     out.push(line);
   }
   return out;
-}
-
-function matchGeneralLine(cat: { id: string; name: string }, lines: BudgetLine[]): BudgetLine | undefined {
-  const spend = spendLines(lines);
-  const n = normName(cat.name);
-  const pred = (l: BudgetLine) => l.templateKey === cat.id || normName(l.name) === n;
-  const vars = spend.filter(l => l.section === 'variable');
-  return preferUnpaid(vars.filter(pred))[0] ?? preferUnpaid(spend.filter(pred))[0];
 }
 
 function initialSpendLineId(
@@ -493,13 +483,6 @@ function PickPhase({
   onDropFile: (uri: string, mime: string) => void;
 }) {
   const C = useTheme();
-  const opts: { id: Method; icon: string; label: string; hint: string; color: string }[] = [
-    { id: 'photo',  icon: 'cam',   label: 'Snap a receipt',     hint: 'AI reads it in seconds',           color: C.sage },
-    { id: 'image',  icon: 'image', label: 'Upload image',       hint: 'From your photo library',          color: C.plum },
-    { id: 'file',   icon: 'doc',   label: 'Share a PDF / email', hint: 'PDF, confirmation email, or screenshot', color: C.sky },
-    { id: 'voice',  icon: 'mic',   label: 'Say it out loud',    hint: 'Merchant, amount, budget line',    color: C.rose },
-    { id: 'manual', icon: 'edit',  label: 'Enter manually',     hint: 'Old fashioned',                    color: C.muted },
-  ];
 
   const dropProps = Platform.OS === 'web' ? {
     onDragOver: (e: { preventDefault: () => void }) => e.preventDefault(),

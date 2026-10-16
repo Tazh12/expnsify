@@ -110,7 +110,7 @@ export function SettingsScreen({ onClose }: Props) {
           onPress={onClose}
           accessibilityLabel="Close settings"
           style={{
-            marginTop: 10, width: 36, height: 36, borderRadius: 18,
+            marginTop: 8, width: 44, height: 44, borderRadius: 22,
             backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
             alignItems: 'center', justifyContent: 'center',
           }}
@@ -380,7 +380,7 @@ export function SettingsScreen({ onClose }: Props) {
         <SettingsRow
           icon={<Icon name="pin" size={18} stroke={C.cream}/>}
           label="Save purchase location"
-          detail="Off unless you turn this on"
+          detail={settings.captureLocation ? 'On' : 'Off'}
           control={<Toggle on={settings.captureLocation} onChange={v => settings.set('captureLocation', v)}/>}
         />
         <SettingsRow

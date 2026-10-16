@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Text, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../theme';
-import { Card, CarryIncomeCard, Tap } from '../components';
+import { Card, CarryIncomeCard, Tap, PageHeader } from '../components';
 import { BudgetSection } from '../components/BudgetSection';
 import { UpcomingPayments } from '../components/UpcomingPayments';
 import { LineEditor } from '../flows/LineEditor';
@@ -149,6 +149,7 @@ export function PlanScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
+        <PageHeader title="Plan"/>
         <Card style={{ padding: 16, marginTop: 8, marginBottom: 8 }}>
           <Text style={{ fontSize: 15, color: C.cream, lineHeight: 22 }}>
             Income {fmt(summary.expectedIncome, preferredCurrency)}
