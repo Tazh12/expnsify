@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   View, Text, ScrollView, Alert, TouchableOpacity,
 } from 'react-native';
@@ -12,7 +12,8 @@ import { useRates } from '../store/useRates';
 import { useSettings } from '../store/useSettings';
 import { useBudgetGroups } from '../store/useBudgetGroups';
 import { fmt } from '../services/format';
-import { monthKey, defaultBudgetMonth } from '../services/month';
+import { monthKey } from '../services/month';
+import { useViewMonth } from '../store/useViewMonth';
 import { lineActual, summarizeMonth, sectionTotal } from '../services/budget';
 import { type BudgetSection } from '../store/budgetTypes';
 import { useLayout } from '../hooks/useLayout';
@@ -29,7 +30,8 @@ export function ReportsScreen({ onOpenRecap }: Props) {
   const { convert } = useRates();
   const { preferredCurrency } = useSettings();
   const spend = useBudgetGroups(s => s.spend);
-  const [month, setMonth] = useState(defaultBudgetMonth);
+  const month = useViewMonth(s => s.month);
+  const shiftMonth = useViewMonth(s => s.shiftMonth);
   const key = monthKey(month);
   const lines = forMonth(key);
 
@@ -81,12 +83,6 @@ export function ReportsScreen({ onOpenRecap }: Props) {
     }
   };
 
-  const shift = (d: number) => {
-    const n = new Date(month);
-    n.setMonth(n.getMonth() + d);
-    setMonth(n);
-  };
-
   return (
     <ScrollView
       style={{ flex: 1 }}
@@ -103,7 +99,7 @@ export function ReportsScreen({ onOpenRecap }: Props) {
       </View>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, marginBottom: 8 }}>
-        <Tap onPress={() => shift(-1)} style={{
+        <Tap onPress={() => shiftMonth(-1)} style={{
           width: 36, height: 36, borderRadius: 18, backgroundColor: C.surface,
           borderWidth: 0.5, borderColor: C.hair, alignItems: 'center', justifyContent: 'center',
         }}>
@@ -112,7 +108,7 @@ export function ReportsScreen({ onOpenRecap }: Props) {
         <Text style={{ fontFamily: C.fonts.serif, fontSize: 20, color: C.cream, flex: 1 }}>
           {monthLabel}
         </Text>
-        <Tap onPress={() => shift(1)} style={{
+        <Tap onPress={() => shiftMonth(1)} style={{
           width: 36, height: 36, borderRadius: 18, backgroundColor: C.surface,
           borderWidth: 0.5, borderColor: C.hair, alignItems: 'center', justifyContent: 'center',
         }}>

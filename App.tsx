@@ -16,7 +16,6 @@ import { useBudget } from './src/store/useBudget';
 import { useBudgetGroups } from './src/store/useBudgetGroups';
 import { useAuth, onAuthStateChanged, firebaseAuth } from './src/store/useAuth';
 import { useLayout } from './src/hooks/useLayout';
-import { defaultBudgetMonth } from './src/services/month';
 import { AppShell } from './src/components/AppShell';
 import { AppHeader } from './src/components/AppHeader';
 import type { TabId } from './src/components/TabBar';
@@ -30,6 +29,7 @@ import { AddSheet } from './src/flows/AddSheet';
 import { RecapModal } from './src/flows/RecapModal';
 import { UpgradeModal } from './src/flows/UpgradeModal';
 import { useAiUsage } from './src/store/useAiUsage';
+import { useViewMonth } from './src/store/useViewMonth';
 
 export default function App() {
   const [fontsLoaded, fontError] = useFonts({
@@ -69,7 +69,8 @@ export default function App() {
   const [addOpen, setAddOpen] = useState(false);
   const [recapOpen, setRecapOpen] = useState(false);
   const [catsOpen, setCatsOpen] = useState(false);
-  const [month, setMonth] = useState(defaultBudgetMonth);
+  const month = useViewMonth(s => s.month);
+  const shiftMonth = useViewMonth(s => s.shiftMonth);
   const [pendingShare, setPendingShare] = useState<{ uri: string; mimeType?: string } | null>(null);
 
   useEffect(() => {
@@ -174,16 +175,10 @@ export default function App() {
     );
   }
 
-  const onChangeMonth = (delta: number) => {
-    const m = new Date(month);
-    m.setMonth(m.getMonth() + delta);
-    setMonth(m);
-  };
-
   const screen = (() => {
     switch (tab) {
       case 'home':
-        return <HomeScreen month={month} onChangeMonth={onChangeMonth} />;
+        return <HomeScreen />;
       case 'txns':
         return <ActivityScreen />;
       case 'reports':
@@ -202,7 +197,7 @@ export default function App() {
             <AppHeader
               tab={tab}
               month={month}
-              onChangeMonth={onChangeMonth}
+              onChangeMonth={shiftMonth}
             />
           </SafeAreaView>
         )}

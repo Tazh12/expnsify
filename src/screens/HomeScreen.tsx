@@ -15,15 +15,11 @@ import { useSettings } from '../store/useSettings';
 import { useBudgetGroups } from '../store/useBudgetGroups';
 import { fmt } from '../services/format';
 import { monthKey, occurrenceDaysInMonth, repeatStepDays, uniqueTemplateKey } from '../services/month';
+import { useViewMonth } from '../store/useViewMonth';
 import { incomeCarryOffers, lineActual, summarizeMonth } from '../services/budget';
 import { syncNotifications } from '../services/notifications';
 import { type BudgetLine, type BudgetSection as BudgetSectionId } from '../store/budgetTypes';
 import { useLayout } from '../hooks/useLayout';
-
-interface Props {
-  month: Date;
-  onChangeMonth: (delta: number) => void;
-}
 
 type DeclinedCarry = Record<string, string[]>;
 
@@ -62,8 +58,10 @@ async function rememberDeclinedCarry(userId: string, month: string, templateKeys
   return next;
 }
 
-export function HomeScreen({ month, onChangeMonth }: Props) {
+export function HomeScreen() {
   const C = useTheme();
+  const month = useViewMonth(s => s.month);
+  const onChangeMonth = useViewMonth(s => s.shiftMonth);
   const { isWide } = useLayout();
   const key = monthKey(month);
   const { forMonth, ensureMonth, addMany, update, remove, loaded, dedupeRepeats, carryIncome, lines: allLines, uid } = useBudget();
