@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   View, Text, Modal, TouchableOpacity, ScrollView, TextInput,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { BottomSheet } from './BottomSheet';
 import { useTheme } from '../theme';
 import { Icon } from './Icon';
 import { Tap } from './Tap';
@@ -40,18 +40,7 @@ export function CurrencyPickerSheet({ visible, current, onSelect, onClose }: Pro
   );
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <BlurView intensity={40} tint={C.isLight ? 'light' : 'dark'} style={{ flex: 1, justifyContent: 'flex-end' }}>
-        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose}/>
-        <View style={{
-          backgroundColor: C.bgElev,
-          borderTopLeftRadius: 28, borderTopRightRadius: 28,
-          borderWidth: 0.5, borderColor: C.hairStrong,
-          paddingTop: 12, maxHeight: '80%' as any,
-        }}>
-          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.subtle, alignSelf: 'center', marginBottom: 16 }}/>
-
-          {/* Header */}
+    <BottomSheet visible={visible} onClose={onClose}>
           <View style={{ paddingHorizontal: 22, marginBottom: 12 }}>
             <Text style={{ fontFamily: C.fonts.serif, fontSize: 26, color: C.cream, marginBottom: 14 }}>
               Currency
@@ -110,8 +99,6 @@ export function CurrencyPickerSheet({ visible, current, onSelect, onClose }: Pro
               );
             })}
           </ScrollView>
-        </View>
-      </BlurView>
-    </Modal>
+    </BottomSheet>
   );
 }

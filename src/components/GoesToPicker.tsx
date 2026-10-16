@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, Modal, TextInput, Pressable, ScrollView } from 'react-native';
+import { View, Text, TextInput, ScrollView } from 'react-native';
 import { useTheme } from '../theme';
 import { Tap } from './Tap';
 import { Icon } from './Icon';
+import { BottomSheet } from './BottomSheet';
 import { useBudgetGroups } from '../store/useBudgetGroups';
 import type { SectionMeta } from '../store/budgetTypes';
 
@@ -63,18 +64,9 @@ export function GoesToPicker({
         </Tap>
       </View>
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-          <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }} onPress={() => setOpen(false)} />
-          <View style={{
-            backgroundColor: C.bgElev,
-            borderTopLeftRadius: 24, borderTopRightRadius: 24,
-            borderWidth: 0.5, borderColor: C.hairStrong,
-            paddingHorizontal: 20, paddingTop: 12, paddingBottom: 28, maxHeight: '70%',
-          }}>
-            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.subtle, alignSelf: 'center', marginBottom: 14 }} />
-            <Text style={{ fontFamily: C.fonts.serif, fontSize: 24, color: C.cream, marginBottom: 12 }}>Goes to</Text>
-            <ScrollView keyboardShouldPersistTaps="handled">
+      <BottomSheet visible={open} onClose={() => setOpen(false)}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 28 }}>
+          <Text style={{ fontFamily: C.fonts.serif, fontSize: 24, color: C.cream, marginBottom: 12 }}>Goes to</Text>
               {spend.map(s => (
                 <Tap
                   key={s.id}
@@ -118,10 +110,8 @@ export function GoesToPicker({
                   <Text style={{ color: '#0E0E0C', fontWeight: '600', fontSize: 14 }}>{saving ? '…' : 'Add'}</Text>
                 </Tap>
               </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+        </ScrollView>
+      </BottomSheet>
     </View>
   );
 }

@@ -3,7 +3,7 @@ import {
   View, Text, Modal, ScrollView, Image, TouchableOpacity,
   StyleSheet, Alert, ActivityIndicator,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { BottomSheet } from '../components/BottomSheet';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { useTheme } from '../theme';
@@ -98,15 +98,7 @@ export function TxnDetailModal({ expense: t, category, onClose, onEdit, onDelete
       : 'Not stored';
 
   return (
-    <Modal visible={!!t} transparent animationType="slide" onRequestClose={onClose}>
-      <BlurView intensity={50} tint="dark" style={{ flex: 1, justifyContent: 'flex-end' }}>
-        {/* Tap-away dismiss */}
-        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose}/>
-
-        <View style={[sh.sheet, { backgroundColor: C.bgElev, borderColor: C.hairStrong }]}>
-          {/* Grabber */}
-          <View style={[sh.grabber, { backgroundColor: C.subtle }]}/>
-
+    <BottomSheet visible={!!t} onClose={onClose}>
           <ScrollView
             showsVerticalScrollIndicator={false}
             bounces={false}
@@ -248,9 +240,7 @@ export function TxnDetailModal({ expense: t, category, onClose, onEdit, onDelete
               )}
             </View>
           </ScrollView>
-        </View>
-      </BlurView>
-    </Modal>
+    </BottomSheet>
   );
 }
 

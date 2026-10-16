@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   View, Text, Modal, TextInput, ScrollView, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { BottomSheet } from '../components/BottomSheet';
 import { TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme';
@@ -156,21 +156,12 @@ export function LineEditor({
   const cta = saving ? 'Saving…' : initial ? 'Save' : addingIncome ? 'Add income' : 'Add budget';
 
   return (
-    <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
-      <BlurView intensity={40} tint={C.isLight ? 'light' : 'dark'} style={{ flex: 1, justifyContent: 'flex-end' }}>
-        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose}/>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={{
-            backgroundColor: C.bgElev,
-            borderTopLeftRadius: 28, borderTopRightRadius: 28,
-            borderWidth: 0.5, borderColor: C.hairStrong,
-            paddingTop: 12, maxHeight: '88%' as any,
-          }}>
-            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.subtle, alignSelf: 'center', marginBottom: 8 }}/>
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{ paddingHorizontal: 22, paddingBottom: 40 }}
-            >
+    <>
+      <BottomSheet visible={open} onClose={onClose}>
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingHorizontal: 22, paddingBottom: 40 }}
+        >
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
                 <Text style={{ fontFamily: C.fonts.serif, fontSize: 26, color: C.cream }}>
                   {title}
@@ -304,9 +295,7 @@ export function LineEditor({
                 </Tap>
               )}
             </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </BlurView>
+      </BottomSheet>
 
       <DatePicker
         visible={datePickerOpen}
@@ -317,7 +306,7 @@ export function LineEditor({
         onClear={() => setDueDay(null)}
         onClose={() => setDatePickerOpen(false)}
       />
-    </Modal>
+    </>
   );
 }
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, ScrollView, Alert, Modal, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { BottomSheet } from '../components/BottomSheet';
 import { useTheme, PALETTES, ACCENTS, type PaletteId, type AccentId } from '../theme';
 import { Card, Icon, Tap, Toggle, PageHeader, SectionHeader, SettingsRow } from '../components';
 import { useSettings } from '../store/useSettings';
@@ -186,18 +186,8 @@ export function SettingsScreen({ onClose }: Props) {
       )}
 
       {/* Name edit sheet */}
-      <Modal visible={editNameOpen} transparent animationType="slide" onRequestClose={() => setEditNameOpen(false)}>
-        <BlurView intensity={50} tint="dark" style={{ flex: 1, justifyContent: 'flex-end' }}>
-          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setEditNameOpen(false)}/>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-            <View style={{
-              backgroundColor: C.bgElev,
-              borderTopLeftRadius: 28, borderTopRightRadius: 28,
-              borderWidth: 0.5, borderColor: C.hairStrong,
-              paddingTop: 12, paddingBottom: 44, paddingHorizontal: 22,
-            }}>
-              {/* Grabber */}
-              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.subtle, alignSelf: 'center', marginBottom: 24 }}/>
+      <BottomSheet visible={editNameOpen} onClose={() => setEditNameOpen(false)}>
+            <View style={{ paddingHorizontal: 22, paddingBottom: 28 }}>
 
               {/* Avatar preview */}
               <View style={{ alignItems: 'center', marginBottom: 20 }}>
@@ -264,9 +254,7 @@ export function SettingsScreen({ onClose }: Props) {
                 </Text>
               </Tap>
             </View>
-          </KeyboardAvoidingView>
-        </BlurView>
-      </Modal>
+      </BottomSheet>
 
       {panel === 'appearance' && (
         <Tap onPress={() => setPanel('main')} accessibilityLabel="Back" style={{ marginTop: 12, minHeight: 44, justifyContent: 'center' }}>
@@ -466,16 +454,8 @@ function NotifySheet({ open, onClose }: { open: boolean; onClose: () => void }) 
   };
 
   return (
-    <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
-      <BlurView intensity={40} tint="dark" style={{ flex: 1, justifyContent: 'flex-end' }}>
-        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose}/>
-        <View style={{
-          backgroundColor: C.bgElev,
-          borderTopLeftRadius: 28, borderTopRightRadius: 28,
-          borderWidth: 0.5, borderColor: C.hairStrong,
-          paddingTop: 12, paddingHorizontal: 22, paddingBottom: 40,
-        }}>
-          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.subtle, alignSelf: 'center', marginBottom: 20 }}/>
+    <BottomSheet visible={open} onClose={onClose}>
+      <View style={{ paddingHorizontal: 22, paddingBottom: 28 }}>
           <Text style={{ fontFamily: C.fonts.serif, fontSize: 26, color: C.cream, marginBottom: 18 }}>Notifications</Text>
 
           <Card style={{ padding: 4, marginBottom: 14 }}>
@@ -510,8 +490,7 @@ function NotifySheet({ open, onClose }: { open: boolean; onClose: () => void }) 
           <Text style={{ fontSize: 12, color: C.muted, lineHeight: 18 }}>
             Reminders stay on this device. We’ll nudge you on the {ordinalDay(settings.budgetReminderDay)} to sit down and budget, and before unpaid due dates.
           </Text>
-        </View>
-      </BlurView>
-    </Modal>
+      </View>
+    </BottomSheet>
   );
 }

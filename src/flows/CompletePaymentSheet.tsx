@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, Modal, TouchableOpacity } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { BottomSheet } from '../components/BottomSheet';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme';
 import { Tap } from '../components/Tap';
@@ -24,16 +24,8 @@ export function CompletePaymentSheet({
   if (!open || !line || !scanned) return null;
 
   return (
-    <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
-      <BlurView intensity={50} tint={C.isLight ? 'light' : 'dark'} style={{ flex: 1, justifyContent: 'flex-end' }}>
-        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose}/>
-        <View style={{
-          backgroundColor: C.bgElev,
-          borderTopLeftRadius: 28, borderTopRightRadius: 28,
-          borderWidth: 0.5, borderColor: C.hairStrong,
-          paddingTop: 12, paddingHorizontal: 22, paddingBottom: 40,
-        }}>
-          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.subtle, alignSelf: 'center', marginBottom: 20 }}/>
+    <BottomSheet visible={open} onClose={onClose}>
+      <View style={{ paddingHorizontal: 22, paddingBottom: 28 }}>
           <Text style={{ fontSize: 11, color: C.sage, letterSpacing: 0.05, textTransform: 'uppercase', marginBottom: 8 }}>
             Payment confirmation
           </Text>
@@ -59,8 +51,7 @@ export function CompletePaymentSheet({
           <Tap onPress={onEdit} style={{ alignItems: 'center', paddingTop: 16 }}>
             <Text style={{ fontSize: 13, color: C.muted }}>Review details instead</Text>
           </Tap>
-        </View>
-      </BlurView>
-    </Modal>
+      </View>
+    </BottomSheet>
   );
 }

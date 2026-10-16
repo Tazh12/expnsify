@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Modal, TouchableOpacity, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { BottomSheet } from './BottomSheet';
 import { useTheme } from '../theme';
 import { Icon } from './';
 import { Tap } from './';
@@ -196,19 +197,10 @@ export function DatePicker({
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
-        <View style={{
-          backgroundColor: C.bgElev,
-          borderTopLeftRadius: 28, borderTopRightRadius: 28,
-          borderWidth: 0.5, borderColor: C.hairStrong,
-          padding: 24, paddingBottom: 40,
-        }}>
-          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.hairStrong, alignSelf: 'center', marginBottom: 20 }} />
-          {calendar}
-        </View>
+    <BottomSheet visible={visible} onClose={onClose}>
+      <View style={{ paddingHorizontal: 24, paddingBottom: 28 }}>
+        {calendar}
       </View>
-    </Modal>
+    </BottomSheet>
   );
 }

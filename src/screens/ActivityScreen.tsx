@@ -3,7 +3,7 @@ import {
   View, Text, ScrollView, TextInput, Modal, Pressable,
   TouchableOpacity, StyleSheet, Alert, ActivityIndicator,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { BottomSheet } from '../components/BottomSheet';
 import { useTheme } from '../theme';
 import { Card, Icon, Tap, TxnRow, PageHeader } from '../components';
 import { useExpenses, type Expense } from '../store/useExpenses';
@@ -393,18 +393,8 @@ function FilterSheet({
   }
 
   return (
-    <Modal visible={open} transparent animationType="slide">
-      <BlurView intensity={40} tint="dark" style={{ flex: 1, justifyContent: 'flex-end' }}>
-        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose}/>
-        <View style={{
-          backgroundColor: C.bgElev,
-          borderTopLeftRadius: 28, borderTopRightRadius: 28,
-          borderWidth: 0.5, borderColor: C.hairStrong,
-          paddingTop: 12, paddingBottom: 40, maxHeight: '85%' as any,
-        }}>
-          {/* Grabber */}
-          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.subtle, alignSelf: 'center', marginBottom: 16 }}/>
-
+    <>
+    <BottomSheet visible={open} onClose={onClose}>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 8 }}>
             {/* Header */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
@@ -500,8 +490,7 @@ function FilterSheet({
               <Text style={{ color: '#0E0E0C', fontFamily: C.fonts.semibold, fontSize: 15 }}>Apply filters</Text>
             </Tap>
           </View>
-        </View>
-      </BlurView>
+    </BottomSheet>
       <DatePicker
         visible={picking != null}
         value={parseLocalDate((picking === 'to' ? local.customTo : local.customFrom) || toLocalDateISO(new Date()))}
@@ -513,7 +502,7 @@ function FilterSheet({
         }}
         onClose={() => setPicking(null)}
       />
-    </Modal>
+    </>
   );
 }
 

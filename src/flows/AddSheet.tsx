@@ -11,7 +11,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
 import { Audio } from 'expo-av';
 import { useTheme } from '../theme';
-import { Icon, Card, Tap, CategoryChip } from '../components';
+import { Icon, Card, Tap, CategoryChip, BottomSheet } from '../components';
 import { DatePicker } from '../components/DatePicker';
 import { useCategories } from '../store/useCategories';
 import { useExpenses, type Expense, type TxnSource } from '../store/useExpenses';
@@ -1084,20 +1084,11 @@ function BudgetLinePicker({
         </View>
       </ScrollView>
 
-      <Modal visible={moreOpen} transparent animationType="fade" onRequestClose={() => setMoreOpen(false)}>
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-          <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }} onPress={() => setMoreOpen(false)} />
-          <View style={{
-            backgroundColor: C.bgElev,
-            borderTopLeftRadius: 24, borderTopRightRadius: 24,
-            borderWidth: 0.5, borderColor: C.hairStrong,
-            paddingHorizontal: 20, paddingTop: 12, paddingBottom: 28, maxHeight: '70%',
-          }}>
-            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.subtle, alignSelf: 'center', marginBottom: 14 }} />
-            <Text style={{ fontFamily: C.fonts.serif, fontSize: 24, color: C.cream, marginBottom: 12 }}>
+      <BottomSheet visible={moreOpen} onClose={() => setMoreOpen(false)}>
+            <Text style={{ fontFamily: C.fonts.serif, fontSize: 24, color: C.cream, marginBottom: 12, paddingHorizontal: 20 }}>
               Budget line
             </Text>
-            <ScrollView keyboardShouldPersistTaps="handled">
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 28 }}>
               {groups.length === 0 ? (
                 <Text style={{ fontSize: 14, color: C.muted, paddingVertical: 16 }}>
                   Nothing on the budget this month yet.
@@ -1138,13 +1129,10 @@ function BudgetLinePicker({
                 </View>
               ))}
             </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      </BottomSheet>
 
-      <Modal visible={newOpen} transparent animationType="fade" onRequestClose={() => setNewOpen(false)}>
-        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' }}>
-          <View style={{ backgroundColor: C.bgElev, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 }}>
+      <BottomSheet visible={newOpen} onClose={() => setNewOpen(false)}>
+        <View style={{ paddingHorizontal: 20, paddingBottom: 28 }}>
             <Text style={{ fontFamily: C.fonts.serif, fontSize: 24, color: C.cream, marginBottom: 12 }}>New line</Text>
             <TextInput
               value={newName}
@@ -1180,9 +1168,8 @@ function BudgetLinePicker({
             <Tap onPress={createLine} style={{ minHeight: 44, borderRadius: 12, backgroundColor: C.sage, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ color: '#0E0E0C', fontWeight: '600' }}>Create line</Text>
             </Tap>
-          </View>
         </View>
-      </Modal>
+      </BottomSheet>
     </View>
   );
 }
