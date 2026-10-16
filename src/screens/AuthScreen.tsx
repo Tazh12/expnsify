@@ -62,7 +62,7 @@ export default function AuthScreen() {
         <View style={s.tabRow}>
           {(['login', 'register'] as Tab[]).map(t => (
             <Pressable key={t} style={[s.tab, tab === t && s.tabActive]} onPress={() => setTab(t)}>
-              <Text style={[s.tabText, tab === t && s.tabTextActive]} numberOfLines={2}>
+              <Text style={[s.tabText, tab === t && s.tabTextActive]}>
                 {t === 'login' ? 'Sign in' : 'Create account'}
               </Text>
             </Pressable>
@@ -159,22 +159,22 @@ function styles(theme: ReturnType<typeof useTheme>) {
       color: theme.muted, textAlign: 'center', marginBottom: 36,
     },
     tabRow: {
-      flexDirection: 'row', flexWrap: 'wrap', backgroundColor: theme.surface,
+      width: '100%', flexDirection: 'row', flexWrap: 'wrap', backgroundColor: theme.surface,
       borderRadius: 12, padding: 4, marginBottom: 24, gap: 4,
     },
     tab: {
-      flexGrow: 1, flexBasis: 140, minHeight: 44,
+      flexGrow: 1, flexShrink: 1, flexBasis: '46%', minWidth: 0, minHeight: 44,
       paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10,
       alignItems: 'center', justifyContent: 'center',
     },
     tabActive: { backgroundColor: theme.bg },
-    tabText: { fontFamily: theme.fonts.regular, fontSize: 14, color: theme.muted, textAlign: 'center' },
+    tabText: { fontFamily: theme.fonts.regular, fontSize: 14, color: theme.muted, textAlign: 'center', width: '100%' },
     forgot: {
       color: theme.muted, fontSize: 13, textAlign: 'right',
-      alignSelf: 'flex-end', minHeight: 44, lineHeight: 44,
+      width: '100%', minHeight: 44, lineHeight: 44,
     },
     tabTextActive: { color: theme.cream, fontFamily: theme.fonts.medium },
-    form: { gap: 12 },
+    form: { width: '100%', gap: 12 },
     input: {
       backgroundColor: theme.surface, borderRadius: 12,
       paddingHorizontal: 16, paddingVertical: 14,
