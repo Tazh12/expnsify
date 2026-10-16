@@ -182,7 +182,7 @@ export default function App() {
   const screen = (() => {
     switch (tab) {
       case 'today':
-        return <TodayScreen />;
+        return <TodayScreen onOpenPlan={() => setTab('plan')} onOpenActivity={() => setTab('activity')} />;
       case 'plan':
         return <PlanScreen />;
       case 'activity':

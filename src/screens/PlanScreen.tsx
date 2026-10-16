@@ -12,11 +12,12 @@ import { useRates } from '../store/useRates';
 import { useSettings } from '../store/useSettings';
 import { useBudgetGroups } from '../store/useBudgetGroups';
 import { fmt } from '../services/format';
-import { monthKey, occurrenceDaysInMonth, repeatStepDays, uniqueTemplateKey } from '../services/month';
+import { monthKey } from '../services/month';
 import { useViewMonth } from '../store/useViewMonth';
 import { incomeCarryOffers, lineActual, summarizeMonth } from '../services/budget';
 import { type BudgetLine, type BudgetSection as BudgetSectionId } from '../store/budgetTypes';
 import { useLayout } from '../hooks/useLayout';
+import { useSaveBudgetLine } from '../hooks/useSaveBudgetLine';
 
 type DeclinedCarry = Record<string, string[]>;
 
@@ -60,7 +61,7 @@ export function PlanScreen() {
   const month = useViewMonth(s => s.month);
   const { isWide } = useLayout();
   const key = monthKey(month);
-  const { forMonth, ensureMonth, addMany, update, remove, loaded, dedupeRepeats, carryIncome, lines: allLines, uid } = useBudget();
+  const { forMonth, ensureMonth, update, remove, loaded, dedupeRepeats, carryIncome, lines: allLines, uid } = useBudget();
   const allMeta = useBudgetGroups(s => s.all);
   const lines = forMonth(key);
   const { expenses } = useExpenses();
@@ -124,58 +125,7 @@ export function PlanScreen() {
 
   const left = summary.leftToBudget;
   const leftColor = left === 0 ? C.sage : left < 0 ? C.rose : C.cream;
-
-  const saveLine = async (payload: Omit<BudgetLine, 'id'> & { id?: string }) => {
-    const isNew = !payload.id;
-    let templateKey = payload.templateKey;
-    if (isNew) {
-      const takenKeys = new Set(
-        allLines
-          .filter(l => l.month === payload.month && l.section === payload.section)
-          .map(l => l.templateKey),
-      );
-      templateKey = uniqueTemplateKey(payload.templateKey || payload.name, takenKeys);
-    }
-    const saved = { ...payload, templateKey };
-
-    const step = saved.recurring ? repeatStepDays(saved.repeatEvery) : 0;
-    const days = step > 0 && saved.dueDay != null
-      ? occurrenceDaysInMonth(saved.month, saved.dueDay, saved.repeatEvery)
-      : [saved.dueDay];
-
-    const series = allLines.filter(l =>
-      l.month === saved.month
-      && l.section === saved.section
-      && l.templateKey === templateKey
-    );
-
-    if (saved.id) {
-      const { id, ...patch } = saved;
-      await update(id, patch);
-      for (const sib of series) {
-        if (sib.id === id || sib.paid) continue;
-        await update(sib.id, {
-          name: saved.name,
-          expected: saved.expected,
-          observation: saved.observation,
-          recurring: saved.recurring,
-          repeatEvery: saved.repeatEvery,
-          currency: saved.currency,
-        });
-      }
-      return;
-    }
-
-    const taken = new Set(series.map(l => l.dueDay));
-    const fresh = days.filter(day => !taken.has(day ?? null));
-    if (fresh.length === 0) return;
-    await addMany(fresh.map((day, i) => ({
-      ...saved,
-      dueDay: day ?? null,
-      actualOverride: i === 0 ? saved.actualOverride : null,
-      sortOrder: (saved.sortOrder ?? 0) + i,
-    })));
-  };
+  const saveLine = useSaveBudgetLine();
 
   const togglePaid = async (line: BudgetLine) => {
     await update(line.id, {
