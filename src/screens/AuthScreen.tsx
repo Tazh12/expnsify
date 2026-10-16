@@ -103,6 +103,7 @@ export default function AuthScreen() {
 
           {tab === 'login' && (
             <Pressable
+              style={s.forgotBtn}
               onPress={async () => {
                 if (!email.trim()) {
                   Alert.alert('Enter your email', 'Type the email for this account, then tap Forgot password.');
@@ -147,9 +148,8 @@ function styles(theme: ReturnType<typeof useTheme>) {
       width: 38, height: 38,
     },
     inner: {
-      flex: 1, width: '100%', maxWidth: 440, alignSelf: 'center',
-      justifyContent: 'center', paddingHorizontal: 20, paddingBottom: 40,
-      overflow: 'hidden',
+      flex: 1, alignSelf: 'stretch', maxWidth: 440,
+      justifyContent: 'center', marginHorizontal: 20, paddingBottom: 40,
     },
     wordmark: {
       fontFamily: theme.fonts.serifItalic,
@@ -170,10 +170,8 @@ function styles(theme: ReturnType<typeof useTheme>) {
     },
     tabActive: { backgroundColor: theme.bg },
     tabText: { fontFamily: theme.fonts.regular, fontSize: 14, color: theme.muted, textAlign: 'center', width: '100%' },
-    forgot: {
-      color: theme.muted, fontSize: 13, textAlign: 'right',
-      width: '100%', minHeight: 44, lineHeight: 44,
-    },
+    forgotBtn: { alignSelf: 'flex-end', minHeight: 44, justifyContent: 'center' },
+    forgot: { color: theme.muted, fontSize: 13 },
     tabTextActive: { color: theme.cream, fontFamily: theme.fonts.medium },
     form: { width: '100%', gap: 12 },
     input: {
