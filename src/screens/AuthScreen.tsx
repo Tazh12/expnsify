@@ -149,6 +149,7 @@ function styles(theme: ReturnType<typeof useTheme>) {
     inner: {
       flex: 1, width: '100%', maxWidth: 440, alignSelf: 'center',
       justifyContent: 'center', paddingHorizontal: 20, paddingBottom: 40,
+      overflow: 'hidden',
     },
     wordmark: {
       fontFamily: theme.fonts.serifItalic,
@@ -159,12 +160,12 @@ function styles(theme: ReturnType<typeof useTheme>) {
       color: theme.muted, textAlign: 'center', marginBottom: 36,
     },
     tabRow: {
-      width: '100%', flexDirection: 'row', flexWrap: 'wrap', backgroundColor: theme.surface,
+      width: '100%', flexDirection: 'column', backgroundColor: theme.surface,
       borderRadius: 12, padding: 4, marginBottom: 24, gap: 4,
     },
     tab: {
-      flexGrow: 1, flexShrink: 1, flexBasis: '46%', minWidth: 0, minHeight: 44,
-      paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10,
+      width: '100%', minHeight: 44,
+      paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10,
       alignItems: 'center', justifyContent: 'center',
     },
     tabActive: { backgroundColor: theme.bg },
