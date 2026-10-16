@@ -318,7 +318,6 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
         goReview(null);
       }
     } catch (e) {
-      console.error('startScan error', e);
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.toLowerCase().includes('simulator') || msg.toLowerCase().includes('not available')) {
         Alert.alert('Camera unavailable', 'The camera does not work in the simulator. Test on a real iPhone.');

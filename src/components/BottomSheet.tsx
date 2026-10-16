@@ -32,7 +32,7 @@ export function BottomSheet({
             borderWidth: 0.5,
             borderColor: C.hairStrong,
             paddingTop: 12,
-            paddingBottom: Platform.OS === 'ios' ? 28 : 16,
+            paddingBottom: Platform.OS === 'ios' ? 44 : 16,
             maxHeight: '92%',
           }}>
             <View style={{
