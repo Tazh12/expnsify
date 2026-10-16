@@ -11,8 +11,12 @@ import { useCategories } from '../store/useCategories';
 import { useBudget } from '../store/useBudget';
 import { useRates } from '../store/useRates';
 import { useSettings } from '../store/useSettings';
-import { fmt, dayLabel, parseLocalDate } from '../services/format';
-import { isUnbudgeted, lineActual } from '../services/budget';
+import { fmt, dayLabel, parseLocalDate, toLocalDateISO } from '../services/format';
+import { isUnbudgeted, lineActual, expenseMatchesLine } from '../services/budget';
+import { monthKey } from '../services/month';
+import { useViewMonth } from '../store/useViewMonth';
+import { useBudgetGroups } from '../store/useBudgetGroups';
+import { DatePicker } from '../components/DatePicker';
 import { TxnDetailModal } from './TxnDetailModal';
 import { AddSheet } from '../flows/AddSheet';
 import { askTally, AiLimitError } from '../services/groq';
@@ -23,22 +27,24 @@ type DateRange = 'all' | 'today' | 'week' | 'month' | 'custom';
 
 interface Filters {
   dateRange: DateRange;
-  customFrom: string;   // ISO date string YYYY-MM-DD
+  customFrom: string;
   customTo: string;
-  categories: string[]; // empty = all
-  merchants: string[];  // empty = all
+  lineIds: string[];
+  merchants: string[];
 }
 
 const EMPTY_FILTERS: Filters = {
   dateRange: 'all',
   customFrom: '',
   customTo: '',
-  categories: [],
+  lineIds: [],
   merchants: [],
 };
 
+type Quick = 'needs' | 'expense' | 'income' | null;
+
 function filtersActive(f: Filters) {
-  return f.dateRange !== 'all' || f.categories.length > 0 || f.merchants.length > 0;
+  return f.dateRange !== 'all' || f.lineIds.length > 0 || f.merchants.length > 0;
 }
 
 function matchesQuery(t: Expense, q: string) {
@@ -56,7 +62,10 @@ export function ActivityScreen() {
   const { expenses, byDay, remove } = useExpenses();
   const { categories } = useCategories();
   const { lines } = useBudget();
-  const { convert } = useRates();           // subscribe so screen re-renders when rates update
+  const groups = useBudgetGroups(s => s.all);
+  const month = useViewMonth(s => s.month);
+  const monthKeyValue = monthKey(month);
+  const { convert } = useRates();
   const { preferredCurrency } = useSettings();
   const catMap = {
     ...Object.fromEntries(categories.map(c => [c.id, c])),
@@ -69,6 +78,8 @@ export function ActivityScreen() {
   const [askedIds, setAskedIds] = useState<string[] | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [allTime, setAllTime] = useState(false);
+  const [quick, setQuick] = useState<Quick>(null);
   const [detailExpense, setDetailExpense] = useState<Expense | null>(null);
   const [editTarget, setEditTarget] = useState<Expense | null>(null);
   const detailCategory = detailExpense
@@ -86,6 +97,12 @@ export function ActivityScreen() {
       if (askedIds) {
         if (!askedIds.includes(t.id)) return false;
       } else if (q && !matchesQuery(t, q)) return false;
+
+      if (!allTime && t.date.slice(0, 7) !== monthKeyValue) return false;
+
+      if (quick === 'needs' && !isUnbudgeted(t, lines.filter(l => l.month === t.date.slice(0, 7)))) return false;
+      if (quick === 'expense' && t.type !== 'expense') return false;
+      if (quick === 'income' && t.type !== 'income') return false;
 
       // Date range
       const d = parseLocalDate(t.date);
@@ -105,15 +122,22 @@ export function ActivityScreen() {
         }
       }
 
-      // Categories
-      if (filters.categories.length > 0 && !filters.categories.includes(t.category_id)) return false;
+      if (filters.lineIds.length > 0) {
+        const selected = lines.filter(l => filters.lineIds.includes(l.id));
+        const hit = selected.some(l =>
+          expenseMatchesLine(t, l)
+          || t.line_id === l.id
+          || (t.line_id == null && t.category_id === l.templateKey),
+        );
+        if (!hit) return false;
+      }
 
       // Merchants
       if (filters.merchants.length > 0 && !filters.merchants.includes(t.merchant)) return false;
 
       return true;
     });
-  }, [expenses, q, filters, askedIds]);
+  }, [expenses, q, filters, askedIds, allTime, monthKeyValue, quick, lines]);
 
   const ask = async () => {
     const question = q.trim();
@@ -141,9 +165,14 @@ export function ActivityScreen() {
         contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
       >
-        <PageHeader title="Transactions" tagline="everything, in order"/>
+        <PageHeader title="Activity"/>
 
-        {/* Search + Filter row */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
+          <QuickChip label="All time" on={allTime} onPress={() => setAllTime(v => !v)} C={C}/>
+          <QuickChip label="Needs a line" on={quick === 'needs'} onPress={() => setQuick(q => q === 'needs' ? null : 'needs')} C={C}/>
+          <QuickChip label="Expenses" on={quick === 'expense'} onPress={() => setQuick(q => q === 'expense' ? null : 'expense')} C={C}/>
+          <QuickChip label="Income" on={quick === 'income'} onPress={() => setQuick(q => q === 'income' ? null : 'income')} C={C}/>
+        </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 18 }}>
           <View style={{
             flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10,
@@ -193,9 +222,18 @@ export function ActivityScreen() {
             {filters.dateRange !== 'all' && (
               <Chip label={DATE_LABELS[filters.dateRange]} onRemove={() => setFilters(f => ({ ...f, dateRange: 'all', customFrom: '', customTo: '' }))} C={C}/>
             )}
-            {filters.categories.map(id => (
-              <Chip key={id} label={catMap[id]?.name ?? id} color={catMap[id]?.color} onRemove={() => setFilters(f => ({ ...f, categories: f.categories.filter(c => c !== id) }))} C={C}/>
-            ))}
+            {filters.lineIds.map(id => {
+              const line = lines.find(l => l.id === id);
+              return (
+                <Chip
+                  key={id}
+                  label={line?.name ?? id}
+                  color={line?.color}
+                  onRemove={() => setFilters(f => ({ ...f, lineIds: f.lineIds.filter(x => x !== id) }))}
+                  C={C}
+                />
+              );
+            })}
             {filters.merchants.map(m => (
               <Chip key={m} label={m} onRemove={() => setFilters(f => ({ ...f, merchants: f.merchants.filter(x => x !== m) }))} C={C}/>
             ))}
@@ -276,7 +314,8 @@ export function ActivityScreen() {
         onClose={() => setFilterOpen(false)}
         filters={filters}
         onChange={setFilters}
-        categories={categories}
+        lines={lines.filter(l => l.month === monthKeyValue && l.section !== 'income')}
+        groups={groups.filter(g => g.id !== 'income')}
         allMerchants={[...new Set(expenses.map(e => e.merchant))].sort()}
       />
 
@@ -284,6 +323,21 @@ export function ActivityScreen() {
         expense={detailExpense ? (expenses.find(e => e.id === detailExpense.id) ?? detailExpense) : null}
         category={detailCategory}
         onClose={() => setDetailExpense(null)}
+        onEdit={detailExpense ? () => {
+          setEditTarget(detailExpense);
+          setDetailExpense(null);
+        } : undefined}
+        onDelete={detailExpense ? () => {
+          const target = detailExpense;
+          Alert.alert(
+            'Delete expense?',
+            `Remove "${target.merchant}" from your tally?`,
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Delete', style: 'destructive', onPress: () => { remove(target.id); setDetailExpense(null); } },
+            ],
+          );
+        } : undefined}
       />
 
       <AddSheet
@@ -306,28 +360,29 @@ const DATE_LABELS: Record<DateRange, string> = {
 };
 
 function FilterSheet({
-  open, onClose, filters, onChange, categories, allMerchants,
+  open, onClose, filters, onChange, lines, groups, allMerchants,
 }: {
   open: boolean;
   onClose: () => void;
   filters: Filters;
   onChange: (f: Filters) => void;
-  categories: { id: string; name: string; color: string; archived?: number }[];
+  lines: { id: string; name: string; color: string; section: string }[];
+  groups: { id: string; label: string }[];
   allMerchants: string[];
 }) {
   const C = useTheme();
   const [local, setLocal] = useState<Filters>(filters);
+  const [picking, setPicking] = useState<'from' | 'to' | null>(null);
 
-  // Sync when opening
   React.useEffect(() => { if (open) setLocal(filters); }, [open]);
 
   function apply() { onChange(local); onClose(); }
   function reset() { setLocal(EMPTY_FILTERS); onChange(EMPTY_FILTERS); onClose(); }
 
-  function toggleCat(id: string) {
+  function toggleLine(id: string) {
     setLocal(f => ({
       ...f,
-      categories: f.categories.includes(id) ? f.categories.filter(c => c !== id) : [...f.categories, id],
+      lineIds: f.lineIds.includes(id) ? f.lineIds.filter(c => c !== id) : [...f.lineIds, id],
     }));
   }
   function toggleMerchant(m: string) {
@@ -362,10 +417,10 @@ function FilterSheet({
             {/* Date range */}
             <SectionLabel title="Date range" C={C}/>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-              {(Object.keys(DATE_LABELS) as DateRange[]).filter(k => k !== 'custom').map(key => (
+              {(Object.keys(DATE_LABELS) as DateRange[]).map(key => (
                 <Pressable
                   key={key}
-                  onPress={() => setLocal(f => ({ ...f, dateRange: key, customFrom: '', customTo: '' }))}
+                  onPress={() => setLocal(f => ({ ...f, dateRange: key, customFrom: key === 'custom' ? f.customFrom : '', customTo: key === 'custom' ? f.customTo : '' }))}
                   style={[
                     sh.pill,
                     { backgroundColor: local.dateRange === key ? C.sage : C.surface, borderColor: local.dateRange === key ? C.sage : C.hair },
@@ -377,26 +432,44 @@ function FilterSheet({
                 </Pressable>
               ))}
             </View>
+            {local.dateRange === 'custom' && (
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: -8, marginBottom: 20 }}>
+                <Tap onPress={() => setPicking('from')} style={[sh.pill, { backgroundColor: C.surface, borderColor: C.hair }]}>
+                  <Text style={{ fontSize: 13, color: C.cream }}>{local.customFrom || 'From'}</Text>
+                </Tap>
+                <Tap onPress={() => setPicking('to')} style={[sh.pill, { backgroundColor: C.surface, borderColor: C.hair }]}>
+                  <Text style={{ fontSize: 13, color: C.cream }}>{local.customTo || 'To'}</Text>
+                </Tap>
+              </View>
+            )}
 
-            {/* Categories */}
-            <SectionLabel title="Categories" C={C}/>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-              {categories.filter(c => !c.archived).map(cat => {
-                const on = local.categories.includes(cat.id);
-                return (
-                  <Pressable
-                    key={cat.id}
-                    onPress={() => toggleCat(cat.id)}
-                    style={[sh.pill, { backgroundColor: on ? `${cat.color}33` : C.surface, borderColor: on ? cat.color : C.hair }]}
-                  >
-                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: cat.color }}/>
-                    <Text style={{ fontSize: 13, fontFamily: C.fonts.regular, color: on ? cat.color : C.cream }}>
-                      {cat.name}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            <SectionLabel title="Budget lines" C={C}/>
+            {groups.map(group => {
+              const groupLines = lines.filter(l => l.section === group.id);
+              if (groupLines.length === 0) return null;
+              return (
+                <View key={group.id} style={{ marginBottom: 14 }}>
+                  <Text style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>{group.label}</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {groupLines.map(line => {
+                      const on = local.lineIds.includes(line.id);
+                      return (
+                        <Pressable
+                          key={line.id}
+                          onPress={() => toggleLine(line.id)}
+                          style={[sh.pill, { backgroundColor: on ? `${line.color}33` : C.surface, borderColor: on ? line.color : C.hair }]}
+                        >
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: line.color }}/>
+                          <Text style={{ fontSize: 13, fontFamily: C.fonts.regular, color: on ? line.color : C.cream }}>
+                            {line.name}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              );
+            })}
 
             {/* Merchants */}
             <SectionLabel title="Merchants" C={C}/>
@@ -429,11 +502,37 @@ function FilterSheet({
           </View>
         </View>
       </BlurView>
+      <DatePicker
+        visible={picking != null}
+        value={parseLocalDate((picking === 'to' ? local.customTo : local.customFrom) || toLocalDateISO(new Date()))}
+        presentation="sheet"
+        onSelect={(d) => {
+          const iso = toLocalDateISO(d);
+          setLocal(f => picking === 'to' ? { ...f, customTo: iso } : { ...f, customFrom: iso });
+          setPicking(null);
+        }}
+        onClose={() => setPicking(null)}
+      />
     </Modal>
   );
 }
 
 // ─── Small helpers ────────────────────────────────────────────────────────────
+
+function QuickChip({ label, on, onPress, C }: { label: string; on: boolean; onPress: () => void; C: any }) {
+  return (
+    <Tap
+      onPress={onPress}
+      style={{
+        minHeight: 44, paddingHorizontal: 14, borderRadius: 22, justifyContent: 'center',
+        backgroundColor: on ? C.sage : C.surface,
+        borderWidth: 0.5, borderColor: on ? C.sage : C.hair,
+      }}
+    >
+      <Text style={{ fontSize: 13, color: on ? '#0E0E0C' : C.cream }}>{label}</Text>
+    </Tap>
+  );
+}
 
 function SectionLabel({ title, C }: { title: string; C: any }) {
   return (
@@ -453,7 +552,11 @@ function Chip({ label, color, onRemove, C }: { label: string; color?: string; on
     }}>
       {color && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }}/>}
       <Text style={{ fontSize: 12, color: color ?? C.cream, fontFamily: C.fonts.regular }}>{label}</Text>
-      <Tap onPress={onRemove} style={{ marginLeft: 2 }}>
+      <Tap
+        onPress={onRemove}
+        accessibilityLabel={`Remove ${label}`}
+        style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+      >
         <Text style={{ fontSize: 12, color: C.muted }}>✕</Text>
       </Tap>
     </View>

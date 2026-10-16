@@ -21,16 +21,18 @@ interface Props {
   expense: Expense | null;
   category: Category | null;
   onClose: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }
 
 function fmtFull(iso: string) {
   const d = parseLocalDate(iso);
   return d.toLocaleDateString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-  }) + ' · ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  });
 }
 
-export function TxnDetailModal({ expense: t, category, onClose }: Props) {
+export function TxnDetailModal({ expense: t, category, onClose, onEdit, onDelete }: Props) {
   const C = useTheme();
   const [imgError, setImgError] = React.useState(false);
   const [attaching, setAttaching] = React.useState(false);
@@ -218,6 +220,28 @@ export function TxnDetailModal({ expense: t, category, onClose }: Props) {
                       <Text style={{ fontSize: 12, color: C.sage, marginTop: 6 }}>
                         {attaching ? 'Saving…' : 'Tap to add a photo'}
                       </Text>
+                    </Tap>
+                  )}
+                </View>
+              )}
+              {(onEdit || onDelete) && (
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+                  {onEdit && (
+                    <Tap
+                      onPress={onEdit}
+                      accessibilityLabel="Edit transaction"
+                      style={{ flex: 1, minHeight: 44, borderRadius: 14, backgroundColor: C.sage, alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <Text style={{ color: '#0E0E0C', fontWeight: '600' }}>Edit</Text>
+                    </Tap>
+                  )}
+                  {onDelete && (
+                    <Tap
+                      onPress={onDelete}
+                      accessibilityLabel="Delete transaction"
+                      style={{ flex: 1, minHeight: 44, borderRadius: 14, borderWidth: 0.5, borderColor: C.rose, alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <Text style={{ color: C.rose, fontWeight: '600' }}>Delete</Text>
                     </Tap>
                   )}
                 </View>

@@ -6,7 +6,7 @@ import { useTheme } from '../theme';
 import { Icon } from './Icon';
 import { useRates } from '../store/useRates';
 import { useSettings } from '../store/useSettings';
-import { fmt, fmtTime } from '../services/format';
+import { fmt } from '../services/format';
 import type { Expense } from '../store/useExpenses';
 
 const REVEAL_W = 68;
@@ -145,7 +145,7 @@ export function TxnRow({
       >
         <TouchableOpacity
           activeOpacity={1}
-          onPress={isOpen.current !== 'none' ? close : undefined}
+          onPress={isOpen.current !== 'none' ? close : (onViewDetail ? () => onViewDetail(t) : undefined)}
           style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 14 }}
         >
           <View style={{
@@ -168,18 +168,17 @@ export function TxnRow({
               {t.note && !warn ? ` · ${t.note}` : ''}
             </Text>
           </View>
-        </TouchableOpacity>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text style={{ fontSize: 15, color: amountColor, fontWeight: '500', fontVariant: ['tabular-nums'] }}>
-            {t.type === 'income' ? '+' : ''}{fmt(convertedAmount, preferredCurrency)}
-          </Text>
-          {showOriginal && (
-            <Text style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
-              {t.currency} {t.amount.toFixed(2)}
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={{ fontSize: 15, color: amountColor, fontWeight: '500', fontVariant: ['tabular-nums'] }}>
+              {t.type === 'income' ? '+' : ''}{fmt(convertedAmount, preferredCurrency)}
             </Text>
-          )}
-          <Text style={{ fontSize: 11, color: C.muted, marginTop: showOriginal ? 0 : 2 }}>{fmtTime(t.date)}</Text>
-        </View>
+            {showOriginal && (
+              <Text style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
+                {t.currency} {t.amount.toFixed(2)}
+              </Text>
+            )}
+          </View>
+        </TouchableOpacity>
       </Animated.View>
     </View>
   );
