@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Image } from 'react-native';
+import { View, Text, Image, useWindowDimensions } from 'react-native';
 import { useTheme } from '../theme';
 import { Icon } from './Icon';
 import { Tap } from './Tap';
@@ -17,8 +17,10 @@ export function AppHeader({
   showBrand?: boolean;
 }) {
   const C = useTheme();
+  const { width } = useWindowDimensions();
   const user = useAuth(s => s.user);
-  const monthLabel = month.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  const compact = width < 430;
+  const monthLabel = month.toLocaleString('en-US', { month: compact ? 'short' : 'long', year: 'numeric' });
   const [mName, mYear] = monthLabel.split(' ');
   const initial = (user?.displayName || user?.email || '?').trim().charAt(0).toUpperCase() || '?';
 
@@ -34,9 +36,6 @@ export function AppHeader({
             style={{ width: 24, height: 24 }}
             resizeMode="contain"
           />
-          <Text style={{ fontSize: 14, fontWeight: '500', color: C.cream, letterSpacing: 0.02 }}>
-            expnsify
-          </Text>
         </View>
       ) : <View style={{ width: 8 }}/>}
 
@@ -44,17 +43,21 @@ export function AppHeader({
         <Tap
           onPress={() => onChangeMonth(-1)}
           accessibilityLabel="Previous month"
-          style={{
-            width: 44, height: 44, borderRadius: 22,
+          style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <View style={{
+            width: 36, height: 36, borderRadius: 18,
             backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
             alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          <Icon name="chev-l" size={16} stroke={C.cream}/>
+          }}>
+            <Icon name="chev-l" size={16} stroke={C.cream}/>
+          </View>
         </Tap>
         <Text
           style={{ fontFamily: C.fonts.serif, fontSize: 20, color: C.cream, letterSpacing: -0.3, flexShrink: 1 }}
           numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
         >
           {mName}{' '}
           <Text style={{ color: C.muted, fontStyle: 'italic' }}>{mYear}</Text>
@@ -62,13 +65,15 @@ export function AppHeader({
         <Tap
           onPress={() => onChangeMonth(1)}
           accessibilityLabel="Next month"
-          style={{
-            width: 44, height: 44, borderRadius: 22,
+          style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <View style={{
+            width: 36, height: 36, borderRadius: 18,
             backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
             alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          <Icon name="chev-r" size={16} stroke={C.cream}/>
+          }}>
+            <Icon name="chev-r" size={16} stroke={C.cream}/>
+          </View>
         </Tap>
       </View>
 
