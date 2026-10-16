@@ -451,13 +451,17 @@ function NotifySheet({ open, onClose }: { open: boolean; onClose: () => void }) 
     if (patch.budgetReminderDay != null) await settings.set('budgetReminderDay', patch.budgetReminderDay);
     const next = { ...settings, ...patch };
     if (next.notifyBudget || next.notifyDueDates) await requestNotificationPermission();
-    const month = monthKey(new Date());
+    const now = new Date();
+    const month = monthKey(now);
+    const lines = forMonth(month);
+    const upcoming = now.getDate() >= 25
+      ? forMonth(monthKey(new Date(now.getFullYear(), now.getMonth() + 1, 1)))
+      : [];
     await syncNotifications({
       notifyBudget: next.notifyBudget,
       budgetReminderDay: next.budgetReminderDay,
       notifyDueDates: next.notifyDueDates,
-      lines: forMonth(month),
-      month,
+      lines: [...lines, ...upcoming],
     });
   };
 

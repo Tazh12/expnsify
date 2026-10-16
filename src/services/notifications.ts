@@ -43,7 +43,6 @@ export async function syncNotifications(opts: {
   budgetReminderDay: number;
   notifyDueDates: boolean;
   lines: BudgetLine[];
-  month: string;
 }): Promise<void> {
   const N = await load();
   if (!N) return;
@@ -72,11 +71,13 @@ export async function syncNotifications(opts: {
 
   if (opts.notifyDueDates) {
     const now = new Date();
-    const current = monthKey(now) === opts.month;
-    if (!current) return;
+    const currentKey = monthKey(now);
+    const nextKey = monthKey(new Date(now.getFullYear(), now.getMonth() + 1, 1));
+    const allowNext = now.getDate() >= 25;
     for (const line of opts.lines) {
       if (line.section === 'income' || line.paid || line.dueDay == null) continue;
-      const due = dueDateFor(opts.month, line.dueDay);
+      if (line.month !== currentKey && !(allowNext && line.month === nextKey)) continue;
+      const due = dueDateFor(line.month, line.dueDay);
       const lead = line.notifyDaysBefore ?? 1;
       const when = new Date(due);
       when.setDate(when.getDate() - lead);
