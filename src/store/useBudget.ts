@@ -4,6 +4,7 @@ import {
   onSnapshot, writeBatch,
 } from 'firebase/firestore';
 import { db } from '../services/firebase';
+import { useExpenses } from './useExpenses';
 import { uid as makeId } from '../services/format';
 import { dueDayInMonth, occurrenceDaysFromAnchor, repeatGroupKey, repeatStepDays, slugKey } from '../services/month';
 import { parseRepeatEvery, SECTION_COLORS, type BudgetLine, type BudgetSection } from './budgetTypes';
@@ -372,16 +373,26 @@ export const useBudget = create<BudgetState>((set, get) => ({
   },
 
   stopFrom: async (templateKey, fromMonth, includeCurrent = false) => {
+    const expenses = useExpenses.getState().expenses;
     const matches = get().lines.filter(l => l.templateKey === templateKey);
-    if (!includeCurrent) {
-      for (const line of matches.filter(l => l.month === fromMonth && l.recurring)) {
-        await get().update(line.id, { recurring: false });
+    const linked = (line: BudgetLine) => line.paid || expenses.some(e =>
+      e.date.slice(0, 7) === line.month && (
+        e.line_id === line.id || (e.line_id == null && e.category_id === line.templateKey)
+      ),
+    );
+    const deleteIds: string[] = [];
+    for (const line of matches.filter(l => l.month > fromMonth)) {
+      if (linked(line)) {
+        if (line.recurring) await get().update(line.id, { recurring: false });
+      } else {
+        deleteIds.push(line.id);
       }
     }
-    const ids = matches
-      .filter(l => includeCurrent ? l.month >= fromMonth : l.month > fromMonth)
-      .map(l => l.id);
-    await get().removeMany(ids);
+    for (const line of matches.filter(l => l.month === fromMonth)) {
+      if (includeCurrent && !linked(line)) deleteIds.push(line.id);
+      else if (line.recurring) await get().update(line.id, { recurring: false });
+    }
+    await get().removeMany(deleteIds);
   },
 
   moveSectionFrom: async (fromSection, toSection, fromMonth) => {
