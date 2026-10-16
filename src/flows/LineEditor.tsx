@@ -335,7 +335,7 @@ function Field({
           value={value}
           onChangeText={onChange}
           placeholder={placeholder}
-          placeholderTextColor={C.subtle}
+          placeholderTextColor={C.muted}
           keyboardType={keyboard}
           style={{
             flex: 1, paddingVertical: 14, paddingRight: 12,

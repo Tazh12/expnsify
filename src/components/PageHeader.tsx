@@ -6,7 +6,12 @@ export function PageHeader({ title, tagline }: { title: string; tagline?: string
   const C = useTheme();
   return (
     <View style={{ paddingTop: 8, paddingBottom: 6 }}>
-      <Text style={{ fontFamily: C.fonts.serif, fontSize: 38, color: C.cream, lineHeight: 40, letterSpacing: -0.5 }}>
+      <Text
+        style={{ fontFamily: C.fonts.serif, fontSize: 32, color: C.cream, lineHeight: 36, letterSpacing: -0.4 }}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.7}
+      >
         {title}
       </Text>
       {tagline ? (

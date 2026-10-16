@@ -91,7 +91,7 @@ export function GoesToPicker({
                   value={draft}
                   onChangeText={setDraft}
                   placeholder="e.g. Kids"
-                  placeholderTextColor={C.subtle}
+                  placeholderTextColor={C.muted}
                   onSubmitEditing={create}
                   style={{
                     flex: 1, backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,

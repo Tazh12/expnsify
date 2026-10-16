@@ -221,7 +221,7 @@ export function SettingsScreen({ onClose }: Props) {
                   value={nameInput}
                   onChangeText={setNameInput}
                   placeholder="Your name"
-                  placeholderTextColor={C.subtle}
+                  placeholderTextColor={C.muted}
                   style={{ flex: 1, fontSize: 16, color: C.cream, fontFamily: C.fonts.regular }}
                   returnKeyType="done"
                   onSubmitEditing={saveName}

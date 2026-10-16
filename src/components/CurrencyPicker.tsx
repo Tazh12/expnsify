@@ -56,7 +56,7 @@ export function CurrencyPickerSheet({ visible, current, onSelect, onClose }: Pro
                 value={q}
                 onChangeText={setQ}
                 placeholder="Search currencies"
-                placeholderTextColor={C.subtle}
+                placeholderTextColor={C.muted}
                 style={{ flex: 1, fontSize: 14, color: C.cream, fontFamily: C.fonts.regular }}
                 autoCapitalize="characters"
               />
