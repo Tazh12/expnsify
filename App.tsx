@@ -27,7 +27,6 @@ import { SettingsScreen } from './src/screens/SettingsScreen';
 import { CategoriesScreen } from './src/screens/CategoriesScreen';
 import AuthScreen from './src/screens/AuthScreen';
 import { AddSheet } from './src/flows/AddSheet';
-import { RecapModal } from './src/flows/RecapModal';
 import { UpgradeModal } from './src/flows/UpgradeModal';
 import { useAiUsage } from './src/store/useAiUsage';
 import { useViewMonth } from './src/store/useViewMonth';
@@ -70,7 +69,6 @@ export default function App() {
 
   const [tab, setTab] = useState<TabId>('today');
   const [addOpen, setAddOpen] = useState(false);
-  const [recapOpen, setRecapOpen] = useState(false);
   const [catsOpen, setCatsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const month = useViewMonth(s => s.month);
@@ -188,7 +186,7 @@ export default function App() {
       case 'activity':
         return <ActivityScreen />;
       case 'insights':
-        return <InsightsScreen onOpenRecap={() => setRecapOpen(true)} />;
+        return <InsightsScreen />;
     }
   })();
 
@@ -228,7 +226,6 @@ export default function App() {
           onClose={() => { setAddOpen(false); setPendingShare(null); }}
           pendingShare={pendingShare}
         />
-        <RecapModal open={recapOpen} onClose={() => setRecapOpen(false)} />
         <UpgradeModal />
 
         <Modal visible={settingsOpen} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setSettingsOpen(false)}>
