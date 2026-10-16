@@ -5,13 +5,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme';
 import { Icon } from './Icon';
 
-export type TabId = 'home' | 'txns' | 'reports' | 'settings';
+export type TabId = 'today' | 'plan' | 'activity' | 'insights';
 
 const TABS: { id: TabId; icon: string; label: string }[] = [
-  { id: 'home',     icon: 'home',  label: 'Budget' },
-  { id: 'txns',     icon: 'list',  label: 'Activity' },
-  { id: 'reports',  icon: 'chart', label: 'Reports' },
-  { id: 'settings', icon: 'gear',  label: 'Settings' },
+  { id: 'today', icon: 'cal', label: 'Today' },
+  { id: 'plan', icon: 'wallet', label: 'Plan' },
+  { id: 'activity', icon: 'list', label: 'Activity' },
+  { id: 'insights', icon: 'chart', label: 'Insights' },
 ];
 
 interface Props {
@@ -57,7 +57,7 @@ export function TabBar({ tab, onTab, onAdd }: Props) {
         <TouchableOpacity
           onPress={onAdd}
           activeOpacity={0.8}
-          accessibilityLabel="Add transaction"
+          accessibilityLabel="Scan"
           style={{ width: 56, height: 56, borderRadius: 28, overflow: 'hidden', marginHorizontal: 4 }}
         >
           <LinearGradient
@@ -65,7 +65,7 @@ export function TabBar({ tab, onTab, onAdd }: Props) {
             start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }}
             style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
           >
-            <Icon name="plus" size={26} stroke="#0E0E0C" sw={2.4}/>
+            <Icon name="cam" size={26} stroke="#0E0E0C" sw={2.2}/>
           </LinearGradient>
         </TouchableOpacity>
 
@@ -78,7 +78,7 @@ export function TabBar({ tab, onTab, onAdd }: Props) {
 function TabItem({ item, active, onPress }: { item: { icon: string; label: string }; active: boolean; onPress: () => void }) {
   const C = useTheme();
   return (
-    <TouchableOpacity onPress={onPress} style={{ flex: 1 }}>
+        <TouchableOpacity onPress={onPress} style={{ flex: 1 }} accessibilityRole="button" accessibilityLabel={item.label}>
       <View style={{
         height: 56, borderRadius: 22, overflow: 'hidden',
         alignItems: 'center', justifyContent: 'center', gap: 4,

@@ -3,71 +3,85 @@ import { View, Text, Image } from 'react-native';
 import { useTheme } from '../theme';
 import { Icon } from './Icon';
 import { Tap } from './Tap';
-import type { TabId } from './TabBar';
+import { useAuth } from '../store/useAuth';
 
 export function AppHeader({
-  tab,
   month,
   onChangeMonth,
+  onOpenSettings,
+  showBrand = true,
 }: {
-  tab: TabId;
   month: Date;
   onChangeMonth: (delta: number) => void;
+  onOpenSettings: () => void;
+  showBrand?: boolean;
 }) {
   const C = useTheme();
-  const onHome = tab === 'home';
+  const user = useAuth(s => s.user);
   const monthLabel = month.toLocaleString('en-US', { month: 'long', year: 'numeric' });
   const [mName, mYear] = monthLabel.split(' ');
+  const initial = (user?.displayName || user?.email || '?').trim().charAt(0).toUpperCase() || '?';
 
   return (
     <View style={{
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
       paddingHorizontal: 20, paddingVertical: 8, minHeight: 52, gap: 10,
     }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-        <Image
-          source={require('../../assets/app-icon-transparent.png')}
-          style={{ width: 24, height: 24 }}
-          resizeMode="contain"
-        />
-        <Text style={{ fontSize: 14, fontWeight: '500', color: C.cream, letterSpacing: 0.02 }}>
-          expnsify
+      {showBrand ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <Image
+            source={require('../../assets/app-icon-transparent.png')}
+            style={{ width: 24, height: 24 }}
+            resizeMode="contain"
+          />
+          <Text style={{ fontSize: 14, fontWeight: '500', color: C.cream, letterSpacing: 0.02 }}>
+            expnsify
+          </Text>
+        </View>
+      ) : <View style={{ width: 8 }}/>}
+
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1, minWidth: 0, flex: showBrand ? undefined : 1 }}>
+        <Tap
+          onPress={() => onChangeMonth(-1)}
+          accessibilityLabel="Previous month"
+          style={{
+            width: 36, height: 36, borderRadius: 18,
+            backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
+            alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <Icon name="chev-l" size={16} stroke={C.cream}/>
+        </Tap>
+        <Text
+          style={{ fontFamily: C.fonts.serif, fontSize: 20, color: C.cream, letterSpacing: -0.3, flexShrink: 1 }}
+          numberOfLines={1}
+        >
+          {mName}{' '}
+          <Text style={{ color: C.muted, fontStyle: 'italic' }}>{mYear}</Text>
         </Text>
+        <Tap
+          onPress={() => onChangeMonth(1)}
+          accessibilityLabel="Next month"
+          style={{
+            width: 36, height: 36, borderRadius: 18,
+            backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
+            alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <Icon name="chev-r" size={16} stroke={C.cream}/>
+        </Tap>
       </View>
 
-      {onHome && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1, minWidth: 0 }}>
-          <Tap
-            onPress={() => onChangeMonth(-1)}
-            accessibilityLabel="Previous month"
-            style={{
-              width: 36, height: 36, borderRadius: 18,
-              backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
-              alignItems: 'center', justifyContent: 'center',
-            }}
-          >
-            <Icon name="chev-l" size={16} stroke={C.cream}/>
-          </Tap>
-          <Text
-            style={{ fontFamily: C.fonts.serif, fontSize: 20, color: C.cream, letterSpacing: -0.3, flexShrink: 1 }}
-            numberOfLines={1}
-          >
-            {mName}{' '}
-            <Text style={{ color: C.muted, fontStyle: 'italic' }}>{mYear}</Text>
-          </Text>
-          <Tap
-            onPress={() => onChangeMonth(1)}
-            accessibilityLabel="Next month"
-            style={{
-              width: 36, height: 36, borderRadius: 18,
-              backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
-              alignItems: 'center', justifyContent: 'center',
-            }}
-          >
-            <Icon name="chev-r" size={16} stroke={C.cream}/>
-          </Tap>
-        </View>
-      )}
+      <Tap
+        onPress={onOpenSettings}
+        accessibilityLabel="Settings"
+        style={{
+          width: 36, height: 36, borderRadius: 18,
+          backgroundColor: C.sage, alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}
+      >
+        <Text style={{ fontFamily: C.fonts.serifItalic, fontSize: 16, color: '#0E0E0C' }}>{initial}</Text>
+      </Tap>
     </View>
   );
 }

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../theme';
-import { Card, Icon, Tap, CarryIncomeCard } from '../components';
+import { Card, CarryIncomeCard } from '../components';
 import { AddMenu } from '../components/AddMenu';
 import { BudgetRing } from '../components/BudgetRing';
 import { BudgetSection } from '../components/BudgetSection';
@@ -58,10 +58,9 @@ async function rememberDeclinedCarry(userId: string, month: string, templateKeys
   return next;
 }
 
-export function HomeScreen() {
+export function PlanScreen() {
   const C = useTheme();
   const month = useViewMonth(s => s.month);
-  const onChangeMonth = useViewMonth(s => s.shiftMonth);
   const { isWide } = useLayout();
   const key = monthKey(month);
   const { forMonth, ensureMonth, addMany, update, remove, loaded, dedupeRepeats, carryIncome, lines: allLines, uid } = useBudget();
@@ -137,11 +136,9 @@ export function HomeScreen() {
     return incomeCarryOffers(allLines, key).filter(o => !declined.has(o.templateKey));
   }, [allLines, key, skipCarry, declinedCarry]);
 
-  const monthLabel = month.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-  const [mName, mYear] = monthLabel.split(' ');
-  const leftColor = summary.leftToBudget === 0 ? C.sage : summary.leftToBudget < 0 ? C.rose : C.cream;
   const over = summary.assigned > 0 && summary.spent > summary.assigned;
   const noPlan = summary.assigned <= 0;
+  const leftColor = summary.leftToBudget === 0 ? C.sage : summary.leftToBudget < 0 ? C.rose : C.cream;
 
   const saveLine = async (payload: Omit<BudgetLine, 'id'> & { id?: string }) => {
     const isNew = !payload.id;
@@ -217,27 +214,7 @@ export function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         {isWide && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, paddingBottom: 18 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-              <Tap onPress={() => onChangeMonth(-1)} style={{
-                width: 36, height: 36, borderRadius: 18,
-                backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
-                alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Icon name="chev-l" size={16} stroke={C.cream}/>
-              </Tap>
-              <Text style={{ fontFamily: C.fonts.serif, fontSize: 24, color: C.cream, letterSpacing: -0.3 }} numberOfLines={1}>
-                {mName}{' '}
-                <Text style={{ color: C.muted, fontStyle: 'italic' }}>{mYear}</Text>
-              </Text>
-              <Tap onPress={() => onChangeMonth(1)} style={{
-                width: 36, height: 36, borderRadius: 18,
-                backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
-                alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Icon name="chev-r" size={16} stroke={C.cream}/>
-              </Tap>
-            </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingTop: 8, paddingBottom: 18 }}>
             <AddMenu
               onAddBudget={() => setEditor({ section: 'variable', line: null })}
               onAddIncome={() => setEditor({ section: 'income', line: null })}

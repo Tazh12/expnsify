@@ -22,7 +22,7 @@ import { exportMonthPdf } from '../services/export';
 
 interface Props { onOpenRecap?: () => void }
 
-export function ReportsScreen({ onOpenRecap }: Props) {
+export function InsightsScreen({ onOpenRecap }: Props) {
   const C = useTheme();
   const { isWide } = useLayout();
   const { expenses } = useExpenses();
@@ -89,7 +89,7 @@ export function ReportsScreen({ onOpenRecap }: Props) {
       contentContainerStyle={{ padding: isWide ? 32 : 20, paddingBottom: isWide ? 48 : 120, maxWidth: isWide ? 900 : undefined, width: '100%' as any, alignSelf: isWide ? 'center' : undefined }}
       showsVerticalScrollIndicator={false}
     >
-      <PageHeader title="Reports" tagline="plan versus reality"/>
+      <PageHeader title="Insights" tagline="plan versus reality"/>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, marginBottom: 8 }}>
         <Tap onPress={() => shiftMonth(-1)} style={{

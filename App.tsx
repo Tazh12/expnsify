@@ -19,9 +19,10 @@ import { useLayout } from './src/hooks/useLayout';
 import { AppShell } from './src/components/AppShell';
 import { AppHeader } from './src/components/AppHeader';
 import type { TabId } from './src/components/TabBar';
-import { HomeScreen } from './src/screens/HomeScreen';
+import { TodayScreen } from './src/screens/TodayScreen';
+import { PlanScreen } from './src/screens/PlanScreen';
 import { ActivityScreen } from './src/screens/ActivityScreen';
-import { ReportsScreen } from './src/screens/ReportsScreen';
+import { InsightsScreen } from './src/screens/InsightsScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { CategoriesScreen } from './src/screens/CategoriesScreen';
 import AuthScreen from './src/screens/AuthScreen';
@@ -65,10 +66,11 @@ export default function App() {
   const unsubBudget = useRef<(() => void) | null>(null);
   const unsubGroups = useRef<(() => void) | null>(null);
 
-  const [tab, setTab] = useState<TabId>('home');
+  const [tab, setTab] = useState<TabId>('today');
   const [addOpen, setAddOpen] = useState(false);
   const [recapOpen, setRecapOpen] = useState(false);
   const [catsOpen, setCatsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const month = useViewMonth(s => s.month);
   const shiftMonth = useViewMonth(s => s.shiftMonth);
   const [pendingShare, setPendingShare] = useState<{ uri: string; mimeType?: string } | null>(null);
@@ -177,16 +179,25 @@ export default function App() {
 
   const screen = (() => {
     switch (tab) {
-      case 'home':
-        return <HomeScreen />;
-      case 'txns':
+      case 'today':
+        return <TodayScreen />;
+      case 'plan':
+        return <PlanScreen />;
+      case 'activity':
         return <ActivityScreen />;
-      case 'reports':
-        return <ReportsScreen onOpenRecap={() => setRecapOpen(true)} />;
-      case 'settings':
-        return <SettingsScreen onOpenCategories={() => setCatsOpen(true)} />;
+      case 'insights':
+        return <InsightsScreen onOpenRecap={() => setRecapOpen(true)} />;
     }
   })();
+
+  const header = (
+    <AppHeader
+      month={month}
+      onChangeMonth={shiftMonth}
+      onOpenSettings={() => setSettingsOpen(true)}
+      showBrand={!isWide}
+    />
+  );
 
   return (
     <ThemeContext.Provider value={theme}>
@@ -194,11 +205,7 @@ export default function App() {
       <View style={{ flex: 1, backgroundColor: theme.bg }}>
         {!isWide && (
           <SafeAreaView style={{ backgroundColor: theme.bg }}>
-            <AppHeader
-              tab={tab}
-              month={month}
-              onChangeMonth={shiftMonth}
-            />
+            {header}
           </SafeAreaView>
         )}
 
@@ -208,7 +215,10 @@ export default function App() {
           onAdd={() => setAddOpen(true)}
           isWide={isWide}
         >
-          {screen}
+          <View style={{ flex: 1 }}>
+            {isWide && header}
+            {screen}
+          </View>
         </AppShell>
 
         <AddSheet
@@ -218,6 +228,17 @@ export default function App() {
         />
         <RecapModal open={recapOpen} onClose={() => setRecapOpen(false)} />
         <UpgradeModal />
+
+        <Modal visible={settingsOpen} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setSettingsOpen(false)}>
+          <ThemeContext.Provider value={theme}>
+            <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+              <SettingsScreen
+                onOpenCategories={() => setCatsOpen(true)}
+                onClose={() => setSettingsOpen(false)}
+              />
+            </SafeAreaView>
+          </ThemeContext.Provider>
+        </Modal>
 
         <Modal visible={catsOpen} animationType="slide" presentationStyle="fullScreen">
           <ThemeContext.Provider value={theme}>

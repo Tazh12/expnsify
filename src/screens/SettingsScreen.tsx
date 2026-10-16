@@ -25,6 +25,7 @@ function ratesAge(fetchedAt: number): string {
 
 interface Props {
   onOpenCategories: () => void;
+  onClose: () => void;
 }
 
 const PALETTE_DATA: { id: PaletteId; label: string; swatches: string[] }[] = [
@@ -40,7 +41,7 @@ const ACCENT_DATA: { id: AccentId; color: string }[] = [
   { id: 'blue',  color: '#9FB8D4' },
 ];
 
-export function SettingsScreen({ onOpenCategories }: Props) {
+export function SettingsScreen({ onOpenCategories, onClose }: Props) {
   const C = useTheme();
   const settings = useSettings();
   const { categories } = useCategories();
@@ -93,7 +94,20 @@ export function SettingsScreen({ onOpenCategories }: Props) {
       contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
       showsVerticalScrollIndicator={false}
     >
-      <PageHeader title="Settings" tagline="your space"/>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <PageHeader title="Settings" tagline="your space"/>
+        <Tap
+          onPress={onClose}
+          accessibilityLabel="Close settings"
+          style={{
+            marginTop: 10, width: 36, height: 36, borderRadius: 18,
+            backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
+            alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <Icon name="x" size={16} stroke={C.muted}/>
+        </Tap>
+      </View>
 
       {/* Profile */}
       <Card style={{ marginTop: 20, padding: 20, flexDirection: 'row', alignItems: 'center', gap: 14 }}>

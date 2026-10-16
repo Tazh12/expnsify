@@ -6,10 +6,10 @@ import { Icon } from './Icon';
 import { TabBar, type TabId } from './TabBar';
 
 const NAV: { id: TabId; icon: string; label: string }[] = [
-  { id: 'home',     icon: 'home',  label: 'Budget' },
-  { id: 'txns',     icon: 'list',  label: 'Activity' },
-  { id: 'reports',  icon: 'chart', label: 'Reports' },
-  { id: 'settings', icon: 'gear',  label: 'Settings' },
+  { id: 'today', icon: 'cal', label: 'Today' },
+  { id: 'plan', icon: 'wallet', label: 'Plan' },
+  { id: 'activity', icon: 'list', label: 'Activity' },
+  { id: 'insights', icon: 'chart', label: 'Insights' },
 ];
 
 export function AppShell({
@@ -70,11 +70,11 @@ export function AppShell({
           );
         })}
 
-        <Tap onPress={onAdd} haptic style={{
+        <Tap onPress={onAdd} haptic accessibilityLabel="Scan or add an expense" style={{
           marginTop: 18, backgroundColor: C.sage, borderRadius: 14,
           paddingVertical: 12, alignItems: 'center',
         }}>
-          <Text style={{ color: '#0E0E0C', fontWeight: '600', fontSize: 14 }}>Add transaction</Text>
+          <Text style={{ color: '#0E0E0C', fontWeight: '600', fontSize: 14 }}>Scan / Add</Text>
         </Tap>
       </View>
       <View style={{ flex: 1 }}>{children}</View>
