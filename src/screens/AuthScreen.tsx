@@ -62,7 +62,7 @@ export default function AuthScreen() {
         <View style={s.tabRow}>
           {(['login', 'register'] as Tab[]).map(t => (
             <Pressable key={t} style={[s.tab, tab === t && s.tabActive]} onPress={() => setTab(t)}>
-              <Text style={[s.tabText, tab === t && s.tabTextActive]}>
+              <Text style={[s.tabText, tab === t && s.tabTextActive]} numberOfLines={2}>
                 {t === 'login' ? 'Sign in' : 'Create account'}
               </Text>
             </Pressable>
@@ -117,7 +117,7 @@ export default function AuthScreen() {
                 }
               }}
             >
-              <Text style={{ color: theme.muted, fontSize: 13, textAlign: 'right' }}>Forgot password</Text>
+              <Text style={s.forgot}>Forgot password</Text>
             </Pressable>
           )}
 
@@ -141,12 +141,15 @@ export default function AuthScreen() {
 
 function styles(theme: ReturnType<typeof useTheme>) {
   return StyleSheet.create({
-    root: { flex: 1, backgroundColor: theme.bg },
+    root: { flex: 1, width: '100%', backgroundColor: theme.bg },
     brandIcon: {
       position: 'absolute', top: Platform.OS === 'ios' ? 58 : 24, right: 24,
       width: 38, height: 38,
     },
-    inner: { flex: 1, justifyContent: 'center', paddingHorizontal: 28, paddingBottom: 40 },
+    inner: {
+      flex: 1, width: '100%', maxWidth: 440, alignSelf: 'center',
+      justifyContent: 'center', paddingHorizontal: 20, paddingBottom: 40,
+    },
     wordmark: {
       fontFamily: theme.fonts.serifItalic,
       fontSize: 52, color: theme.cream, textAlign: 'center', letterSpacing: -1, marginBottom: 4,
@@ -156,12 +159,20 @@ function styles(theme: ReturnType<typeof useTheme>) {
       color: theme.muted, textAlign: 'center', marginBottom: 36,
     },
     tabRow: {
-      flexDirection: 'row', backgroundColor: theme.surface,
-      borderRadius: 12, padding: 4, marginBottom: 24,
+      flexDirection: 'row', flexWrap: 'wrap', backgroundColor: theme.surface,
+      borderRadius: 12, padding: 4, marginBottom: 24, gap: 4,
     },
-    tab: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
+    tab: {
+      flexGrow: 1, flexBasis: 140, minHeight: 44,
+      paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10,
+      alignItems: 'center', justifyContent: 'center',
+    },
     tabActive: { backgroundColor: theme.bg },
-    tabText: { fontFamily: theme.fonts.regular, fontSize: 14, color: theme.muted },
+    tabText: { fontFamily: theme.fonts.regular, fontSize: 14, color: theme.muted, textAlign: 'center' },
+    forgot: {
+      color: theme.muted, fontSize: 13, textAlign: 'right',
+      alignSelf: 'flex-end', minHeight: 44, lineHeight: 44,
+    },
     tabTextActive: { color: theme.cream, fontFamily: theme.fonts.medium },
     form: { gap: 12 },
     input: {
