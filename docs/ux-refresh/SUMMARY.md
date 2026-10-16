@@ -61,13 +61,64 @@ Seen without a crash, after dismissing the dev warning banner (SafeAreaView and 
 - No proxy, schema, or dependency changes. Firestore `categories` documents are still subscribed and still written as `category_id = line.templateKey`.
 - No test runner. `src/services/receiptUri.test.ts` still fails under `node --experimental-strip-types --test` because the import has no `.ts` extension.
 - Recap’s quarter, year, all-time, and custom ranges were not copied onto Insights. Week and Month remain.
-- The scan sheet itself is still its own animated sheet. The pickers it opens use `BottomSheet`. Date picker popovers stay centered. Upgrade is still a centered dialog.
+- Date picker popovers stay centered. Upgrade is still a centered dialog.
 - Rename and “move this group” inside Lines & Groups are still small dialogs, not the shared sheet.
 
 ## Follow-ups
 
 - Let a receipt’s line items be assigned to more than one budget line. They are display and search only.
 - Add a test runner that can import `receiptUri.test.ts` without a new production dependency, or give that import a `.ts` extension if Node is the runner.
-- Sign in on web and check the sidebar at 900px, and the phone-width auth row so “Create account” and “Forgot password” are not clipped.
-- Plan section headers add raw `expected` and then format that number as the preferred currency. The equation uses `convert`. On this account the income header and the equation did not show the same total.
+- Sign in on web and check the sidebar at 900px. The phone-width auth row is fixed in `402fa34`; headless Chrome at 360px now shows Create account on its own row.
 - Confirm stop-repeating against a real next month once you are willing to write that data.
+
+## Round 3
+
+Fixes on `feat/ux-refresh`. `npx tsc --noEmit` passed after each commit. Nothing was merged or pushed.
+
+| Fix | Commit | What changed |
+|---|---|---|
+| Later months with spending stay when a line stops repeating | `7ac8346` | Empty unpaid later lines are deleted. A later line that is paid or has an expense is kept and set to not repeating. |
+| Plan totals convert currency | `c843971` | Section headers, rows, Needs attention, Upcoming, overspent, and the review warning use `convert`. CSV and PDF include the original amount and currency plus the converted amount. |
+| Sign-in fits at 360px | `ec793aa`, `c84c0f8`, `a43d7c5`, `402fa34` | Sign in and Create account stack. The form is inset with margin so Forgot password stays inside the window. |
+| Insights copy when nothing is logged | `17f89a1` | A $0 period says “Nothing logged yet this month” (or this week) and skips the percentage. The percentage is also skipped when the previous period was $0. |
+| Scan options | `6391d4b`, `5e6b631` | The scan sheet uses the shared opaque sheet. Title is one line, the close control sits inside the padding, and the other methods are equal tiles. |
+| Empty lists | `6fe426b` | Activity distinguishes no history, an empty month, and no filter matches. Today, Insights, and custom groups use the same empty state. |
+| Activity filters and titles | `6fe426b`, `63776fa` | Chips sit on one scrolling row under search. The selected chip is filled sage. Page titles are 32pt. Placeholder text uses the muted color, darkened so cream and carbon clear 4.5:1. |
+| Month in the header | `6ab7aca` | Phones show the icon only. Below 430px the label is “Oct 2026”. |
+
+Screenshots in `docs/ux-refresh/screenshots/`:
+
+- Before: `before-scan-options.png`, `before-activity-chips.png`, `before-header-month.png`, `before-activity-empty.png`, `before-today-header.png`
+- After, iPhone 17 Pro simulator, Cream, Default: `after-scan-options.png`, `after-activity.png`, `after-activity-filters.png`, `after-today-header.png`
+- Web, not signed in, Midnight: `web-360.png`, `web-430.png`, `web-1100.png`
+
+The after shots are one theme and one font. Cycling Midnight, Cream, and Carbon across Default, Sans, Mono, and Comic would rewrite this account’s appearance settings, so that matrix was not clicked through. Placeholder contrast was checked against the theme colors: cream muted `#6B655C` on `#FAF8F2` is 5.43:1, midnight muted `#8F8A80` on `#1B1A17` is 5.07:1, carbon muted `#8E8E9A` on `#121215` is 5.78:1.
+
+## End-to-end flows
+
+Not run. The simulator is signed into the existing account, and these flows write expenses and budget lines. They need a test account first.
+
+| # | Flow | iOS | Web 390 | Web 1100 |
+|---|---|---|---|---|
+| 1 | Empty month and starter lines | not run | not run | not run |
+| 2 | Add income and one line in each spend section | not run | not run | not run |
+| 3 | Weekly repeating line and sibling edit | not run | — | — |
+| 4 | Groceries stays in Bills, then the move suggestion | not run | — | — |
+| 5 | Mark a bill paid, then unmark it | not run | — | — |
+| 6 | Next month carry-forward and the income prompt | not run | — | — |
+| 7 | Manual entry on a line | not run | not run | not run |
+| 8 | Manual entry with no line, then Assign line | not run | not run | not run |
+| 9 | New line from review | not run | not run | not run |
+| 10 | Photo library upload | not run | — | — |
+| 11 | PDF or email, including web drop | not run | not run | not run |
+| 12 | Payment confirmation marks the bill paid | not run | — | — |
+| 13 | Receipt dated in another month | not run | — | — |
+| 14 | Foreign currency uses the converted amount | not run | — | — |
+| 15 | Needs attention actions | not run | not run | not run |
+| 16 | Activity detail, edit, delete, filters, search | not run | not run | not run |
+| 17 | Ask Tally and Generate insights | not run | — | — |
+| 18 | Insights week/month, bars, CSV, PDF | not run | not run | not run |
+| 19 | Lines and groups rename, delete, stop repeating | not run | not run | not run |
+| 20 | Export all data | not run | not run | not run |
+
+The camera on a real iPhone is still yours to test. On the simulator, opening Scan shows “Camera unavailable” and then the options sheet.
