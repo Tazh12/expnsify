@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, TextInput, Alert, Modal,
 } from 'react-native';
@@ -13,7 +13,13 @@ import type { BudgetLine } from '../store/budgetTypes';
 export function LinesGroupsScreen({ onClose }: { onClose: () => void }) {
   const C = useTheme();
   const month = monthKey(useViewMonth(s => s.month));
-  const lines = useBudget(s => s.forMonth(month));
+  const allLines = useBudget(s => s.lines);
+  const lines = useMemo(
+    () => allLines
+      .filter(l => l.month === month)
+      .sort((a, b) => a.sortOrder - b.sortOrder || (a.dueDay ?? 99) - (b.dueDay ?? 99) || a.name.localeCompare(b.name)),
+    [allLines, month],
+  );
   const renameForward = useBudget(s => s.renameForward);
   const stopFrom = useBudget(s => s.stopFrom);
   const moveSectionFrom = useBudget(s => s.moveSectionFrom);
