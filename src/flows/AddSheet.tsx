@@ -1,9 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, Modal, TouchableOpacity, Pressable, ScrollView, Image,
-  Animated, TextInput, KeyboardAvoidingView, Platform, Alert,
+  Animated, TextInput, Platform, Alert,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -156,7 +155,6 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
   const [completeOpen, setCompleteOpen] = useState(false);
   const [matchedLine, setMatchedLine] = useState<BudgetLine | null>(null);
 
-  const slideY = useRef(new Animated.Value(600)).current;
   const doneScale = useRef(new Animated.Value(0.6)).current;
 
   const launchedCamera = useRef(false);
@@ -164,7 +162,6 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
   useEffect(() => {
     if (!open) {
       launchedCamera.current = false;
-      Animated.timing(slideY, { toValue: 600, duration: 280, useNativeDriver: true }).start();
       return;
     }
     setPhase(editExpense ? 'review' : 'pick');
@@ -174,7 +171,6 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
     setSaveState('idle');
     setCompleteOpen(false);
     setMatchedLine(null);
-    Animated.spring(slideY, { toValue: 0, useNativeDriver: true, speed: 18, bounciness: 2 }).start();
     if (Platform.OS !== 'web' && !editExpense && !pendingShare?.uri && !launchedCamera.current) {
       launchedCamera.current = true;
       startScan('photo');
@@ -412,38 +408,29 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
   if (!open) return null;
 
   return (
-    <Modal visible={open} transparent animationType="none">
-      <BlurView intensity={40} tint={C.isLight ? 'light' : 'dark'} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
-        <TouchableOpacity style={{ flex: 1 }} onPress={onClose} activeOpacity={1}/>
-      </BlurView>
-
-      <Animated.View style={{
-        position: 'absolute', left: 0, right: 0, bottom: 0,
-        transform: [{ translateY: slideY }],
-      }}>
-        <View style={{ borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden' }}>
-          <BlurView intensity={90} tint={C.isLight ? 'light' : 'dark'} style={{ paddingTop: 14, paddingHorizontal: 20, paddingBottom: 40 }}>
-            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.hair, alignSelf: 'center', marginBottom: 16 }}/>
-            {phase === 'pick' && <PickPhase onPick={startScan} onClose={onClose} onDropFile={(uri, mime) => ingestFile(uri, mime, 'share')}/>}
-            {phase === 'coach' && <VoiceCoach onStart={startVoice} onClose={() => setPhase('pick')}/>}
-            {phase === 'scan' && <ScanPhase method={method}/>}
-            {phase === 'review' && !completeOpen && (
-              <ReviewPhase
-                scanned={scanned}
-                receiptUri={receiptUri}
-                matchedLine={matchedLine}
-                method={method}
-                onSave={onClose}
-                onClose={onClose}
-                setSaveState={setSaveState}
-                editExpense={editExpense}
-              />
-            )}
-          </BlurView>
-
+    <>
+      <BottomSheet visible={open} onClose={onClose}>
+        <View style={{ paddingHorizontal: 20, position: 'relative' }}>
+          {phase === 'pick' && <PickPhase onPick={startScan} onClose={onClose} onDropFile={(uri, mime) => ingestFile(uri, mime, 'share')}/>}
+          {phase === 'coach' && <VoiceCoach onStart={startVoice} onClose={() => setPhase('pick')}/>}
+          {phase === 'scan' && <ScanPhase method={method}/>}
+          {phase === 'review' && !completeOpen && (
+            <ReviewPhase
+              scanned={scanned}
+              receiptUri={receiptUri}
+              matchedLine={matchedLine}
+              method={method}
+              onSave={onClose}
+              onClose={onClose}
+              setSaveState={setSaveState}
+              editExpense={editExpense}
+            />
+          )}
           {saveState !== 'idle' && (
-            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
-              <BlurView intensity={85} tint={C.isLight ? 'light' : 'dark'} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}/>
+            <View style={{
+              position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+              alignItems: 'center', justifyContent: 'center', backgroundColor: C.bgElev,
+            }}>
               {saveState === 'saving' ? (
                 <Text style={{ fontFamily: C.fonts.serifItalic, fontSize: 22, color: C.muted }}>Saving…</Text>
               ) : (
@@ -460,8 +447,7 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
             </View>
           )}
         </View>
-      </Animated.View>
-
+      </BottomSheet>
       <CompletePaymentSheet
         open={completeOpen}
         line={matchedLine}
@@ -471,7 +457,7 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
         onEdit={() => setCompleteOpen(false)}
         onClose={() => { setCompleteOpen(false); onClose(); }}
       />
-    </Modal>
+    </>
   );
 }
 
@@ -497,82 +483,111 @@ function PickPhase({
 
   return (
     <View {...dropProps as object}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16 }}>
-        <View>
-          <Text style={{ fontFamily: C.fonts.serif, fontSize: 28, color: C.cream, lineHeight: 32, letterSpacing: -0.3 }}>
-            Scan or add an expense
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text
+            style={{ fontFamily: C.fonts.serif, fontSize: 24, color: C.cream, letterSpacing: -0.3 }}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+          >
+            Add an expense
           </Text>
-          <Text style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>
-            {Platform.OS === 'web' ? 'Drop a receipt or PDF, or type it in' : 'Take a photo, or add it another way'}
+          <Text style={{ fontSize: 13, color: C.muted, marginTop: 4 }} numberOfLines={2}>
+            Scan a receipt or add it another way
           </Text>
         </View>
-        <Tap onPress={onClose} accessibilityLabel="Close" style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }}>
-          <Icon name="x" size={16} stroke={C.muted}/>
+        <Tap onPress={onClose} accessibilityLabel="Close" style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="x" size={16} stroke={C.muted}/>
+          </View>
         </Tap>
       </View>
 
-      {Platform.OS === 'web' && (
-        <View style={{
-          marginBottom: 14, paddingVertical: 28, borderRadius: 16,
+      {Platform.OS === 'web' ? (
+        <Tap onPress={() => onPick('file')} haptic style={{
+          marginBottom: 12, paddingVertical: 28, borderRadius: 16,
           borderWidth: 1, borderStyle: 'dashed', borderColor: C.hair,
           alignItems: 'center',
         }}>
-          <Text style={{ fontSize: 15, color: C.cream }}>Drop a receipt or PDF</Text>
-        </View>
-      )}
-
-      {Platform.OS !== 'web' && (
-        <Tap onPress={() => onPick('photo')} haptic style={{
-          marginBottom: 12, minHeight: 72, borderRadius: 16, backgroundColor: C.sage,
-          alignItems: 'center', justifyContent: 'center',
-        }}>
-          <Text style={{ fontSize: 17, fontWeight: '600', color: '#0E0E0C' }}>Take photo</Text>
+          <Text style={{ fontSize: 15, color: C.cream, textAlign: 'center' }}>Drop a receipt or PDF here, or choose a file</Text>
+        </Tap>
+      ) : (
+        <Tap onPress={() => onPick('photo')} haptic style={{ marginBottom: 8 }}>
+          <LinearGradient
+            colors={[C.sage, C.sageDeep]}
+            start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }}
+            style={{ height: 56, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+          >
+            <Icon name="cam" size={20} stroke="#0E0E0C" sw={2}/>
+            <Text style={{ fontSize: 16, fontWeight: '600', color: '#0E0E0C' }}>Scan a receipt</Text>
+          </LinearGradient>
         </Tap>
       )}
+      {Platform.OS !== 'web' && (
+        <Text style={{ fontSize: 12, color: C.muted, textAlign: 'center', marginBottom: 14 }}>AI reads it in seconds</Text>
+      )}
 
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        {(Platform.OS === 'web'
+      <View style={{ gap: 10 }}>
+        {chunk(Platform.OS === 'web'
           ? [
-              { id: 'image' as Method, label: 'Upload' },
-              { id: 'file' as Method, label: 'File' },
-              { id: 'manual' as Method, label: 'Type' },
+              { id: 'voice' as Method, icon: 'mic', label: 'Say it', hint: 'Merchant, amount, line' },
+              { id: 'manual' as Method, icon: 'edit', label: 'Type it', hint: 'Enter it by hand' },
             ]
           : [
-              { id: 'image' as Method, label: 'Library' },
-              { id: 'file' as Method, label: 'File' },
-              { id: 'voice' as Method, label: 'Voice' },
-              { id: 'manual' as Method, label: 'Type' },
-            ]
-        ).map(item => (
-          <Tap
-            key={item.id}
-            onPress={() => onPick(item.id)}
-            haptic
-            accessibilityLabel={item.label}
-            style={{
-              flex: 1, minHeight: 44, borderRadius: 14,
-              backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
-              alignItems: 'center', justifyContent: 'center',
-            }}
-          >
-            <Text style={{ fontSize: 13, color: C.cream, fontWeight: '600' }}>{item.label}</Text>
-          </Tap>
+              { id: 'image' as Method, icon: 'image', label: 'Photo library', hint: 'Pick a receipt photo' },
+              { id: 'file' as Method, icon: 'doc', label: 'PDF or email', hint: 'Confirmations and invoices' },
+              { id: 'voice' as Method, icon: 'mic', label: 'Say it', hint: 'Merchant, amount, line' },
+              { id: 'manual' as Method, icon: 'edit', label: 'Type it', hint: 'Enter it by hand' },
+            ], 2).map(row => (
+          <View key={row.map(item => item.id).join('-')} style={{ flexDirection: 'row', gap: 10 }}>
+            {row.map(item => (
+              <Tap
+                key={item.id}
+                onPress={() => onPick(item.id)}
+                haptic
+                accessibilityLabel={item.label}
+                style={{
+                  flex: 1, minHeight: 72, borderRadius: 16, padding: 12,
+                  backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
+                  justifyContent: 'center',
+                }}
+              >
+                <Icon name={item.icon} size={18} stroke={C.sage}/>
+                <Text style={{ marginTop: 8, fontSize: 14, color: C.cream, fontWeight: '600' }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{item.label}</Text>
+                <Text style={{ marginTop: 2, fontSize: 12, color: C.muted }} numberOfLines={1}>{item.hint}</Text>
+              </Tap>
+            ))}
+          </View>
         ))}
       </View>
     </View>
   );
 }
 
+function chunk<T>(items: T[], size: number): T[][] {
+  const rows: T[][] = [];
+  for (let i = 0; i < items.length; i += size) rows.push(items.slice(i, i + size));
+  return rows;
+}
+
 function VoiceCoach({ onStart, onClose }: { onStart: () => void; onClose: () => void }) {
   const C = useTheme();
   return (
     <View style={{ paddingBottom: 8 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16 }}>
-        <Text style={{ fontFamily: C.fonts.serif, fontSize: 28, color: C.cream, letterSpacing: -0.3 }}>
-          Say three <Text style={{ fontStyle: 'italic' }}>things</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+        <Text
+          style={{ flex: 1, fontFamily: C.fonts.serif, fontSize: 24, color: C.cream, letterSpacing: -0.3 }}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
+        >
+          Say three things
         </Text>
-        <Tap onPress={onClose} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }}>
-          <Icon name="x" size={16} stroke={C.muted}/>
+        <Tap onPress={onClose} accessibilityLabel="Close" style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="x" size={16} stroke={C.muted}/>
+          </View>
         </Tap>
       </View>
       <View style={{ gap: 10, marginBottom: 22 }}>
@@ -622,7 +637,7 @@ function ScanPhase({ method }: { method: Method | null }) {
   }, []);
 
   return (
-    <View style={{ paddingVertical: 40, alignItems: 'center', minHeight: 280 }}>
+    <View style={{ paddingVertical: 28, alignItems: 'center' }}>
       <Text style={{ fontFamily: C.fonts.serif, fontSize: 22, color: C.cream, textAlign: 'center' }}>
         {lines[step]}
       </Text>
@@ -743,14 +758,26 @@ function ReviewPhase({
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 560 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 8 }}>
-          <Text style={{ fontFamily: C.fonts.serif, fontSize: 28, color: C.cream, lineHeight: 30, letterSpacing: -0.3 }}>
-            {editExpense ? 'Edit ' : 'I read '}<Text style={{ fontStyle: 'italic' }}>{editExpense ? 'this' : 'this'}</Text>
+    <View>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        style={{ maxHeight: 560 }}
+        contentContainerStyle={{ paddingBottom: 12 }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+          <Text
+            style={{ flex: 1, fontFamily: C.fonts.serif, fontSize: 24, color: C.cream, letterSpacing: -0.3 }}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+          >
+            {editExpense ? 'Edit this' : 'I read this'}
           </Text>
-          <Tap onPress={onClose} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }}>
-            <Icon name="x" size={16} stroke={C.muted}/>
+          <Tap onPress={onClose} accessibilityLabel="Close" style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="x" size={16} stroke={C.muted}/>
+            </View>
           </Tap>
         </View>
         <Text style={{ fontSize: 12, color: C.muted, marginBottom: 18 }}>
@@ -902,7 +929,7 @@ function ReviewPhase({
         onSelect={setCurrencyCode}
         onClose={() => setCurrencyPickerOpen(false)}
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -1124,14 +1151,14 @@ function BudgetLinePicker({
               value={newName}
               onChangeText={setNewName}
               placeholder="Name"
-              placeholderTextColor={C.subtle}
+              placeholderTextColor={C.muted}
               style={{ borderWidth: 0.5, borderColor: C.hair, borderRadius: 12, padding: 12, color: C.cream, marginBottom: 10 }}
             />
             <TextInput
               value={newAmount}
               onChangeText={setNewAmount}
               placeholder="Amount (optional)"
-              placeholderTextColor={C.subtle}
+              placeholderTextColor={C.muted}
               keyboardType="decimal-pad"
               style={{ borderWidth: 0.5, borderColor: C.hair, borderRadius: 12, padding: 12, color: C.cream, marginBottom: 12 }}
             />

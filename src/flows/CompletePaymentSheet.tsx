@@ -25,12 +25,17 @@ export function CompletePaymentSheet({
 
   return (
     <BottomSheet visible={open} onClose={onClose}>
-      <View style={{ paddingHorizontal: 22, paddingBottom: 28 }}>
+      <View style={{ paddingHorizontal: 22 }}>
           <Text style={{ fontSize: 11, color: C.sage, letterSpacing: 0.05, textTransform: 'uppercase', marginBottom: 8 }}>
             Payment confirmation
           </Text>
-          <Text style={{ fontFamily: C.fonts.serif, fontSize: 28, color: C.cream, letterSpacing: -0.3, lineHeight: 32 }}>
-            Mark <Text style={{ fontStyle: 'italic' }}>{line.name}</Text> as paid?
+          <Text
+            style={{ fontFamily: C.fonts.serif, fontSize: 24, color: C.cream, letterSpacing: -0.3 }}
+            numberOfLines={2}
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+          >
+            Mark {line.name} as paid?
           </Text>
           <Text style={{ fontSize: 14, color: C.muted, marginTop: 12, lineHeight: 20 }}>
             {scanned.merchant} · {fmt(scanned.amount, scanned.currency || preferredCurrency)}

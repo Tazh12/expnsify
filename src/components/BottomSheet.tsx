@@ -2,7 +2,6 @@ import React from 'react';
 import {
   View, Modal, Pressable, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
 import { useTheme } from '../theme';
 
 export function BottomSheet({
@@ -18,11 +17,7 @@ export function BottomSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <BlurView
-        intensity={40}
-        tint={C.isLight ? 'light' : 'dark'}
-        style={{ flex: 1, justifyContent: 'flex-end' }}
-      >
+      <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.35)' }}>
         <Pressable
           style={{ flex: 1 }}
           onPress={onClose}
@@ -37,7 +32,8 @@ export function BottomSheet({
             borderWidth: 0.5,
             borderColor: C.hairStrong,
             paddingTop: 12,
-            maxHeight: '88%',
+            paddingBottom: Platform.OS === 'ios' ? 28 : 16,
+            maxHeight: '92%',
           }}>
             <View style={{
               width: 36, height: 4, borderRadius: 2,
@@ -46,7 +42,7 @@ export function BottomSheet({
             {children}
           </View>
         </KeyboardAvoidingView>
-      </BlurView>
+      </View>
     </Modal>
   );
 }
