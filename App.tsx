@@ -24,7 +24,6 @@ import { PlanScreen } from './src/screens/PlanScreen';
 import { ActivityScreen } from './src/screens/ActivityScreen';
 import { InsightsScreen } from './src/screens/InsightsScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
-import { LinesGroupsScreen } from './src/screens/LinesGroupsScreen';
 import AuthScreen from './src/screens/AuthScreen';
 import { AddSheet } from './src/flows/AddSheet';
 import { UpgradeModal } from './src/flows/UpgradeModal';
@@ -69,7 +68,6 @@ export default function App() {
 
   const [tab, setTab] = useState<TabId>('today');
   const [addOpen, setAddOpen] = useState(false);
-  const [catsOpen, setCatsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const month = useViewMonth(s => s.month);
   const shiftMonth = useViewMonth(s => s.shiftMonth);
@@ -231,17 +229,8 @@ export default function App() {
         <Modal visible={settingsOpen} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setSettingsOpen(false)}>
           <ThemeContext.Provider value={theme}>
             <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
-              <SettingsScreen
-                onOpenLines={() => setCatsOpen(true)}
-                onClose={() => setSettingsOpen(false)}
-              />
+              <SettingsScreen onClose={() => setSettingsOpen(false)} />
             </SafeAreaView>
-          </ThemeContext.Provider>
-        </Modal>
-
-        <Modal visible={catsOpen} animationType="slide" presentationStyle="fullScreen">
-          <ThemeContext.Provider value={theme}>
-            <LinesGroupsScreen onClose={() => setCatsOpen(false)} />
           </ThemeContext.Provider>
         </Modal>
       </View>

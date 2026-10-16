@@ -16,6 +16,7 @@ import { useAiUsage } from '../store/useAiUsage';
 import { aiRemainingLabel } from '../flows/UpgradeModal';
 import { deleteAccount } from '../services/account';
 import { expensesToCsv } from '../services/export';
+import { LinesGroupsScreen } from './LinesGroupsScreen';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import Constants from 'expo-constants';
@@ -28,7 +29,6 @@ function ratesAge(fetchedAt: number): string {
 }
 
 interface Props {
-  onOpenLines: () => void;
   onClose: () => void;
 }
 
@@ -45,7 +45,7 @@ const ACCENT_DATA: { id: AccentId; color: string }[] = [
   { id: 'blue',  color: '#9FB8D4' },
 ];
 
-export function SettingsScreen({ onOpenLines, onClose }: Props) {
+export function SettingsScreen({ onClose }: Props) {
   const C = useTheme();
   const settings = useSettings();
   const { expenses } = useExpenses();
@@ -60,7 +60,7 @@ export function SettingsScreen({ onOpenLines, onClose }: Props) {
   const [currencyPickerOpen, setCurrencyPickerOpen] = useState(false);
   const [editNameOpen, setEditNameOpen] = useState(false);
   const [notifyOpen, setNotifyOpen] = useState(false);
-  const [panel, setPanel] = useState<'main' | 'appearance'>('main');
+  const [panel, setPanel] = useState<'main' | 'appearance' | 'lines'>('main');
   const [nameInput, setNameInput] = useState('');
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<TextInput>(null);
@@ -92,6 +92,10 @@ export function SettingsScreen({ onOpenLines, onClose }: Props) {
   }
 
   const displayName = user?.displayName || user?.email?.split('@')[0] || 'You';
+
+  if (panel === 'lines') {
+    return <LinesGroupsScreen onClose={() => setPanel('main')} />;
+  }
 
   return (
     <>
@@ -378,7 +382,7 @@ export function SettingsScreen({ onOpenLines, onClose }: Props) {
             </Text>
           </View>
         )}
-        <SettingsRow icon={<Icon name="tag" size={18} stroke={C.cream}/>} label="Lines & Groups" onPress={onOpenLines}/>
+        <SettingsRow icon={<Icon name="tag" size={18} stroke={C.cream}/>} label="Lines & Groups" onPress={() => setPanel('lines')}/>
         <SettingsRow
           icon={<Icon name="bell" size={18} stroke={C.cream}/>}
           label="Notifications"
