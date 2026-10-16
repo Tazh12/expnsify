@@ -25,7 +25,7 @@ interface BudgetState {
   dedupeRepeats: (month: string) => Promise<void>;
   carryIncome: (month: string, templateKeys: string[]) => Promise<void>;
   renameForward: (templateKey: string, fromMonth: string, name: string) => Promise<void>;
-  stopFrom: (templateKey: string, fromMonth: string) => Promise<void>;
+  stopFrom: (templateKey: string, fromMonth: string, includeCurrent?: boolean) => Promise<void>;
   moveSectionFrom: (fromSection: string, toSection: string, fromMonth: string) => Promise<void>;
 }
 
@@ -371,9 +371,15 @@ export const useBudget = create<BudgetState>((set, get) => ({
     for (const line of targets) await get().update(line.id, { name });
   },
 
-  stopFrom: async (templateKey, fromMonth) => {
-    const ids = get().lines
-      .filter(l => l.templateKey === templateKey && l.month >= fromMonth)
+  stopFrom: async (templateKey, fromMonth, includeCurrent = false) => {
+    const matches = get().lines.filter(l => l.templateKey === templateKey);
+    if (!includeCurrent) {
+      for (const line of matches.filter(l => l.month === fromMonth && l.recurring)) {
+        await get().update(line.id, { recurring: false });
+      }
+    }
+    const ids = matches
+      .filter(l => includeCurrent ? l.month >= fromMonth : l.month > fromMonth)
       .map(l => l.id);
     await get().removeMany(ids);
   },

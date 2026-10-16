@@ -6,14 +6,16 @@ import { useTheme } from '../theme';
 import { Card, Icon, Tap } from '../components';
 import { useBudget } from '../store/useBudget';
 import { useBudgetGroups } from '../store/useBudgetGroups';
+import { useExpenses } from '../store/useExpenses';
 import { useViewMonth } from '../store/useViewMonth';
-import { monthKey } from '../services/month';
+import { monthKey, monthTitle } from '../services/month';
 import type { BudgetLine } from '../store/budgetTypes';
 
 export function LinesGroupsScreen({ onClose }: { onClose: () => void }) {
   const C = useTheme();
   const month = monthKey(useViewMonth(s => s.month));
   const allLines = useBudget(s => s.lines);
+  const expenses = useExpenses(s => s.expenses);
   const lines = useMemo(
     () => allLines
       .filter(l => l.month === month)
@@ -93,14 +95,35 @@ export function LinesGroupsScreen({ onClose }: { onClose: () => void }) {
                         <Text style={{ color: C.sage, fontSize: 13 }}>Rename</Text>
                       </Tap>
                       <Tap
-                        onPress={() => Alert.alert(
-                          'Stop repeating',
-                          `${line.name} will be removed from this month onward. Past months stay as they are.`,
-                          [
+                        onPress={() => {
+                          const siblings = allLines.filter(l => l.templateKey === line.templateKey && l.month === month);
+                          const ids = new Set(siblings.map(l => l.id));
+                          const linked = expenses.some(e =>
+                            e.date.slice(0, 7) === month && (
+                              (e.line_id != null && ids.has(e.line_id))
+                              || (e.line_id == null && e.category_id === line.templateKey)
+                            ),
+                          );
+                          const blocked = siblings.some(l => l.paid) || linked;
+                          const buttons: { text: string; style?: 'cancel' | 'destructive'; onPress?: () => void }[] = [
                             { text: 'Cancel', style: 'cancel' },
-                            { text: 'Stop', style: 'destructive', onPress: () => stopFrom(line.templateKey, month) },
-                          ],
-                        )}
+                            { text: 'Stop repeating', onPress: () => stopFrom(line.templateKey, month, false) },
+                          ];
+                          if (!blocked) {
+                            buttons.push({
+                              text: 'Remove from this month too',
+                              style: 'destructive',
+                              onPress: () => stopFrom(line.templateKey, month, true),
+                            });
+                          }
+                          Alert.alert(
+                            'Stop repeating',
+                            blocked
+                              ? `${line.name} stays in ${monthTitle(month)} because it has spending or is already paid. It will not be added to later months.`
+                              : `${line.name} stays in ${monthTitle(month)}. It will not be added to later months. You can also remove it from this month, since nothing is logged against it.`,
+                            buttons,
+                          );
+                        }}
                         accessibilityLabel={`Stop repeating ${line.name}`}
                         style={{ minHeight: 44, justifyContent: 'center' }}
                       >
