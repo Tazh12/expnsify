@@ -26,11 +26,12 @@ import { uid, fmt, currencySymbol, parseLocalDate, toLocalDateISO } from '../ser
 import { CurrencyPickerSheet } from '../components/CurrencyPicker';
 import { CompletePaymentSheet } from './CompletePaymentSheet';
 import { matchLine } from '../services/budget';
-import { monthKey, expenseMonthKey } from '../services/month';
+import { monthKey, expenseMonthKey, slugKey, uniqueTemplateKey } from '../services/month';
 import { uploadReceipt } from '../services/receipts';
 import { RECEIPT_STORAGE_ENABLED, resolveReceiptUriToPersist } from '../services/receiptUri';
 import { DEFAULT_CATEGORIES } from '../store/defaults';
 import type { BudgetLine, SectionMeta } from '../store/budgetTypes';
+import { sectionColor } from '../store/budgetTypes';
 
 const GENERAL_VARIABLE_IDS = ['groceries', 'coffee', 'dining', 'transport', 'travel', 'home', 'software', 'health'] as const;
 const PICKER_SECTION_ORDER = ['bills', 'variable', 'investments'] as const;
@@ -824,10 +825,12 @@ function ReviewPhase({
         </Card>
 
         <BudgetLinePicker
+          month={expenseMonthKey(dateISO) || monthKey(new Date())}
           monthLines={monthLines}
           selectedLineId={selectedLineId}
           selectedCategoryId={selectedCategoryId}
           matchedLineId={matchedLine?.id ?? scanned?.lineId ?? null}
+          suggestedName={!scanned?.lineId ? scanned?.category?.name : undefined}
           onSelectUnbudgeted={() => {
             setSelectedLineId(null);
             setSelectedCategoryId(null);
@@ -877,35 +880,90 @@ function ReviewPhase({
 }
 
 function BudgetLinePicker({
-  monthLines, selectedLineId, selectedCategoryId, matchedLineId,
+  month, monthLines, selectedLineId, selectedCategoryId, matchedLineId, suggestedName,
   onSelectUnbudgeted, onSelectCategory, onSelectLine,
 }: {
+  month: string;
   monthLines: BudgetLine[];
   selectedLineId: string | null;
   selectedCategoryId: string | null;
   matchedLineId: string | null;
+  suggestedName?: string;
   onSelectUnbudgeted: () => void;
   onSelectCategory: (cat: { id: string; name: string }, line?: BudgetLine) => void;
   onSelectLine: (line: BudgetLine) => void;
 }) {
   const C = useTheme();
-  const { categories } = useCategories();
+  const allLines = useBudget(s => s.lines);
+  const addLine = useBudget(s => s.add);
+  const currency = useSettings(s => s.preferredCurrency);
+  const expenses = useExpenses(s => s.expenses);
   const allMeta = useBudgetGroups(s => s.all);
+  const spendGroups = useBudgetGroups(s => s.spend);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [newOpen, setNewOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newAmount, setNewAmount] = useState('');
+  const [newGroup, setNewGroup] = useState('variable');
 
-  const generalCats = useMemo(() => (
-    GENERAL_VARIABLE_IDS.map(id => {
-      const live = categories.find(c => c.id === id && !c.archived);
-      const fallback = DEFAULT_CATEGORIES.find(c => c.id === id)!;
-      return live ?? fallback;
-    })
-  ), [categories]);
+  const chips = useMemo(() => {
+    const since = new Date();
+    since.setDate(since.getDate() - 60);
+    const counts = new Map<string, number>();
+    for (const expense of expenses) {
+      if (expense.type === 'income') continue;
+      if (parseLocalDate(expense.date) < since) continue;
+      const key = expense.line_id
+        ? allLines.find(l => l.id === expense.line_id)?.templateKey ?? expense.category_id
+        : expense.category_id;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    const spend = uniqueByTemplate(spendLines(monthLines));
+    const ai = spend.find(l => l.id === matchedLineId) ?? null;
+    const ranked = spend
+      .filter(l => l.id !== ai?.id)
+      .sort((a, b) => (counts.get(b.templateKey) ?? 0) - (counts.get(a.templateKey) ?? 0) || a.name.localeCompare(b.name))
+      .slice(0, 8);
+    return ai ? [ai, ...ranked] : ranked;
+  }, [expenses, allLines, monthLines, matchedLineId]);
 
   const selectedLine = monthLines.find(l => l.id === selectedLineId) ?? null;
-  const extraSelected = selectedLine && selectedLine.section !== 'income' && !generalCats.some(cat => {
-    const match = matchGeneralLine(cat, monthLines);
-    return !!match && (match.id === selectedLine.id || match.templateKey === selectedLine.templateKey);
-  }) ? selectedLine : null;
+  const extraSelected = selectedLine && !chips.some(l => l.id === selectedLine.id) ? selectedLine : null;
+
+  const openNew = () => {
+    setNewName(suggestedName?.trim() ?? '');
+    setNewAmount('');
+    setNewGroup('variable');
+    setNewOpen(true);
+  };
+
+  const createLine = async () => {
+    const name = newName.trim();
+    if (!name) return;
+    const taken = new Set(monthLines.filter(l => l.section === newGroup).map(l => l.templateKey));
+    const created = await addLine({
+      month,
+      section: newGroup,
+      name,
+      expected: Number.parseFloat(newAmount) || 0,
+      currency,
+      templateKey: uniqueTemplateKey(slugKey(name), taken),
+      recurring: true,
+      repeatEvery: 'month',
+      dueDay: null,
+      automated: false,
+      notifyDaysBefore: null,
+      observation: null,
+      actualOverride: null,
+      sortOrder: monthLines.length,
+      paid: false,
+      paidAt: null,
+      paidSource: null,
+      color: sectionColor(newGroup, spendGroups),
+    });
+    onSelectLine(created);
+    setNewOpen(false);
+  };
 
   const groups = useMemo(() => {
     const unique = uniqueByTemplate(spendLines(monthLines));
@@ -937,22 +995,16 @@ function BudgetLinePicker({
             selected={!selectedLineId && !selectedCategoryId}
             onPress={onSelectUnbudgeted}
           />
-          {generalCats.map(cat => {
-            const match = matchGeneralLine(cat, monthLines);
-            const selected = selectedLine
-              ? !!match && (match.id === selectedLine.id || match.templateKey === selectedLine.templateKey)
-              : selectedCategoryId === cat.id;
-            return (
-              <CategoryChip
-                key={cat.id}
-                label={cat.name}
-                color={cat.color}
-                selected={selected}
-                aiSuggested={!!match && match.id === matchedLineId}
-                onPress={() => onSelectCategory(cat, match)}
-              />
-            );
-          })}
+          {chips.map(line => (
+            <CategoryChip
+              key={line.id}
+              label={line.name}
+              color={line.color}
+              selected={selectedLineId === line.id}
+              aiSuggested={line.id === matchedLineId}
+              onPress={() => onSelectLine(line)}
+            />
+          ))}
           {extraSelected && (
             <CategoryChip
               label={extraSelected.name}
@@ -962,6 +1014,18 @@ function BudgetLinePicker({
               onPress={() => onSelectLine(extraSelected)}
             />
           )}
+          <Tap
+            onPress={openNew}
+            haptic
+            accessibilityLabel="New line"
+            style={{
+              height: 36, paddingHorizontal: 12, borderRadius: 18,
+              backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
+              alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <Text style={{ fontSize: 12, color: C.sage, fontWeight: '600' }}>+ New line</Text>
+          </Tap>
           <Tap
             onPress={() => setMoreOpen(true)}
             haptic
@@ -1033,6 +1097,48 @@ function BudgetLinePicker({
                 </View>
               ))}
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={newOpen} transparent animationType="fade" onRequestClose={() => setNewOpen(false)}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' }}>
+          <View style={{ backgroundColor: C.bgElev, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 }}>
+            <Text style={{ fontFamily: C.fonts.serif, fontSize: 24, color: C.cream, marginBottom: 12 }}>New line</Text>
+            <TextInput
+              value={newName}
+              onChangeText={setNewName}
+              placeholder="Name"
+              placeholderTextColor={C.subtle}
+              style={{ borderWidth: 0.5, borderColor: C.hair, borderRadius: 12, padding: 12, color: C.cream, marginBottom: 10 }}
+            />
+            <TextInput
+              value={newAmount}
+              onChangeText={setNewAmount}
+              placeholder="Amount (optional)"
+              placeholderTextColor={C.subtle}
+              keyboardType="decimal-pad"
+              style={{ borderWidth: 0.5, borderColor: C.hair, borderRadius: 12, padding: 12, color: C.cream, marginBottom: 12 }}
+            />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {spendGroups.map(group => (
+                  <Tap
+                    key={group.id}
+                    onPress={() => setNewGroup(group.id)}
+                    style={{
+                      paddingHorizontal: 12, minHeight: 44, justifyContent: 'center', borderRadius: 16,
+                      backgroundColor: newGroup === group.id ? C.sage : C.surface,
+                    }}
+                  >
+                    <Text style={{ color: newGroup === group.id ? '#0E0E0C' : C.cream, fontSize: 13 }}>{group.label}</Text>
+                  </Tap>
+                ))}
+              </View>
+            </ScrollView>
+            <Tap onPress={createLine} style={{ minHeight: 44, borderRadius: 12, backgroundColor: C.sage, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ color: '#0E0E0C', fontWeight: '600' }}>Create line</Text>
+            </Tap>
           </View>
         </View>
       </Modal>

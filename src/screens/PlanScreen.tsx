@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Text, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../theme';
-import { Card, CarryIncomeCard } from '../components';
+import { Card, CarryIncomeCard, Tap } from '../components';
 import { BudgetSection } from '../components/BudgetSection';
 import { UpcomingPayments } from '../components/UpcomingPayments';
 import { LineEditor } from '../flows/LineEditor';
@@ -15,6 +15,7 @@ import { fmt } from '../services/format';
 import { monthKey } from '../services/month';
 import { useViewMonth } from '../store/useViewMonth';
 import { incomeCarryOffers, lineActual, summarizeMonth } from '../services/budget';
+import { sectionColor } from '../store/budgetTypes';
 import { type BudgetLine, type BudgetSection as BudgetSectionId } from '../store/budgetTypes';
 import { useLayout } from '../hooks/useLayout';
 import { useSaveBudgetLine } from '../hooks/useSaveBudgetLine';
@@ -159,6 +160,52 @@ export function PlanScreen() {
             </Text>
           </Text>
         </Card>
+
+        {lines.length === 0 && (
+          <Tap
+            onPress={() => {
+              const common: Array<[string, string]> = [
+                ['groceries', 'Groceries'],
+                ['coffee', 'Coffee'],
+                ['dining', 'Dining'],
+                ['transport', 'Transport'],
+                ['travel', 'Travel'],
+                ['home', 'Home'],
+                ['software', 'Software'],
+                ['health', 'Health'],
+              ];
+              useBudget.getState().addMany(common.map(([templateKey, name], i) => ({
+                month: key,
+                section: 'variable',
+                name,
+                expected: 0,
+                currency: preferredCurrency,
+                templateKey,
+                recurring: true,
+                repeatEvery: 'month' as const,
+                dueDay: null,
+                automated: false,
+                notifyDaysBefore: null,
+                observation: null,
+                actualOverride: null,
+                sortOrder: i,
+                paid: false,
+                paidAt: null,
+                paidSource: null,
+                color: sectionColor('variable'),
+              }))).catch(() => {});
+            }}
+            accessibilityLabel="Start with common lines"
+            style={{ marginBottom: 8 }}
+          >
+            <Card style={{ padding: 16 }}>
+              <Text style={{ fontSize: 15, color: C.sage, fontWeight: '600' }}>Start with common lines</Text>
+              <Text style={{ marginTop: 4, color: C.muted, fontSize: 13 }}>
+                Groceries, coffee, dining, and a few more, at $0 until you fill them in.
+              </Text>
+            </Card>
+          </Tap>
+        )}
 
         <CarryIncomeCard
           month={key}

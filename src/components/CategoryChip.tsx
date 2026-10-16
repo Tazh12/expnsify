@@ -27,7 +27,7 @@ export function CategoryChip({ label, color, selected, aiSuggested, onPress, sty
         {label}
       </Text>
       {aiSuggested && (
-        <Text style={{ fontSize: 9, color: C.sage, letterSpacing: 0.03 }}>✦</Text>
+        <Text style={{ fontSize: 11, color: C.sage }}>✦ suggested</Text>
       )}
     </TouchableOpacity>
   );
