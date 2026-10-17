@@ -143,7 +143,6 @@ export function TxnDetailModal({ expense: t, category, onClose, onEdit, onDelete
               </Text>
               <Text style={{ fontFamily: C.fonts.serif, fontSize: 40, color: C.cream, marginTop: 6, letterSpacing: -1 }}>
                 {fmt(convertedAmount, preferredCurrency)}
-                <Text style={{ fontSize: 18, color: C.muted }}> {preferredCurrency}</Text>
               </Text>
               {showOriginal && (
                 <Text style={{ fontSize: 14, color: C.muted, marginTop: 4 }}>

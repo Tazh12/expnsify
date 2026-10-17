@@ -199,7 +199,7 @@ export function LineEditor({
                   <Text style={{ fontSize: 12, color: C.muted, marginTop: -6, marginBottom: 12 }}>
                     {match
                       ? `Updates ${match.name} in ${allMeta.find(s => s.id === match.section)?.label ?? 'the plan'}.`
-                      : dest
+                      : !initial && dest
                         ? `New line under ${dest.label}.`
                         : ''}
                   </Text>
