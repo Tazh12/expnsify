@@ -10,15 +10,13 @@ enabled = true
 # GROQ_API_KEY set via: wrangler secret put GROQ_API_KEY
 # Public Firebase web API key. It identifies the project; it is not a secret.
 FIREBASE_API_KEY = "AIzaSyAoWSmnr7S-dkGR2JcKYaimgYbzzt53k_A"
-# Optional. Omit to use the defaults in src/index.ts.
-# SCAN_MODEL must accept images. TEXT_MODEL is chat-only. AUDIO_MODEL is Whisper.
-# SCAN_MODEL = ""
-# TEXT_MODEL = ""
-# AUDIO_MODEL = "whisper-large-v3-turbo"
+SCAN_MODEL = "qwen/qwen3.8-27b"
+TEXT_MODEL = "openai/gpt-oss-20b"
+AUDIO_MODEL = "whisper-large-v3-turbo"
 
 # Create with: npx wrangler kv namespace create USAGE
 # Then replace both ids. Until then the worker fails closed instead of leaving AI uncapped.
 [[kv_namespaces]]
 binding = "USAGE"
-id = "00000000000000000000000000000001"
-preview_id = "00000000000000000000000000000002"
+id = "f5dac8f959f7479cb400d2e1469f7eac"
+preview_id = "b00277f9fd6a49d693b72b7576f6aa26"
