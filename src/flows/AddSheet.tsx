@@ -598,7 +598,7 @@ function PickPhase({
               { id: 'voice' as Method, icon: 'mic', label: 'Say it', hint: 'Merchant, amount, line' },
               { id: 'manual' as Method, icon: 'edit', label: 'Type it', hint: 'Enter it by hand' },
             ], 2).map(row => (
-          <View key={row.map(item => item.id).join('-')} style={{ flexDirection: 'row', gap: 10 }}>
+          <View key={row.map(item => item.id).join('-')} style={{ flexDirection: 'row', alignItems: 'stretch', gap: 10 }}>
             {row.map(item => (
               <Tap
                 key={item.id}
@@ -606,7 +606,7 @@ function PickPhase({
                 haptic
                 accessibilityLabel={item.label}
                 style={{
-                  flex: 1, minHeight: 72, borderRadius: 16, padding: 12,
+                  flex: 1, minHeight: 88, borderRadius: 16, padding: 12,
                   backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
                   justifyContent: 'center',
                 }}
