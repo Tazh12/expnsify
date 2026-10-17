@@ -210,12 +210,14 @@ export function ActivityScreen({ onScan }: { onScan?: () => void }) {
           </Tap>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 12 }} contentContainerStyle={{ gap: 8, paddingRight: 28 }}>
+        <View style={{ marginTop: 12, flexDirection: 'row' }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
           <QuickChip label={allTime ? 'All time' : monthTitle(monthKeyValue)} on={allTime} onPress={() => setAllTime(v => !v)} C={C}/>
           <QuickChip label="Needs a line" on={quick === 'needs'} onPress={() => setQuick(q => q === 'needs' ? null : 'needs')} C={C}/>
           <QuickChip label="Expenses" on={quick === 'expense'} onPress={() => setQuick(q => q === 'expense' ? null : 'expense')} C={C}/>
           <QuickChip label="Income" on={quick === 'income'} onPress={() => setQuick(q => q === 'income' ? null : 'income')} C={C}/>
         </ScrollView>
+        </View>
 
         {/* Active filter chips */}
         {active && (
