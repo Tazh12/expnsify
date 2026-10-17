@@ -2,6 +2,45 @@ interface Env {
   GROQ_API_KEY: string;
   FIREBASE_API_KEY: string;
   USAGE?: KVNamespace;
+  SCAN_MODEL?: string;
+  TEXT_MODEL?: string;
+  AUDIO_MODEL?: string;
+}
+
+// Replaced from wrangler [vars] when a model is retired. These match the last
+// models this worker called; set SCAN_MODEL and TEXT_MODEL before deploying
+// if Groq no longer serves them.
+const DEFAULT_SCAN_MODEL = 'qwen/qwen3.6-27b';
+const DEFAULT_TEXT_MODEL = 'qwen/qwen3.6-27b';
+const DEFAULT_AUDIO_MODEL = 'whisper-large-v3-turbo';
+
+function scanModel(env: Env): string {
+  return env.SCAN_MODEL || DEFAULT_SCAN_MODEL;
+}
+
+function textModel(env: Env): string {
+  return env.TEXT_MODEL || DEFAULT_TEXT_MODEL;
+}
+
+function audioModel(env: Env): string {
+  return env.AUDIO_MODEL || DEFAULT_AUDIO_MODEL;
+}
+
+function acceptsQwenReasoning(model: string): boolean {
+  return model.toLowerCase().includes('qwen');
+}
+
+function chatPayload(
+  model: string,
+  messages: unknown,
+  options: { temperature: number; max_tokens: number },
+): Record<string, unknown> {
+  const body: Record<string, unknown> = { model, messages, ...options };
+  if (acceptsQwenReasoning(model)) {
+    body.reasoning_effort = 'none';
+    body.reasoning_format = 'hidden';
+  }
+  return body;
 }
 
 const FREE_LIMIT = 10;
@@ -290,14 +329,7 @@ Rules:
       'Content-Type': 'application/json',
       Authorization: `Bearer ${env.GROQ_API_KEY}`,
     },
-    body: JSON.stringify({
-      model: 'qwen/qwen3.6-27b',
-      messages,
-      temperature: 0.1,
-      max_tokens: 1024,
-      reasoning_effort: 'none',
-      reasoning_format: 'hidden',
-    }),
+    body: JSON.stringify(chatPayload(scanModel(env), messages, { temperature: 0.1, max_tokens: 1024 })),
   });
 
   if (!groqRes.ok) {
@@ -442,7 +474,7 @@ async function handleTranscribe(req: Request, env: Env): Promise<Response> {
 
   const groqForm = new FormData();
   groqForm.append('file', new Blob([bytes], { type: mime }), filename);
-  groqForm.append('model', 'whisper-large-v3-turbo');
+  groqForm.append('model', audioModel(env));
   groqForm.append('response_format', 'json');
 
   const groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
@@ -477,20 +509,13 @@ async function handleInsights(req: Request, env: Env): Promise<Response> {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${env.GROQ_API_KEY}`,
     },
-    body: JSON.stringify({
-      model: 'qwen/qwen3.6-27b',
-      messages: [
-        {
-          role: 'system',
-          content: `You summarize personal spending. Return ONLY JSON: { "insights": string[] } with 3 or 4 short sentences. Use the category names. Do not invent purchases that are not in the data. Categories: ${categories.map(c => `${c.id}=${c.name}`).join(', ') || 'none'}.`,
-        },
-        { role: 'user', content: JSON.stringify(expenses) },
-      ],
-      temperature: 0.3,
-      max_tokens: 400,
-      reasoning_effort: 'none',
-      reasoning_format: 'hidden',
-    }),
+    body: JSON.stringify(chatPayload(textModel(env), [
+      {
+        role: 'system',
+        content: `You summarize personal spending. Return ONLY JSON: { "insights": string[] } with 3 or 4 short sentences. Use the category names. Do not invent purchases that are not in the data. Categories: ${categories.map(c => `${c.id}=${c.name}`).join(', ') || 'none'}.`,
+      },
+      { role: 'user', content: JSON.stringify(expenses) },
+    ], { temperature: 0.3, max_tokens: 400 })),
   });
 
   if (!groqRes.ok) return err(`Groq error: ${await groqRes.text()}`, 502);
@@ -527,20 +552,13 @@ async function handleAsk(req: Request, env: Env): Promise<Response> {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${env.GROQ_API_KEY}`,
     },
-    body: JSON.stringify({
-      model: 'qwen/qwen3.6-27b',
-      messages: [
-        {
-          role: 'system',
-          content: 'Match a question to expenses. Return ONLY JSON: { "ids": string[] } using ids from the provided expenses. Match merchant, note, and item names. If nothing matches, return an empty array.',
-        },
-        { role: 'user', content: JSON.stringify({ question, expenses }) },
-      ],
-      temperature: 0.1,
-      max_tokens: 400,
-      reasoning_effort: 'none',
-      reasoning_format: 'hidden',
-    }),
+    body: JSON.stringify(chatPayload(textModel(env), [
+      {
+        role: 'system',
+        content: 'Match a question to expenses. Return ONLY JSON: { "ids": string[] } using ids from the provided expenses. Match merchant, note, and item names. If nothing matches, return an empty array.',
+      },
+      { role: 'user', content: JSON.stringify({ question, expenses }) },
+    ], { temperature: 0.1, max_tokens: 400 })),
   });
 
   if (!groqRes.ok) return err(`Groq error: ${await groqRes.text()}`, 502);
