@@ -19,7 +19,7 @@ import { useBudgetGroups } from '../store/useBudgetGroups';
 import { useSettings } from '../store/useSettings';
 import { useRates, FRANKFURTER_CURRENCIES } from '../store/useRates';
 import { useAuth } from '../store/useAuth';
-import { scanImage, scanText, scanPdf, transcribeAudio, takeAiLimit, type ScannedExpense } from '../services/groq';
+import { scanImage, scanText, scanPdf, transcribeAudio, takeAiLimit, ScanRequestError, type ScannedExpense } from '../services/groq';
 import { capturePurchaseLocation } from '../services/location';
 import { uid, fmt, currencySymbol, parseLocalDate, toLocalDateISO } from '../services/format';
 import { CurrencyPickerSheet } from '../components/CurrencyPicker';
@@ -220,6 +220,47 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
     setPhase('review');
   };
 
+  const offerManualEntry = () => {
+    Alert.alert(
+      "Scanning isn't available right now",
+      'You can add it by hand.',
+      [
+        { text: 'Not now', style: 'cancel', onPress: () => setPhase('pick') },
+        { text: 'Type it', onPress: () => { setMethod('manual'); goReview(null); } },
+      ],
+    );
+  };
+
+  const finishScan = async (
+    run: () => Promise<ScannedExpense | null>,
+    unreadable?: { title?: string; message?: string },
+  ): Promise<ScannedExpense | null> => {
+    try {
+      const data = await run();
+      if (!data) {
+        if (takeAiLimit()) setPhase('pick');
+        else failScan(unreadable?.message, unreadable?.title);
+        return null;
+      }
+      return data;
+    } catch (e) {
+      if (takeAiLimit()) {
+        setPhase('pick');
+        return null;
+      }
+      if (e instanceof ScanRequestError && e.kind === 'auth') {
+        Alert.alert('Please sign in again.');
+        setPhase('pick');
+        return null;
+      }
+      if (e instanceof ScanRequestError) {
+        offerManualEntry();
+        return null;
+      }
+      throw e;
+    }
+  };
+
   const ingestFile = async (uri: string, mimeType: string, src: TxnSource) => {
     setPhase('scan');
     const { categories } = useCategories.getState();
@@ -231,15 +272,21 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
       || /\.(eml|html?|txt|msg)$/i.test(lower);
     if (isPdf) {
       const base64 = await uriToBase64(uri);
-      const data = await scanPdf(base64, categories, lines);
-      if (!data) { failScan('Could not read that PDF. Try a screenshot of the confirmation.'); return; }
+      const data = await finishScan(
+        () => scanPdf(base64, categories, lines),
+        { message: 'Could not read that PDF. Try a screenshot of the confirmation.' },
+      );
+      if (!data) return;
       goReview(data, uri, src);
       return;
     }
     if (isEmail) {
       const raw = await readTextFile(uri);
-      const data = await scanText(emailToPlain(raw), categories, lines);
-      if (!data) { failScan('Could not read that email. Try a PDF or screenshot.'); return; }
+      const data = await finishScan(
+        () => scanText(emailToPlain(raw), categories, lines),
+        { message: 'Could not read that email. Try a PDF or screenshot.' },
+      );
+      if (!data) return;
       goReview(data, undefined, src);
       return;
     }
@@ -250,8 +297,8 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
     );
     const base64 = manipulated.base64
       ?? await FileSystem.readAsStringAsync(manipulated.uri, { encoding: FileSystem.EncodingType.Base64 });
-    const data = await scanImage(base64, categories, 'image/jpeg', lines);
-    if (!data) { failScan(); return; }
+    const data = await finishScan(() => scanImage(base64, categories, 'image/jpeg', lines));
+    if (!data) return;
     goReview(data, manipulated.uri, src);
   };
 
@@ -294,8 +341,8 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
           ?? await FileSystem.readAsStringAsync(manipulated.uri, { encoding: FileSystem.EncodingType.Base64 });
         const { categories } = useCategories.getState();
         const lines = useBudget.getState().forMonth(monthKey(new Date()));
-        const data = await scanImage(base64, categories, 'image/jpeg', lines);
-        if (!data) { failScan(); return; }
+        const data = await finishScan(() => scanImage(base64, categories, 'image/jpeg', lines));
+        if (!data) return;
         goReview(data, manipulated.uri, 'photo');
       } else if (m === 'file') {
         const result = await DocumentPicker.getDocumentAsync({
@@ -318,6 +365,15 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
         goReview(null);
       }
     } catch (e) {
+      if (e instanceof ScanRequestError) {
+        if (e.kind === 'auth') {
+          Alert.alert('Please sign in again.');
+          setPhase('pick');
+        } else {
+          offerManualEntry();
+        }
+        return;
+      }
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.toLowerCase().includes('simulator') || msg.toLowerCase().includes('not available')) {
         Alert.alert('Camera unavailable', 'The camera does not work in the simulator. Test on a real iPhone.');
@@ -353,12 +409,15 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
         console.error('audio mode reset', e);
       }
       if (!uri) { failScan('No audio was captured. Please try again.', 'Could not record'); return; }
-      const text = await transcribeAudio(uri);
-      if (!text) { failScan('Could not hear that. Please try again, or enter it manually.', 'Could not record'); return; }
-      const { categories } = useCategories.getState();
-      const lines = useBudget.getState().forMonth(monthKey(new Date()));
-      const data = await scanText(text, categories, lines);
-      if (!data) { failScan(); return; }
+      const text = await finishScan(async () => {
+        const heard = await transcribeAudio(uri);
+        if (!heard) return null;
+        const { categories } = useCategories.getState();
+        const lines = useBudget.getState().forMonth(monthKey(new Date()));
+        return scanText(heard, categories, lines);
+      }, { title: 'Could not record', message: 'Could not hear that. Please try again, or enter it manually.' });
+      if (!text) return;
+      const data = text;
       goReview(data, undefined, 'voice');
     } catch (e) {
       console.error('voice error', e);
@@ -554,7 +613,7 @@ function PickPhase({
               >
                 <Icon name={item.icon} size={18} stroke={C.sage}/>
                 <Text style={{ marginTop: 8, fontSize: 14, color: C.cream, fontWeight: '600' }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{item.label}</Text>
-                <Text style={{ marginTop: 2, fontSize: 12, color: C.muted }} numberOfLines={1}>{item.hint}</Text>
+                <Text style={{ marginTop: 2, fontSize: 12, color: C.muted }} numberOfLines={2}>{item.hint}</Text>
               </Tap>
             ))}
           </View>

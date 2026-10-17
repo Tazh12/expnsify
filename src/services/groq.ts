@@ -28,6 +28,17 @@ export interface ScannedExpense {
 
 export type AiUsage = UsageSnapshot;
 
+export class ScanRequestError extends Error {
+  kind: 'unavailable' | 'auth';
+  status?: number;
+
+  constructor(kind: 'unavailable' | 'auth', status?: number) {
+    super(kind === 'auth' ? 'Please sign in again.' : "Scanning isn't available right now.");
+    this.kind = kind;
+    this.status = status;
+  }
+}
+
 export class AiLimitError extends Error {
   used: number;
   limit: number;
@@ -73,6 +84,14 @@ function readUsage(res: Response): AiUsage | null {
 function remember(res: Response) {
   const usage = readUsage(res);
   if (usage) publishAiUsage(usage);
+}
+
+async function rejectIfNotOk(label: string, res: Response): Promise<void> {
+  if (res.ok) return;
+  const body = await res.text();
+  console.error(label, res.status, body.slice(0, 500));
+  if (res.status === 401 || res.status === 403) throw new ScanRequestError('auth', res.status);
+  throw new ScanRequestError('unavailable', res.status);
 }
 
 async function throwIfLimited(res: Response): Promise<void> {
@@ -168,15 +187,12 @@ async function scan(body: {
       }),
     });
     await throwIfLimited(res);
-    if (!res.ok) {
-      console.error('scan failed', res.status, await res.text());
-      return null;
-    }
+    await rejectIfNotOk('scan failed', res);
     remember(res);
     const json = await res.json() as ScannedExpense;
     const amount = Number(json.amount);
     if (!Number.isFinite(amount)) {
-      console.error('scan missing amount', json);
+      console.error('scan missing amount', res.status);
       return null;
     }
     return {
@@ -192,8 +208,9 @@ async function scan(body: {
       lastLimited = true;
       return null;
     }
-    console.error('scan error', e);
-    return null;
+    if (e instanceof ScanRequestError) throw e;
+    console.error('scan error', e instanceof Error ? e.message : e);
+    throw new ScanRequestError('unavailable');
   }
 }
 
@@ -232,10 +249,7 @@ export async function transcribeAudio(uri: string): Promise<string | null> {
       body: JSON.stringify({ audioBase64, mimeType }),
     });
     await throwIfLimited(res);
-    if (!res.ok) {
-      console.error('transcribe failed', res.status, await res.text());
-      return null;
-    }
+    await rejectIfNotOk('transcribe failed', res);
     remember(res);
     const json = await res.json() as { text: string };
     return json.text ?? null;
@@ -244,8 +258,9 @@ export async function transcribeAudio(uri: string): Promise<string | null> {
       lastLimited = true;
       return null;
     }
-    console.error('transcribe error', e);
-    return null;
+    if (e instanceof ScanRequestError) throw e;
+    console.error('transcribe error', e instanceof Error ? e.message : e);
+    throw new ScanRequestError('unavailable');
   }
 }
 
@@ -276,7 +291,10 @@ export async function fetchInsights(
     body: JSON.stringify({ expenses, categories }),
   });
   await throwIfLimited(res);
-  if (!res.ok) return [];
+  if (!res.ok) {
+    console.error('insights failed', res.status, (await res.text()).slice(0, 500));
+    return [];
+  }
   remember(res);
   const json = await res.json() as { insights?: string[] };
   return Array.isArray(json.insights) ? json.insights.filter(line => typeof line === 'string' && line.trim()) : [];
@@ -303,7 +321,10 @@ export async function askTally(
     }),
   });
   await throwIfLimited(res);
-  if (!res.ok) return [];
+  if (!res.ok) {
+    console.error('ask failed', res.status, (await res.text()).slice(0, 500));
+    return [];
+  }
   remember(res);
   const json = await res.json() as { ids?: string[] };
   return Array.isArray(json.ids) ? json.ids.filter(id => typeof id === 'string') : [];
