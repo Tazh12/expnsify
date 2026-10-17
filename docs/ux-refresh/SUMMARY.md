@@ -122,3 +122,27 @@ Not run. The simulator is signed into the existing account, and these flows writ
 | 20 | Export all data | not run | not run | not run |
 
 The camera on a real iPhone is still yours to test. On the simulator, opening Scan shows “Camera unavailable” and then the options sheet.
+
+## Round 4
+
+### Scanning in production
+
+Not deployed. `GROQ_API_KEY` is not in this environment, so the model list was not fetched. The worker now reads `SCAN_MODEL`, `TEXT_MODEL`, and `AUDIO_MODEL` from Wrangler vars (`6bac3af`). Until those are set from the key’s model list, the code still defaults to `qwen/qwen3.6-27b`, which Groq rejects. Qwen reasoning flags are sent only when the model id contains `qwen`. `parseModelJson` already accepts fenced JSON and a trailing object.
+
+The KV ids in `proxy/wrangler.toml` are still placeholders. Deploying this worker as-is would fail closed and block AI calls. Wrangler login, `kv namespace create`, `secret list`, and `deploy` were not run.
+
+The app (`a7a622e`) now treats a non-OK scan, a timeout, or a network error as “Scanning isn't available right now” with a Type it button, 401/403 as “Please sign in again”, and a response with no amount as “Could not read that receipt”. The status and response body are logged. The image and token are not.
+
+### Scan tiles
+
+`docs/ux-refresh/screenshots/after-scan-tiles.png` (iPhone 17 Pro, Cream, Mono, after the tap change): the title, close button, and “Scan a receipt” button are inside the sheet. The four labels are readable (Photo library, PDF or email, Say it, Type it) and the two columns are the same width. The second row still sits on the bottom edge of the sheet. The page color shows in the gap under that edge, and the tile fill continues a short way past the sheet background. This is not closed.
+
+`Tap` is now one pressable, so flex and the background are the same view (`2e466fd` plus the follow-up). That did not by itself pull the second row fully inside the sheet.
+
+### Account check
+
+Settings on this simulator is `gutierrezlabarrera@gmail.com`. That address does not contain `+test`, so the 20 flows were not run and nothing was written. Appearance was left as it was found: Cream, sage, Mono.
+
+### Theme and font matrix
+
+Not taken. The tile screenshot above is the only new one, and it does not match the brief.
