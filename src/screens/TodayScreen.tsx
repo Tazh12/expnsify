@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import { useTheme } from '../theme';
-import { Card, Tap, BottomSheet, EmptyState } from '../components';
+import { Card, Tap, BottomSheet, EmptyState, Icon } from '../components';
 import { useLayout } from '../hooks/useLayout';
 import { useViewMonth } from '../store/useViewMonth';
 import { useBudget } from '../store/useBudget';
@@ -230,9 +230,16 @@ export function TodayScreen({
 
       <BottomSheet visible={!!assigning} onClose={() => setAssigning(null)}>
         <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 28 }} keyboardShouldPersistTaps="handled">
-          <Text style={{ fontFamily: C.fonts.serif, fontSize: 26, color: C.cream, marginBottom: 6 }}>
-            Assign line
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+            <Text style={{ flex: 1, fontFamily: C.fonts.serif, fontSize: 26, color: C.cream }} numberOfLines={1}>
+              Assign line
+            </Text>
+            <Tap onPress={() => setAssigning(null)} accessibilityLabel="Close" style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="x" size={16} stroke={C.muted}/>
+              </View>
+            </Tap>
+          </View>
           <Text style={{ color: C.muted, fontSize: 13, marginBottom: 16 }}>
             {assigning?.merchant}
           </Text>

@@ -820,7 +820,7 @@ function ReviewPhase({
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        style={{ maxHeight: 560 }}
+        style={{ flexGrow: 0 }}
         contentContainerStyle={{ paddingBottom: 12 }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 }}>
