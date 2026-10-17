@@ -172,4 +172,19 @@ Not opened in this pass: transaction detail, Assign line, the line editor (inclu
 
 ### Flows
 
-Not run. The simulator email is `gutierrezlabarrera@gmail.com`, which does not contain `+test`.
+The simulator is now `gutierrezlabarrera+test@gmail.com`. What was actually run:
+
+| # | Flow | Result |
+|---|---|---|
+| 1 | Empty October shows Income, Bills, Variable, Debt, and Investments. Start with common lines adds Groceries at CHF 0.00 under Variable and the prompt goes away. | pass |
+| 2–20 | Add lines, repeating weeks, paid checkbox, next month, manual entry, scans, activity edit/delete, insights, lines and groups, export | not run |
+| Scan | Photo library, PDF, voice, Ask Tally, Generate insights, AI-actions count | not run. Photo library was on screen; the tap kept opening the camera alert instead. |
+
+Sheets opened on this account:
+
+- Line editor, scrolled to Save and Delete line (`r5-editor-bottom.png`). Both are fully on the sheet. The bottom row of pixels is the sheet colour `#FAF8F2`. Editing does not say “New line under …”.
+- Line editor with the keyboard open (`r5-editor-keyboard.png`). The name field is focused and the keyboard sits against the sheet. Save is not on screen.
+- Scan options (`r5-scan-options-test.png`). Four tiles, readable labels, one sheet colour. A camera-unavailable alert was also up because the primary button was tapped.
+- Activity (`r5-activity-income-chip.png`). October’s chip row shows the full word Income.
+
+Not opened: transaction detail, Assign line, Filters, Notifications, Currency, More lines, New line, Goes to, Payment confirmation.
