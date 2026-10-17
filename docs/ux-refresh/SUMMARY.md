@@ -146,3 +146,30 @@ Settings on this simulator is `gutierrezlabarrera@gmail.com`. That address does 
 ### Theme and font matrix
 
 Not taken. The tile screenshot above is the only new one, and it does not match the brief.
+
+## Round 5
+
+### What was drawing the band
+
+The opaque sheet was the child of a content-sized `KeyboardAvoidingView`. `maxHeight: '92%'` had no parent height to resolve against, and the default overflow is visible, so content painted past the background. The sheet frame stopped above the floating tab bar, and the dimmed page showed through that gap. There is no Xcode view-hierarchy capture; the before/after pixels are the check.
+
+`85e0a2e` drops that wrapper, sets a numeric 90% cap, scrolls what doesn't fit, and extends the `C.bgElev` surface through the gap under the sheet (`measureInWindow` against the screen height, plus 16pt).
+
+### Screenshots (opened)
+
+iPhone 17 Pro only. No 375pt simulator is installed (iPhone 16e is 390pt and was left shut down).
+
+- `r5-scan-cream-mono.png` — Cream, Mono. The sheet colour `#FAF8F2` runs to the last row of pixels. The four tiles are readable and the same width. The second-row text ends about 16pt above the bottom edge, still on that sheet colour. The tab bar is not visible below the sheet.
+- `r5-review-cream-mono.png` — same device and theme, manual review. Amount, merchant, Save unbudgeted, and More details are on one sheet colour that also fills the bottom edge.
+- `r5-activity-cream-mono.png` — the chip row shows October, Needs a line, Expenses, and the full word Income.
+- `r5-scan-midnight-default.png` — Midnight, Default. Same scan layout on the dark elevated colour, also flush with the bottom edge.
+
+Not opened in this pass: transaction detail, Assign line, the line editor (including the keyboard), Filters, Notifications, Currency, More lines, New line, Goes to, and Payment confirmation. Appearance was put back to Cream, sage, Mono.
+
+### Deploy
+
+`npx wrangler kv namespace create USAGE` → `f5dac8f959f7479cb400d2e1469f7eac`. Preview → `b00277f9fd6a49d693b72b7576f6aa26`. `npx wrangler secret list` shows `GROQ_API_KEY` as `secret_text`. Deploy printed version `5a2117f7-f957-460c-80c4-20be5f9aeb67` at `https://tally-proxy.tallyexpnses.workers.dev`. `POST /scan` with no Firebase token returned **401** `{"error":"unauthorized"}`.
+
+### Flows
+
+Not run. The simulator email is `gutierrezlabarrera@gmail.com`, which does not contain `+test`.
