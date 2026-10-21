@@ -38,7 +38,7 @@ export function EmptyState({
             backgroundColor: C.sage, alignItems: 'center', justifyContent: 'center',
           }}
         >
-          <Text style={{ color: '#0E0E0C', fontSize: 14, fontWeight: '600' }}>{actionLabel}</Text>
+          <Text style={{ color: C.onPrimary, fontSize: 14, fontWeight: '600' }}>{actionLabel}</Text>
         </Tap>
       ) : null}
     </View>

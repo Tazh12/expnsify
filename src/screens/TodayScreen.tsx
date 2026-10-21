@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView } from 'react-native';
-import { useTheme } from '../theme';
+import { amountStyle, useTheme } from '../theme';
 import { Card, Tap, BottomSheet, EmptyState, Icon } from '../components';
 import { useLayout } from '../hooks/useLayout';
 import { useViewMonth } from '../store/useViewMonth';
@@ -124,8 +124,9 @@ export function TodayScreen({
           <>
             <Text style={{ fontSize: 13, color: C.muted, marginTop: 8 }}>Left to spend this month</Text>
             <Text style={{
-              fontFamily: C.fonts.serif, fontSize: 48, letterSpacing: -1, marginTop: 4,
-              color: overspentMonth ? C.rose : C.cream,
+              fontSize: 48, letterSpacing: -1, marginTop: 4,
+              color: overspentMonth ? C.alertInk : C.text,
+              ...amountStyle('semibold'),
             }}>
               {fmt(leftToSpend, preferredCurrency)}
             </Text>
@@ -134,7 +135,7 @@ export function TodayScreen({
             }}>
               <View style={{
                 width: `${Math.round(bar * 100)}%`, height: 4,
-                backgroundColor: overspentMonth ? C.rose : C.sage,
+                backgroundColor: overspentMonth ? C.alert : C.success,
               }}/>
             </View>
             <Tap
@@ -146,12 +147,12 @@ export function TodayScreen({
                 backgroundColor: C.surface, borderWidth: 0.5, borderColor: C.hair,
               }}
             >
-              <Text style={{ fontSize: 13, color: summary.leftToBudget < 0 ? C.rose : C.cream }}>
-                {summary.leftToBudget === 0
-                  ? '✓ Every dollar assigned'
-                  : summary.leftToBudget < 0
-                    ? `Over-assigned by ${fmt(Math.abs(summary.leftToBudget), preferredCurrency)} →`
-                    : `${fmt(summary.leftToBudget, preferredCurrency)} to assign →`}
+              <Text style={{ fontSize: 13, color: summary.leftToBudget < 0 ? C.alertInk : C.text }}>
+                {summary.leftToBudget === 0 ? '✓ Every dollar assigned' : summary.leftToBudget < 0 ? (
+                  <Text>Over-assigned by <Text style={amountStyle()}>{fmt(Math.abs(summary.leftToBudget), preferredCurrency)}</Text> →</Text>
+                ) : (
+                  <Text><Text style={amountStyle()}>{fmt(summary.leftToBudget, preferredCurrency)}</Text> to assign →</Text>
+                )}
               </Text>
             </Tap>
           </>
@@ -167,7 +168,7 @@ export function TodayScreen({
                 <AttentionRow
                   key={expense.id}
                   title={expense.merchant || 'Expense'}
-                  detail={`${fmt(convert(expense.amount, expense.currency || 'USD'), preferredCurrency)} needs a line`}
+                  detail={<Text style={{ fontSize: 12, color: C.muted, marginTop: 2 }}><Text style={amountStyle('regular')}>{fmt(convert(expense.amount, expense.currency || 'USD'), preferredCurrency)}</Text> needs a line</Text>}
                   action="Assign line"
                   onPress={() => setAssigning(expense)}
                 />
@@ -185,7 +186,7 @@ export function TodayScreen({
                 <AttentionRow
                   key={`over-${line.id}`}
                   title={line.name}
-                  detail={`${fmt(lineActual(line, monthExpenses, convert), preferredCurrency)} of ${fmt(convert(line.expected, line.currency || 'USD'), preferredCurrency)}`}
+                  detail={<Text style={{ fontSize: 12, color: C.muted, marginTop: 2 }}><Text style={amountStyle('regular')}>{fmt(lineActual(line, monthExpenses, convert), preferredCurrency)}</Text> of <Text style={amountStyle('regular')}>{fmt(convert(line.expected, line.currency || 'USD'), preferredCurrency)}</Text></Text>}
                   action="Adjust"
                   onPress={() => setEditor(line)}
                 />
@@ -215,13 +216,13 @@ export function TodayScreen({
                     <Text style={{ fontSize: 15, color: C.cream }} numberOfLines={1}>{expense.merchant || 'Expense'}</Text>
                     <Text style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{dayLabel(expense.date.slice(0, 10))}</Text>
                   </View>
-                  <Text style={{ fontSize: 14, color: expense.type === 'income' ? C.sage : C.cream }}>
+                  <Text style={{ fontSize: 14, color: expense.type === 'income' ? C.success : C.text, ...amountStyle() }}>
                     {fmt(convert(expense.amount, expense.currency || 'USD'), preferredCurrency)}
                   </Text>
                 </View>
               ))}
               <Tap onPress={onOpenActivity} accessibilityLabel="See all activity" style={{ padding: 16 }}>
-                <Text style={{ fontSize: 14, color: C.sage, fontWeight: '600' }}>See all</Text>
+                <Text style={{ fontSize: 14, color: C.link, fontWeight: '600' }}>See all</Text>
               </Tap>
             </Card>
           </View>
@@ -290,7 +291,7 @@ function AttentionRow({
   title, detail, action, onPress,
 }: {
   title: string;
-  detail: string;
+  detail: React.ReactNode;
   action: string;
   onPress: () => void;
 }) {
@@ -303,7 +304,9 @@ function AttentionRow({
     }}>
       <View style={{ flex: 1 }}>
         <Text style={{ fontSize: 15, color: C.cream }} numberOfLines={1}>{title}</Text>
-        <Text style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{detail}</Text>
+        {typeof detail === 'string' ? (
+          <Text style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{detail}</Text>
+        ) : detail}
       </View>
       <Tap
         onPress={onPress}
@@ -313,7 +316,7 @@ function AttentionRow({
           paddingHorizontal: 12, borderRadius: 12, backgroundColor: C.surface,
         }}
       >
-        <Text style={{ fontSize: 13, color: C.sage, fontWeight: '600' }}>{action}</Text>
+        <Text style={{ fontSize: 13, color: C.link, fontWeight: '600' }}>{action}</Text>
       </Tap>
     </View>
   );

@@ -5,7 +5,7 @@ import {
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import Svg, { Path, Circle, Defs, LinearGradient as SvgGrad, Stop } from 'react-native-svg';
-import { useTheme } from '../theme';
+import { amountStyle, useTheme } from '../theme';
 import { Card, PageHeader, SectionHeader, SettingsRow, Icon, Tap, EmptyState } from '../components';
 import { useExpenses, type Expense } from '../store/useExpenses';
 import { useBudget } from '../store/useBudget';
@@ -213,7 +213,7 @@ export function InsightsScreen() {
               borderWidth: 0.5, borderColor: span === id ? C.sage : C.hair,
             }}
           >
-            <Text style={{ fontSize: 13, color: span === id ? '#0E0E0C' : C.cream, fontWeight: '600' }}>
+            <Text style={{ fontSize: 13, color: span === id ? C.onPrimary : C.cream, fontWeight: '600' }}>
               {id === 'week' ? 'Week' : 'Month'}
             </Text>
           </Tap>
@@ -253,8 +253,8 @@ export function InsightsScreen() {
           style={{ marginTop: 14, minHeight: 44, borderRadius: 12, backgroundColor: C.sage, alignItems: 'center', justifyContent: 'center' }}
         >
           {insightState === 'loading'
-            ? <ActivityIndicator color="#0E0E0C"/>
-            : <Text style={{ fontSize: 14, fontWeight: '600', color: '#0E0E0C' }}>Generate insights</Text>}
+            ? <ActivityIndicator color={C.onPrimary}/>
+            : <Text style={{ fontSize: 14, fontWeight: '600', color: C.onPrimary }}>Generate insights</Text>}
         </Tap>
       </Card>
 
@@ -278,7 +278,7 @@ export function InsightsScreen() {
             <View key={s.id} style={{ paddingVertical: 12, borderBottomWidth: i === arr.length - 1 ? 0 : 0.5, borderBottomColor: C.hair }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
                 <Text style={{ fontSize: 14, color: C.cream }}>{s.label}</Text>
-                <Text style={{ fontSize: 13, color: tot.actual > tot.expected && tot.expected > 0 ? C.rose : C.muted }}>
+                <Text style={{ fontSize: 13, color: tot.actual > tot.expected && tot.expected > 0 ? C.alertInk : C.success, ...amountStyle('regular') }}>
                   {fmt(tot.actual, preferredCurrency)} / {fmt(tot.expected, preferredCurrency)}
                 </Text>
               </View>
@@ -286,7 +286,7 @@ export function InsightsScreen() {
                 <View style={{
                   height: '100%',
                   width: `${Math.min(100, (tot.actual / max) * 100)}%`,
-                  backgroundColor: tot.actual > tot.expected && tot.expected > 0 ? C.rose : C.sage,
+                  backgroundColor: tot.actual > tot.expected && tot.expected > 0 ? C.alert : C.success,
                   borderRadius: 3,
                 }}/>
               </View>
@@ -306,8 +306,8 @@ export function InsightsScreen() {
                   flexDirection: 'row', justifyContent: 'space-between', padding: 16,
                   borderBottomWidth: i === overspent.length - 1 ? 0 : 0.5, borderBottomColor: C.hair,
                 }}>
-                  <Text style={{ fontSize: 15, color: C.rose }}>{l.name}</Text>
-                  <Text style={{ fontSize: 14, color: C.rose }}>
+                  <Text style={{ fontSize: 15, color: C.alertInk }}>{l.name}</Text>
+                  <Text style={{ fontSize: 14, color: C.alertInk, ...amountStyle() }}>
                     {fmt(actual, preferredCurrency)} / {fmt(convert(l.expected, l.currency || 'USD'), preferredCurrency)}
                   </Text>
                 </View>
@@ -330,7 +330,7 @@ function Stat({ label, value, C }: { label: string; value: string; C: ReturnType
   return (
     <View style={{ flex: 1 }}>
       <Text style={{ fontSize: 11, color: C.muted }}>{label}</Text>
-      <Text style={{ fontSize: 14, color: C.cream, marginTop: 2 }}>{value}</Text>
+      <Text style={{ fontSize: 14, color: C.text, marginTop: 2, ...amountStyle() }}>{value}</Text>
     </View>
   );
 }

@@ -74,7 +74,7 @@ export function AppShell({
           marginTop: 18, backgroundColor: C.sage, borderRadius: 14,
           paddingVertical: 12, alignItems: 'center',
         }}>
-          <Text style={{ color: '#0E0E0C', fontWeight: '600', fontSize: 14 }}>Scan / Add</Text>
+          <Text style={{ color: C.onPrimary, fontWeight: '600', fontSize: 14 }}>Scan / Add</Text>
         </Tap>
       </View>
       <View style={{ flex: 1 }}>{children}</View>

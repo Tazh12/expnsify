@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text } from 'react-native';
-import { useTheme } from '../theme';
+import { amountStyle, useTheme } from '../theme';
 import { Card } from './Card';
 import { Tap } from './Tap';
 import { fmt } from '../services/format';
@@ -44,7 +44,7 @@ export function CarryIncomeCard({
             <Text style={{ flex: 1, fontSize: 14, color: C.cream }} numberOfLines={1}>
               {o.name}
             </Text>
-            <Text style={{ fontSize: 13, color: C.muted }}>
+            <Text style={{ fontSize: 13, color: C.muted, ...amountStyle('regular') }}>
               {o.count > 1 ? `${o.count}× ` : ''}{fmt(o.expected, o.currency || preferredCurrency)}
             </Text>
           </View>
@@ -60,7 +60,7 @@ export function CarryIncomeCard({
             backgroundColor: C.sage, alignItems: 'center', justifyContent: 'center',
           }}
         >
-          <Text style={{ fontSize: 14, fontWeight: '600', color: '#0E0E0C' }}>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: C.onPrimary }}>
             {offers.length === 1 && totalTimes > 1 ? `Add ${totalTimes} to ${dest}` : `Add to ${dest}`}
           </Text>
         </Tap>

@@ -155,13 +155,13 @@ export default function App() {
     };
   }, []);
 
-  const theme = buildTheme(settings.palette, settings.accent, settings.fontId);
-  const isLight = settings.palette === 'cream';
+  const theme = buildTheme(settings.palette, settings.fontId);
+  const isLight = theme.isLight;
 
   if (!fontsReady || initializing) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#0E0E0C', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color="#B8D4B0" />
+      <View style={{ flex: 1, backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={theme.primary} />
       </View>
     );
   }
@@ -169,7 +169,7 @@ export default function App() {
   if (!user) {
     return (
       <ThemeContext.Provider value={theme}>
-        <StatusBar barStyle="light-content" backgroundColor="#0E0E0C" />
+        <StatusBar barStyle={isLight ? 'dark-content' : 'light-content'} backgroundColor={theme.background} />
         <AuthScreen />
       </ThemeContext.Provider>
     );

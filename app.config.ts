@@ -7,12 +7,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
-  userInterfaceStyle: 'dark',
+  userInterfaceStyle: 'light',
   newArchEnabled: true,
   splash: {
     image: './assets/icon.png',
     resizeMode: 'contain',
-    backgroundColor: '#6B5FE6',
+    backgroundColor: '#FBF6EA',
   },
   ios: {
     bundleIdentifier: 'com.expensify.ExpenseTracker',
@@ -61,7 +61,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'expo-notifications',
       {
         icon: './assets/icon.png',
-        color: '#B8D4B0',
+        color: '#2A4343',
       },
     ],
   ],

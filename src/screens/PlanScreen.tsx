@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Text, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTheme } from '../theme';
+import { amountStyle, useTheme } from '../theme';
 import { Card, CarryIncomeCard, Tap, PageHeader } from '../components';
 import { BudgetSection } from '../components/BudgetSection';
 import { UpcomingPayments } from '../components/UpcomingPayments';
@@ -125,7 +125,7 @@ export function PlanScreen() {
   }, [allLines, key, skipCarry, declinedCarry]);
 
   const left = summary.leftToBudget;
-  const leftColor = left === 0 ? C.sage : left < 0 ? C.rose : C.cream;
+  const leftColor = left < 0 ? C.alertInk : C.success;
   const saveLine = useSaveBudgetLine();
 
   const togglePaid = async (line: BudgetLine) => {
@@ -151,14 +151,15 @@ export function PlanScreen() {
       >
         <PageHeader title="Plan"/>
         <Card style={{ padding: 16, marginTop: 8, marginBottom: 8 }}>
-          <Text style={{ fontSize: 15, color: C.cream, lineHeight: 22 }}>
-            Income {fmt(summary.expectedIncome, preferredCurrency)}
+          <Text style={{ fontSize: 15, color: C.text, lineHeight: 22 }}>
+            Income <Text style={amountStyle()}>{fmt(summary.expectedIncome, preferredCurrency)}</Text>
             {'  −  '}
-            Assigned {fmt(summary.assigned, preferredCurrency)}
+            Assigned <Text style={amountStyle()}>{fmt(summary.assigned, preferredCurrency)}</Text>
             {'  =  '}
-            <Text style={{ color: leftColor, fontFamily: C.fonts.semibold }}>
-              {fmt(left, preferredCurrency)} to assign
+            <Text style={{ color: leftColor, ...amountStyle('semibold') }}>
+              {fmt(left, preferredCurrency)}
             </Text>
+            <Text style={{ color: leftColor, fontFamily: C.fonts.semibold }}> to assign</Text>
           </Text>
         </Card>
 
@@ -200,7 +201,7 @@ export function PlanScreen() {
             style={{ marginBottom: 8 }}
           >
             <Card style={{ padding: 16 }}>
-              <Text style={{ fontSize: 15, color: C.sage, fontWeight: '600' }}>Start with common lines</Text>
+              <Text style={{ fontSize: 15, color: C.link, fontWeight: '600' }}>Start with common lines</Text>
               <Text style={{ marginTop: 4, color: C.muted, fontSize: 13 }}>
                 Groceries, coffee, dining, and a few more, at $0 until you fill them in.
               </Text>

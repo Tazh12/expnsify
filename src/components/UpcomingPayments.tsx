@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text } from 'react-native';
-import { useTheme } from '../theme';
+import { amountStyle, useTheme } from '../theme';
 import { Card } from './Card';
 import { Tap } from './Tap';
 import { Icon } from './Icon';
@@ -49,7 +49,7 @@ export function UpcomingPayments({
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 15, color: C.cream, fontWeight: '500' }}>{line.name}</Text>
               <Text style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
-                {line.automated ? 'Auto-pay' : 'You pay'} · {fmt(convert(line.expected, line.currency || 'USD'), preferredCurrency)}
+                {line.automated ? 'Auto-pay' : 'You pay'} · <Text style={amountStyle('regular')}>{fmt(convert(line.expected, line.currency || 'USD'), preferredCurrency)}</Text>
               </Text>
             </View>
             <Icon name="chev-r" size={14} stroke={C.subtle}/>

@@ -87,7 +87,7 @@ export function CurrencyPickerSheet({ visible, current, onSelect, onClose }: Pro
                   }}
                 >
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 15, color: on ? C.sage : C.cream, fontWeight: on ? '600' : '400' }}>
+                    <Text style={{ fontSize: 15, color: on ? C.link : C.text, fontWeight: on ? '600' : '400' }}>
                       {code}
                     </Text>
                     <Text style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>

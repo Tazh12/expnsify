@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTheme } from '../theme';
+import { amountStyle, useTheme } from '../theme';
 import { Card } from './Card';
 import { Tap } from './Tap';
 import { Icon } from './Icon';
@@ -95,7 +95,7 @@ export function BudgetSection({
           <Text style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{subtitle}</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Text style={{ fontSize: 12, color: C.muted, fontVariant: ['tabular-nums'] }}>
+          <Text style={{ fontSize: 12, color: C.muted, ...amountStyle('regular') }}>
             {fmt(actual, preferredCurrency)} / {fmt(expected, preferredCurrency)}
           </Text>
           <Icon name={open ? 'chev-d' : 'chev-r'} size={14} stroke={C.muted}/>

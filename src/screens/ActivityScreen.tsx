@@ -4,7 +4,7 @@ import {
   TouchableOpacity, StyleSheet, Alert, ActivityIndicator,
 } from 'react-native';
 import { BottomSheet } from '../components/BottomSheet';
-import { useTheme } from '../theme';
+import { amountStyle, useTheme } from '../theme';
 import { Card, Icon, Tap, TxnRow, PageHeader, EmptyState } from '../components';
 import { useExpenses, type Expense } from '../store/useExpenses';
 import { useCategories } from '../store/useCategories';
@@ -199,12 +199,12 @@ export function ActivityScreen({ onScan }: { onScan?: () => void }) {
               alignItems: 'center', justifyContent: 'center',
             }}
           >
-            <FilterIcon color={active ? '#0E0E0C' : C.cream}/>
+            <FilterIcon color={active ? C.onPrimary : C.cream}/>
             {active && (
               <View style={{
                 position: 'absolute', top: 7, right: 7,
                 width: 7, height: 7, borderRadius: 4,
-                backgroundColor: '#0E0E0C',
+                backgroundColor: C.accent,
               }}/>
             )}
           </Tap>
@@ -254,7 +254,7 @@ export function ActivityScreen({ onScan }: { onScan?: () => void }) {
               <View key={day} style={{ marginBottom: 18 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingBottom: 8, paddingHorizontal: 4 }}>
                   <Text style={{ fontFamily: C.fonts.serifItalic, fontSize: 15, color: C.muted }}>{dayLabel(day)}</Text>
-                  <Text style={{ fontSize: 12, color: C.subtle }}>{fmt(dayTotal, preferredCurrency)}</Text>
+                  <Text style={{ fontSize: 12, color: C.mutedText, ...amountStyle('regular') }}>{fmt(dayTotal, preferredCurrency)}</Text>
                 </View>
                 <Card style={{ overflow: 'hidden' }}>
                   {items.map((t, i) => (
@@ -433,7 +433,7 @@ function FilterSheet({
                     { backgroundColor: local.dateRange === key ? C.sage : C.surface, borderColor: local.dateRange === key ? C.sage : C.hair },
                   ]}
                 >
-                  <Text style={{ fontSize: 13, fontFamily: C.fonts.regular, color: local.dateRange === key ? '#0E0E0C' : C.cream }}>
+                  <Text style={{ fontSize: 13, fontFamily: C.fonts.regular, color: local.dateRange === key ? C.onPrimary : C.cream }}>
                     {DATE_LABELS[key]}
                   </Text>
                 </Pressable>
@@ -489,7 +489,7 @@ function FilterSheet({
                     onPress={() => toggleMerchant(m)}
                     style={[sh.pill, { backgroundColor: on ? C.sageGlow : C.surface, borderColor: on ? C.sage : C.hair }]}
                   >
-                    <Text style={{ fontSize: 13, fontFamily: C.fonts.regular, color: on ? C.sage : C.cream }} numberOfLines={1}>
+                    <Text style={{ fontSize: 13, fontFamily: C.fonts.regular, color: on ? C.link : C.text }} numberOfLines={1}>
                       {m}
                     </Text>
                   </Pressable>
@@ -504,7 +504,7 @@ function FilterSheet({
               backgroundColor: C.sage, borderRadius: 14,
               paddingVertical: 15, alignItems: 'center',
             }}>
-              <Text style={{ color: '#0E0E0C', fontFamily: C.fonts.semibold, fontSize: 15 }}>Apply filters</Text>
+              <Text style={{ color: C.onPrimary, fontFamily: C.fonts.semibold, fontSize: 15 }}>Apply filters</Text>
             </Tap>
           </View>
     </BottomSheet>
@@ -535,7 +535,7 @@ function QuickChip({ label, on, onPress, C }: { label: string; on: boolean; onPr
         borderWidth: 0.5, borderColor: on ? C.sage : C.hair,
       }}
     >
-      <Text style={{ fontSize: 13, color: on ? '#0E0E0C' : C.cream }}>{label}</Text>
+      <Text style={{ fontSize: 13, color: on ? C.onPrimary : C.cream }}>{label}</Text>
     </Tap>
   );
 }

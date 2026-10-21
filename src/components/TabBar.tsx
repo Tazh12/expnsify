@@ -27,7 +27,7 @@ export function TabBar({ tab, onTab, onAdd }: Props) {
     <View style={{
       position: 'absolute', bottom: 22, left: 14, right: 14,
       borderRadius: 34, overflow: 'hidden',
-      shadowColor: '#000',
+      shadowColor: C.shadow,
       shadowOffset: { width: 0, height: 12 },
       shadowOpacity: C.isLight ? 0.16 : 0.45,
       shadowRadius: 20,
@@ -45,9 +45,7 @@ export function TabBar({ tab, onTab, onAdd }: Props) {
       >
         <LinearGradient
           pointerEvents="none"
-          colors={C.isLight
-            ? ['rgba(255,255,255,0.65)', 'rgba(255,255,255,0.22)']
-            : ['rgba(255,255,255,0.10)', 'rgba(255,255,255,0.0)']}
+          colors={[C.glassTop, C.glassBottom]}
           start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
           style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '60%' }}
         />
@@ -65,7 +63,7 @@ export function TabBar({ tab, onTab, onAdd }: Props) {
             start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }}
             style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
           >
-            <Icon name="cam" size={26} stroke="#0E0E0C" sw={2.2}/>
+            <Icon name="cam" size={26} stroke={C.onPrimary} sw={2.2}/>
           </LinearGradient>
         </TouchableOpacity>
 
@@ -90,8 +88,8 @@ function TabItem({ item, active, onPress }: { item: { icon: string; label: strin
             style={{
               position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
               borderRadius: 22, borderWidth: 0.5,
-              borderColor: C.isLight ? 'rgba(255,255,255,0.7)' : C.hairStrong,
-              backgroundColor: C.isLight ? 'rgba(255,255,255,0.30)' : 'rgba(255,255,255,0.06)',
+              borderColor: C.glassStroke,
+              backgroundColor: C.glassFill,
             }}
           />
         )}

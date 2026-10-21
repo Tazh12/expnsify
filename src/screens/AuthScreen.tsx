@@ -128,7 +128,7 @@ export default function AuthScreen() {
             disabled={loading}
           >
             {loading
-              ? <ActivityIndicator color="#0E0E0C" />
+              ? <ActivityIndicator color={theme.onPrimary} />
               : <Text style={s.btnText}>{tab === 'login' ? 'Sign in' : 'Create account'}</Text>
             }
           </Pressable>
@@ -183,6 +183,6 @@ function styles(theme: ReturnType<typeof useTheme>) {
       backgroundColor: theme.sage, borderRadius: 12,
       paddingVertical: 14, alignItems: 'center', marginTop: 4,
     },
-    btnText: { color: '#0E0E0C', fontFamily: theme.fonts.semibold, fontSize: 15 },
+    btnText: { color: theme.onPrimary, fontFamily: theme.fonts.semibold, fontSize: 15 },
   });
 }

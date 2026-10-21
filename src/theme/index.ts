@@ -1,7 +1,29 @@
 import React from 'react';
+import { TextStyle } from 'react-native';
+import {
+  PALETTES,
+  alertInkFor,
+  inkForFill,
+  isLightColor,
+  linkFor,
+  migratePalette,
+  mix,
+  withAlpha,
+  type PaletteId,
+  type PaletteTokens,
+} from './palettes';
 
-export type PaletteId = 'midnight' | 'cream' | 'carbon';
-export type AccentId = 'sage' | 'amber' | 'rose' | 'blue';
+export type { PaletteId, PaletteTokens };
+export {
+  PALETTES,
+  THEME_OPTIONS,
+  alertInkFor,
+  contrastRatio,
+  linkFor,
+  migratePalette,
+  paletteSwatches,
+} from './palettes';
+
 export type FontId = 'default' | 'sans' | 'mono' | 'comic';
 
 export const FONT_IDS: FontId[] = ['default', 'sans', 'mono', 'comic'];
@@ -55,114 +77,99 @@ export const FONTS: Record<FontId, FontMap> = {
   },
 };
 
-export interface Palette {
+/** Amounts stay in the Default face with tabular figures, whatever font style is selected. */
+export function amountStyle(weight: 'regular' | 'medium' | 'semibold' | 'bold' = 'medium'): TextStyle {
+  return {
+    fontFamily: FONTS.default[weight],
+    fontVariant: ['tabular-nums'],
+  };
+}
+
+export interface Theme extends PaletteTokens {
+  id: PaletteId;
+  isLight: boolean;
+  onPrimary: string;
+  onAccent: string;
+  onSuccess: string;
+  /** Small text in the brand hue. Matches primary when that already clears WCAG AA. */
+  link: string;
+  /** Alert hue darkened or lightened until small text clears WCAG AA. */
+  alertInk: string;
+  surfaceMuted: string;
+  primarySoft: string;
+  scrim: string;
+  scrimSoft: string;
+  shadow: string;
+  hair: string;
+  hairStrong: string;
+  glassTop: string;
+  glassBottom: string;
+  glassStroke: string;
+  glassFill: string;
+  fonts: FontMap;
   bg: string;
   bgElev: string;
-  surface: string;
   surface2: string;
   cream: string;
   muted: string;
   subtle: string;
-  hair: string;
-  hairStrong: string;
-}
-
-export interface Accent {
   sage: string;
   sageDeep: string;
   sageGlow: string;
-}
-
-export interface Theme extends Palette, Accent {
-  id: PaletteId;
-  isLight: boolean;
-  amber: string;
   rose: string;
-  plum: string;
-  sky: string;
-  fonts: FontMap;
+  amber: string;
 }
 
-export const PALETTES: Record<PaletteId, Palette> = {
-  midnight: {
-    bg: '#0E0E0C',
-    bgElev: '#161513',
-    surface: '#1B1A17',
-    surface2: '#232220',
-    cream: '#F4EFE6',
-    muted: '#8F8A80',
-    subtle: '#58544D',
-    hair: 'rgba(244,239,230,0.07)',
-    hairStrong: 'rgba(244,239,230,0.13)',
-  },
-  cream: {
-    bg: '#F4EFE6',
-    bgElev: '#FAF8F2',
-    surface: '#FAF8F2',
-    surface2: '#EFE9DD',
-    cream: '#1F1B16',
-    muted: '#6B655C',
-    subtle: '#A8A39A',
-    hair: 'rgba(31,27,22,0.08)',
-    hairStrong: 'rgba(31,27,22,0.16)',
-  },
-  carbon: {
-    bg: '#08080A',
-    bgElev: '#121215',
-    surface: '#121215',
-    surface2: '#1A1A1F',
-    cream: '#EDEDF0',
-    muted: '#8E8E9A',
-    subtle: '#4A4A55',
-    hair: 'rgba(237,237,240,0.06)',
-    hairStrong: 'rgba(237,237,240,0.12)',
-  },
-};
+export function buildTheme(paletteId: unknown, fontId: FontId = 'default'): Theme {
+  const id = migratePalette(paletteId);
+  const palette = PALETTES[id];
+  const isLight = isLightColor(palette.background);
+  const alertInk = alertInkFor(palette);
+  const link = linkFor(palette);
+  const onPrimary = inkForFill(palette.primary, palette.background, isLight ? '#000000' : palette.background);
+  const onAccent = inkForFill(palette.accent, palette.text, palette.background);
+  const onSuccess = inkForFill(palette.success, palette.background, palette.text);
+  const surfaceMuted = mix(palette.surface, palette.border, 0.28);
+  const hair = palette.border;
+  const hairStrong = mix(palette.border, palette.mutedText, 0.35);
+  const primarySoft = withAlpha(palette.primary, 0.15);
 
-export const ACCENTS: Record<AccentId, Accent> = {
-  sage: {
-    sage: '#B8D4B0',
-    sageDeep: '#6F8E63',
-    sageGlow: 'rgba(184,212,176,0.15)',
-  },
-  amber: {
-    sage: '#E0B872',
-    sageDeep: '#9C7B43',
-    sageGlow: 'rgba(224,184,114,0.15)',
-  },
-  rose: {
-    sage: '#E0A0A0',
-    sageDeep: '#A06868',
-    sageGlow: 'rgba(224,160,160,0.15)',
-  },
-  blue: {
-    sage: '#9FB8D4',
-    sageDeep: '#6182A6',
-    sageGlow: 'rgba(159,184,212,0.15)',
-  },
-};
-
-const STATIC = {
-  amber: '#E0A872',
-  rose: '#D9846A',
-  plum: '#A47BB9',
-  sky: '#7FA6C8',
-};
-
-export function buildTheme(paletteId: PaletteId, accentId: AccentId, fontId: FontId = 'default'): Theme {
-  const palette = PALETTES[paletteId] ?? PALETTES.midnight;
-  const accent = ACCENTS[accentId] ?? ACCENTS.sage;
   return {
-    id: PALETTES[paletteId] ? paletteId : 'midnight',
-    isLight: (PALETTES[paletteId] ? paletteId : 'midnight') === 'cream',
     ...palette,
-    ...accent,
-    ...STATIC,
+    id,
+    isLight,
+    onPrimary,
+    onAccent,
+    onSuccess,
+    link,
+    alertInk,
+    surfaceMuted,
+    primarySoft,
+    scrim: withAlpha('#000000', 0.45),
+    scrimSoft: withAlpha('#000000', 0.35),
+    shadow: '#000000',
+    hair,
+    hairStrong,
+    glassTop: withAlpha('#FFFFFF', isLight ? 0.65 : 0.1),
+    glassBottom: withAlpha('#FFFFFF', isLight ? 0.22 : 0),
+    glassStroke: isLight ? withAlpha('#FFFFFF', 0.7) : hairStrong,
+    glassFill: withAlpha('#FFFFFF', isLight ? 0.3 : 0.06),
     fonts: FONTS[fontId] ?? FONTS.default,
+    bg: palette.background,
+    bgElev: palette.surface,
+    surface2: surfaceMuted,
+    cream: palette.text,
+    muted: palette.mutedText,
+    subtle: mix(palette.mutedText, palette.background, 0.35),
+    sage: palette.primary,
+    sageDeep: palette.secondary,
+    sageGlow: primarySoft,
+    rose: alertInk,
+    amber: palette.accent,
   };
 }
 
-export const ThemeContext = React.createContext<Theme>(buildTheme('midnight', 'sage', 'default'));
+export const ThemeContext = React.createContext<Theme>(buildTheme('forest', 'default'));
 
 export function useTheme(): Theme {
   return React.useContext(ThemeContext);

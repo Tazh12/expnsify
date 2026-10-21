@@ -6,7 +6,7 @@ import {
 import { BottomSheet } from '../components/BottomSheet';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { useTheme } from '../theme';
+import { amountStyle, useTheme } from '../theme';
 import { Icon, Tap } from '../components';
 import { useExpenses, type Expense } from '../store/useExpenses';
 import type { Category } from '../store/useCategories';
@@ -141,11 +141,11 @@ export function TxnDetailModal({ expense: t, category, onClose, onEdit, onDelete
               >
                 {t.merchant}
               </Text>
-              <Text style={{ fontFamily: C.fonts.serif, fontSize: 40, color: C.cream, marginTop: 6, letterSpacing: -1 }}>
+              <Text style={{ fontSize: 40, color: C.text, marginTop: 6, letterSpacing: -1, ...amountStyle('semibold') }}>
                 {fmt(convertedAmount, preferredCurrency)}
               </Text>
               {showOriginal && (
-                <Text style={{ fontSize: 14, color: C.muted, marginTop: 4 }}>
+                <Text style={{ fontSize: 14, color: C.muted, marginTop: 4, ...amountStyle('regular') }}>
                   Originally {t.currency} {t.amount.toFixed(2)}
                 </Text>
               )}
@@ -191,7 +191,7 @@ export function TxnDetailModal({ expense: t, category, onClose, onEdit, onDelete
                 {attaching ? (
                   <ActivityIndicator size="small" color={C.sage}/>
                 ) : (
-                  <Text style={{ flex: 1, fontSize: 14, color: hasReceipt ? C.sage : C.subtle }}>
+                  <Text style={{ flex: 1, fontSize: 14, color: hasReceipt ? C.link : C.subtle }}>
                     {receiptLabel}
                   </Text>
                 )}
@@ -208,7 +208,7 @@ export function TxnDetailModal({ expense: t, category, onClose, onEdit, onDelete
                   </Text>
                   {RECEIPT_STORAGE_ENABLED && (
                     <Tap onPress={attachReceipt}>
-                      <Text style={{ fontSize: 12, color: C.sage, marginTop: 6 }}>
+                      <Text style={{ fontSize: 12, color: C.link, marginTop: 6 }}>
                         {attaching ? 'Saving…' : 'Tap to add a photo'}
                       </Text>
                     </Tap>
@@ -223,7 +223,7 @@ export function TxnDetailModal({ expense: t, category, onClose, onEdit, onDelete
                       accessibilityLabel="Edit transaction"
                       style={{ flex: 1, minHeight: 44, borderRadius: 14, backgroundColor: C.sage, alignItems: 'center', justifyContent: 'center' }}
                     >
-                      <Text style={{ color: '#0E0E0C', fontWeight: '600' }}>Edit</Text>
+                      <Text style={{ color: C.onPrimary, fontWeight: '600' }}>Edit</Text>
                     </Tap>
                   )}
                   {onDelete && (

@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import {
   View, Text, TouchableOpacity, Animated, PanResponder,
 } from 'react-native';
-import { useTheme } from '../theme';
+import { amountStyle, useTheme } from '../theme';
 import { Icon } from './Icon';
 import { useRates } from '../store/useRates';
 import { useSettings } from '../store/useSettings';
@@ -32,7 +32,7 @@ export function TxnRow({
   const cat = catMap[t.category_id] ?? { name: t.category_id, color: C.muted };
   const initial = cat.name[0]?.toUpperCase() ?? '?';
   const warn = unbudgeted || overspend || t.unbudgeted;
-  const amountColor = warn ? C.rose : t.type === 'income' ? C.sage : C.cream;
+  const amountColor = warn ? C.alertInk : t.type === 'income' ? C.success : C.text;
 
   const translateX = useRef(new Animated.Value(0)).current;
   const isOpen = useRef<'none' | 'right' | 'left'>('none');
@@ -95,7 +95,7 @@ export function TxnRow({
             }}
             activeOpacity={0.8}
           >
-            <Icon name="eye" size={18} stroke="#0E0E0C" sw={2}/>
+            <Icon name="eye" size={18} stroke={C.onPrimary} sw={2}/>
           </TouchableOpacity>
         </View>
       )}
@@ -169,11 +169,11 @@ export function TxnRow({
             </Text>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
-            <Text style={{ fontSize: 15, color: amountColor, fontWeight: '500', fontVariant: ['tabular-nums'] }}>
+            <Text style={{ fontSize: 15, color: amountColor, ...amountStyle() }}>
               {t.type === 'income' ? '+' : ''}{fmt(convertedAmount, preferredCurrency)}
             </Text>
             {showOriginal && (
-              <Text style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
+              <Text style={{ fontSize: 11, color: C.muted, marginTop: 1, ...amountStyle('regular') }}>
                 {t.currency} {t.amount.toFixed(2)}
               </Text>
             )}

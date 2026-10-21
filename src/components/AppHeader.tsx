@@ -85,7 +85,7 @@ export function AppHeader({
           backgroundColor: C.sage, alignItems: 'center', justifyContent: 'center', flexShrink: 0,
         }}
       >
-        <Text style={{ fontFamily: C.fonts.serifItalic, fontSize: 16, color: '#0E0E0C' }}>{initial}</Text>
+        <Text style={{ fontFamily: C.fonts.serifItalic, fontSize: 16, color: C.onPrimary }}>{initial}</Text>
       </Tap>
     </View>
   );
