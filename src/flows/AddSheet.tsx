@@ -9,7 +9,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
 import { Audio } from 'expo-av';
-import { useTheme } from '../theme';
+import { amountStyle, useTheme } from '../theme';
 import { Icon, Card, Tap, CategoryChip, BottomSheet } from '../components';
 import { DatePicker } from '../components/DatePicker';
 import { useCategories } from '../store/useCategories';
@@ -577,8 +577,8 @@ function PickPhase({
             start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }}
             style={{ height: 56, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
           >
-            <Icon name="cam" size={20} stroke="#0E0E0C" sw={2}/>
-            <Text style={{ fontSize: 16, fontWeight: '600', color: '#0E0E0C' }}>Scan a receipt</Text>
+            <Icon name="cam" size={20} stroke={C.onPrimary} sw={2}/>
+            <Text style={{ fontSize: 16, fontWeight: '600', color: C.onPrimary }}>Scan a receipt</Text>
           </LinearGradient>
         </Tap>
       )}
@@ -659,7 +659,7 @@ function VoiceCoach({ onStart, onClose }: { onStart: () => void; onClose: () => 
               width: 28, height: 28, borderRadius: 10, backgroundColor: C.sageGlow,
               alignItems: 'center', justifyContent: 'center',
             }}>
-              <Text style={{ fontSize: 13, color: C.sage, fontWeight: '600' }}>{i + 1}</Text>
+              <Text style={{ fontSize: 13, color: C.link, fontWeight: '600' }}>{i + 1}</Text>
             </View>
             <Text style={{ fontSize: 15, color: C.cream, flex: 1 }}>{t}</Text>
           </View>
@@ -674,8 +674,8 @@ function VoiceCoach({ onStart, onClose }: { onStart: () => void; onClose: () => 
           start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }}
           style={{ height: 52, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
         >
-          <Icon name="mic" size={18} stroke="#0E0E0C" sw={2}/>
-          <Text style={{ fontSize: 15, fontWeight: '600', color: '#0E0E0C' }}>Start 5-second take</Text>
+          <Icon name="mic" size={18} stroke={C.onPrimary} sw={2}/>
+          <Text style={{ fontSize: 15, fontWeight: '600', color: C.onPrimary }}>Start 5-second take</Text>
         </LinearGradient>
       </Tap>
     </View>
@@ -700,7 +700,7 @@ function ScanPhase({ method }: { method: Method | null }) {
         {lines[step]}
       </Text>
       <Text style={{ marginTop: 18, fontSize: 11, color: C.subtle, letterSpacing: 0.06, textTransform: 'uppercase' }}>
-        ✦ powered by tally intelligence
+        ✦ powered by Vadri intelligence
       </Text>
     </View>
   );
@@ -853,7 +853,7 @@ function ReviewPhase({
               value={amount}
               onChangeText={setAmount}
               keyboardType="decimal-pad"
-              style={{ fontFamily: C.fonts.serif, fontSize: 52, lineHeight: 64, color: C.cream, flex: 1 }}
+              style={{ ...amountStyle('semibold'), fontSize: 52, lineHeight: 64, color: C.text, flex: 1 }}
               placeholderTextColor={C.muted}
               placeholder="0.00"
             />
@@ -863,7 +863,7 @@ function ReviewPhase({
             </Tap>
           </View>
           {currencyCode !== preferredCurrency && !!amount && parseFloat(amount) > 0 && (
-            <Text style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>
+            <Text style={{ fontSize: 12, color: C.muted, marginTop: 6, ...amountStyle('regular') }}>
               ≈ {fmt(convert(parseFloat(amount) || 0, currencyCode), preferredCurrency)} converted
             </Text>
           )}
@@ -919,8 +919,8 @@ function ReviewPhase({
             start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }}
             style={{ height: 52, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
           >
-            <Icon name="check" size={18} stroke="#0E0E0C" sw={2.2}/>
-            <Text style={{ fontSize: 15, fontWeight: '600', color: '#0E0E0C' }}>
+            <Icon name="check" size={18} stroke={C.onPrimary} sw={2.2}/>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: C.onPrimary }}>
               {editExpense ? 'Update' : selectedLineId ? 'Save to budget' : 'Save unbudgeted'}
             </Text>
           </LinearGradient>
@@ -931,7 +931,7 @@ function ReviewPhase({
           accessibilityLabel={moreOpen ? 'Hide more details' : 'More details'}
           style={{ minHeight: 44, justifyContent: 'center', marginBottom: 8 }}
         >
-          <Text style={{ fontSize: 14, color: C.sage, fontWeight: '600' }}>{moreOpen ? 'Hide details' : 'More details'}</Text>
+          <Text style={{ fontSize: 14, color: C.link, fontWeight: '600' }}>{moreOpen ? 'Hide details' : 'More details'}</Text>
         </Tap>
 
         {moreOpen && (
@@ -1136,7 +1136,7 @@ function BudgetLinePicker({
               alignItems: 'center', justifyContent: 'center',
             }}
           >
-            <Text style={{ fontSize: 12, color: C.sage, fontWeight: '600' }}>+ New line</Text>
+            <Text style={{ fontSize: 12, color: C.link, fontWeight: '600' }}>+ New line</Text>
           </Tap>
           <Tap
             onPress={() => setMoreOpen(true)}
@@ -1231,13 +1231,13 @@ function BudgetLinePicker({
                       backgroundColor: newGroup === group.id ? C.sage : C.surface,
                     }}
                   >
-                    <Text style={{ color: newGroup === group.id ? '#0E0E0C' : C.cream, fontSize: 13 }}>{group.label}</Text>
+                    <Text style={{ color: newGroup === group.id ? C.onPrimary : C.cream, fontSize: 13 }}>{group.label}</Text>
                   </Tap>
                 ))}
               </View>
             </ScrollView>
             <Tap onPress={createLine} style={{ minHeight: 44, borderRadius: 12, backgroundColor: C.sage, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ color: '#0E0E0C', fontWeight: '600' }}>Create line</Text>
+              <Text style={{ color: C.onPrimary, fontWeight: '600' }}>Create line</Text>
             </Tap>
         </View>
       </BottomSheet>

@@ -68,7 +68,7 @@ export function LinesGroupsScreen({ onClose }: { onClose: () => void }) {
               {!group.builtin && (
                 <>
                   <Tap onPress={() => { setRenameGroupId(group.id); setDraft(group.label); }} accessibilityLabel={`Rename ${group.label}`} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }}>
-                    <Text style={{ color: C.sage, fontSize: 13 }}>Rename</Text>
+                    <Text style={{ color: C.link, fontSize: 13 }}>Rename</Text>
                   </Tap>
                   <Tap onPress={() => { setMoving(group.id); setDestination('variable'); }} accessibilityLabel={`Delete ${group.label}`} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }}>
                     <Text style={{ color: C.rose, fontSize: 13 }}>Delete</Text>
@@ -95,7 +95,7 @@ export function LinesGroupsScreen({ onClose }: { onClose: () => void }) {
                     <Text style={{ fontSize: 15, color: C.cream }}>{line.name}</Text>
                     <View style={{ flexDirection: 'row', gap: 16, marginTop: 8 }}>
                       <Tap onPress={() => { setRenameLine(line); setDraft(line.name); }} accessibilityLabel={`Rename ${line.name}`} style={{ minHeight: 44, justifyContent: 'center' }}>
-                        <Text style={{ color: C.sage, fontSize: 13 }}>Rename</Text>
+                        <Text style={{ color: C.link, fontSize: 13 }}>Rename</Text>
                       </Tap>
                       <Tap
                         onPress={() => {
@@ -142,7 +142,7 @@ export function LinesGroupsScreen({ onClose }: { onClose: () => void }) {
       </ScrollView>
 
       <Modal visible={!!renameLine || !!renameGroupId} transparent animationType="fade" onRequestClose={() => { setRenameLine(null); setRenameGroupId(null); }}>
-        <View style={{ flex: 1, justifyContent: 'center', padding: 24, backgroundColor: 'rgba(0,0,0,0.45)' }}>
+        <View style={{ flex: 1, justifyContent: 'center', padding: 24, backgroundColor: C.scrim }}>
           <View style={{ backgroundColor: C.bgElev, borderRadius: 20, padding: 18 }}>
             <Text style={{ fontFamily: C.fonts.serif, fontSize: 24, color: C.cream, marginBottom: 12 }}>Rename</Text>
             <TextInput
@@ -152,14 +152,14 @@ export function LinesGroupsScreen({ onClose }: { onClose: () => void }) {
               style={{ borderWidth: 0.5, borderColor: C.hair, borderRadius: 12, padding: 12, color: C.cream, marginBottom: 14 }}
             />
             <Tap onPress={saveRename} style={{ minHeight: 44, borderRadius: 12, backgroundColor: C.sage, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ color: '#0E0E0C', fontWeight: '600' }}>Save</Text>
+              <Text style={{ color: C.onPrimary, fontWeight: '600' }}>Save</Text>
             </Tap>
           </View>
         </View>
       </Modal>
 
       <Modal visible={!!moving} transparent animationType="fade" onRequestClose={() => setMoving(null)}>
-        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' }}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: C.scrim }}>
           <View style={{ backgroundColor: C.bgElev, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 }}>
             <Text style={{ fontFamily: C.fonts.serif, fontSize: 24, color: C.cream }}>Move its lines</Text>
             <Text style={{ color: C.muted, marginTop: 6, marginBottom: 12 }}>
@@ -167,13 +167,13 @@ export function LinesGroupsScreen({ onClose }: { onClose: () => void }) {
             </Text>
             {groups.filter(g => g.id !== 'income' && g.id !== moving).map(group => (
               <Tap key={group.id} onPress={() => setDestination(group.id)} style={{ minHeight: 44, justifyContent: 'center' }}>
-                <Text style={{ color: destination === group.id ? C.sage : C.cream, fontSize: 15 }}>
+                <Text style={{ color: destination === group.id ? C.link : C.text, fontSize: 15 }}>
                   {destination === group.id ? '✓ ' : ''}{group.label}
                 </Text>
               </Tap>
             ))}
             <Tap onPress={confirmMove} style={{ marginTop: 12, minHeight: 44, borderRadius: 12, backgroundColor: C.sage, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ color: '#0E0E0C', fontWeight: '600' }}>Move and delete group</Text>
+              <Text style={{ color: C.onPrimary, fontWeight: '600' }}>Move and delete group</Text>
             </Tap>
           </View>
         </View>

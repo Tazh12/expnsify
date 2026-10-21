@@ -57,7 +57,7 @@ export async function syncNotifications(opts: {
       identifier: BUDGET_ID,
       content: {
         title: 'Time to budget',
-        body: 'Sit down for 10 minutes and give every dollar a job.',
+        body: 'Sit down for 10 minutes and plan every franc before you spend it.',
       },
       trigger: {
         type: N.SchedulableTriggerInputTypes.CALENDAR,

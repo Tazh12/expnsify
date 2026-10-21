@@ -69,6 +69,8 @@ export function Icon({ name, size = 20, stroke = 'currentColor', fill = 'none', 
       return <Svg {...props}><Rect x="3" y="5" width="18" height="16" rx="2"/><Path d="M8 3v4M16 3v4M3 10h18"/></Svg>;
     case 'pin':
       return <Svg {...props}><Path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><Circle cx="12" cy="10" r="2.5"/></Svg>;
+    case 'lock':
+      return <Svg {...props}><Rect x="5" y="11" width="14" height="10" rx="2"/><Path d="M8 11V8a4 4 0 0 1 8 0v3"/></Svg>;
     default:
       return null;
   }

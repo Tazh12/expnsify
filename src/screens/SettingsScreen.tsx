@@ -1,10 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, ScrollView, Alert, Modal, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, ScrollView, Alert, TextInput } from 'react-native';
 import { BottomSheet } from '../components/BottomSheet';
-import { useTheme, PALETTES, ACCENTS, type PaletteId, type AccentId } from '../theme';
+import { FONTS, PALETTES, THEME_OPTIONS, paletteSwatches, useTheme, type FontId } from '../theme';
 import { Card, Icon, Tap, Toggle, PageHeader, SectionHeader, SettingsRow } from '../components';
 import { useSettings } from '../store/useSettings';
-import { FONTS, type FontId } from '../theme';
 import { useExpenses } from '../store/useExpenses';
 import { useAuth } from '../store/useAuth';
 import { useRates } from '../store/useRates';
@@ -32,19 +31,6 @@ interface Props {
   onClose: () => void;
 }
 
-const PALETTE_DATA: { id: PaletteId; label: string; swatches: string[] }[] = [
-  { id: 'midnight', label: 'Midnight', swatches: ['#0E0E0C', '#1B1A17', '#F4EFE6'] },
-  { id: 'cream',    label: 'Cream',    swatches: ['#F4EFE6', '#FAF8F2', '#1F1B16'] },
-  { id: 'carbon',   label: 'Carbon',   swatches: ['#08080A', '#121215', '#EDEDF0'] },
-];
-
-const ACCENT_DATA: { id: AccentId; color: string }[] = [
-  { id: 'sage',  color: '#B8D4B0' },
-  { id: 'amber', color: '#E0B872' },
-  { id: 'rose',  color: '#E0A0A0' },
-  { id: 'blue',  color: '#9FB8D4' },
-];
-
 export function SettingsScreen({ onClose }: Props) {
   const C = useTheme();
   const settings = useSettings();
@@ -63,7 +49,19 @@ export function SettingsScreen({ onClose }: Props) {
   const [panel, setPanel] = useState<'main' | 'appearance' | 'lines'>('main');
   const [nameInput, setNameInput] = useState('');
   const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const inputRef = useRef<TextInput>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+  }, []);
+
+  function showProToast() {
+    setToast('Coming soon with Vadri Pro');
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 2200);
+  }
 
   function openEditName() {
     setNameInput(user?.displayName ?? '');
@@ -98,7 +96,7 @@ export function SettingsScreen({ onClose }: Props) {
   }
 
   return (
-    <>
+    <View style={{ flex: 1 }}>
     <ScrollView
       style={{ flex: 1 }}
       contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
@@ -128,7 +126,7 @@ export function SettingsScreen({ onClose }: Props) {
             backgroundColor: C.sage,
             alignItems: 'center', justifyContent: 'center',
           }}>
-            <Text style={{ fontFamily: C.fonts.serifItalic, fontSize: 26, color: '#0E0E0C' }}>
+            <Text style={{ fontFamily: C.fonts.serifItalic, fontSize: 26, color: C.onPrimary }}>
               {displayName.charAt(0).toUpperCase()}
             </Text>
           </View>
@@ -197,7 +195,7 @@ export function SettingsScreen({ onClose }: Props) {
                   alignItems: 'center', justifyContent: 'center',
                   marginBottom: 10,
                 }}>
-                  <Text style={{ fontFamily: C.fonts.serifItalic, fontSize: 32, color: '#0E0E0C' }}>
+                  <Text style={{ fontFamily: C.fonts.serifItalic, fontSize: 32, color: C.onPrimary }}>
                     {(nameInput.trim() || displayName).charAt(0).toUpperCase()}
                   </Text>
                 </View>
@@ -247,7 +245,7 @@ export function SettingsScreen({ onClose }: Props) {
                 }}
               >
                 <Text style={{
-                  color: nameInput.trim() ? '#0E0E0C' : C.muted,
+                  color: nameInput.trim() ? C.onPrimary : C.muted,
                   fontFamily: C.fonts.semibold, fontSize: 15,
                 }}>
                   {saving ? 'Saving…' : 'Save name'}
@@ -258,7 +256,7 @@ export function SettingsScreen({ onClose }: Props) {
 
       {panel === 'appearance' && (
         <Tap onPress={() => setPanel('main')} accessibilityLabel="Back" style={{ marginTop: 12, minHeight: 44, justifyContent: 'center' }}>
-          <Text style={{ color: C.sage, fontSize: 15 }}>← Back</Text>
+          <Text style={{ color: C.link, fontSize: 15 }}>← Back</Text>
         </Tap>
       )}
       {panel === 'appearance' && (
@@ -268,58 +266,66 @@ export function SettingsScreen({ onClose }: Props) {
         <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.06, textTransform: 'uppercase', marginBottom: 12 }}>
           Theme
         </Text>
-        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 22 }}>
-          {PALETTE_DATA.map(p => (
-            <Tap key={p.id} onPress={() => settings.set('palette', p.id)} style={{
-              width: 88, padding: 12, borderRadius: 16,
-              backgroundColor: settings.palette === p.id ? `${C.sage}1e` : C.surface2,
-              borderWidth: 0.5, borderColor: settings.palette === p.id ? C.sage : C.hair,
-              alignItems: 'center', gap: 10,
-            }}>
-              <View style={{ flexDirection: 'row', borderRadius: 8, overflow: 'hidden', width: 54, height: 28 }}>
-                {p.swatches.map((s, i) => <View key={i} style={{ flex: 1, backgroundColor: s }}/>)}
-              </View>
-              <Text style={{
-                fontSize: 11, fontWeight: '500', textTransform: 'capitalize',
-                color: settings.palette === p.id ? C.cream : C.muted,
-              }}>
-                {p.label}
-              </Text>
-            </Tap>
-          ))}
-        </View>
-
-        {/* ── Accent ── */}
-        <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.06, textTransform: 'uppercase', marginBottom: 12 }}>
-          Accent
-        </Text>
-        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 22 }}>
-          {ACCENT_DATA.map(a => {
-            const on = settings.accent === a.id;
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ marginBottom: 22 }}
+          contentContainerStyle={{ flexDirection: 'row', gap: 8, paddingRight: 4 }}
+        >
+          {THEME_OPTIONS.map(p => {
+            const locked = PALETTES[p.id].locked;
+            const selected = !locked && settings.palette === p.id;
+            const swatches = paletteSwatches(p.id);
             return (
-              <Tap key={a.id} onPress={() => settings.set('accent', a.id)} style={{
-                width: 68, height: 68, borderRadius: 18,
-                backgroundColor: a.color,
-                borderWidth: on ? 3 : 1.5,
-                borderColor: on ? C.cream : 'transparent',
-                alignItems: 'center', justifyContent: 'center',
+              <Tap key={p.id} onPress={() => {
+                if (locked) {
+                  showProToast();
+                  return;
+                }
+                settings.set('palette', p.id);
+              }} style={{
+                width: 100, padding: 12, borderRadius: 16,
+                backgroundColor: selected ? `${C.primary}1e` : C.surface2,
+                borderWidth: 0.5, borderColor: selected ? C.primary : C.border,
+                alignItems: 'center', gap: 8,
               }}>
-                {on && <Icon name="check" size={22} stroke="#0E0E0C" sw={2.6}/>}
+                <View style={{ opacity: locked ? 0.62 : 1, alignItems: 'center', gap: 8 }}>
+                  <View style={{ flexDirection: 'row', borderRadius: 8, overflow: 'hidden', width: 54, height: 28 }}>
+                    {swatches.map((s, i) => <View key={i} style={{ flex: 1, backgroundColor: s }}/>)}
+                  </View>
+                  <Text style={{
+                    fontSize: 11, fontWeight: '500', textAlign: 'center',
+                    color: selected ? C.text : C.muted,
+                  }}>
+                    {p.label}
+                  </Text>
+                </View>
+                {locked ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Icon name="lock" size={11} stroke={C.muted} sw={2}/>
+                    <Text style={{ fontSize: 10, fontWeight: '600', color: C.muted, letterSpacing: 0.3 }}>Pro</Text>
+                  </View>
+                ) : null}
               </Tap>
             );
           })}
-        </View>
+        </ScrollView>
 
         {/* ── Font style ── */}
         <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.06, textTransform: 'uppercase', marginBottom: 12 }}>
           Font style
         </Text>
-        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 10 }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ flexDirection: 'row', gap: 10, paddingRight: 4 }}
+        >
           {([
-            { id: 'default' as FontId, label: 'Default', previewFont: FONTS.default.regular, agFont: FONTS.default.serif },
-            { id: 'sans'    as FontId, label: 'Sans',    previewFont: FONTS.sans.regular,    agFont: FONTS.sans.regular },
-            { id: 'mono'    as FontId, label: 'Mono',    previewFont: FONTS.mono.regular,    agFont: FONTS.mono.regular },
-            { id: 'comic'   as FontId, label: 'Comic',   previewFont: FONTS.comic.regular,   agFont: FONTS.comic.regular },
+            { id: 'vadri' as FontId, label: 'Vadri', previewFont: FONTS.vadri.serif, agFont: FONTS.vadri.serif },
+            { id: 'default' as FontId, label: 'Instrument Serif', previewFont: FONTS.default.regular, agFont: FONTS.default.serif },
+            { id: 'sans' as FontId, label: 'Sans', previewFont: FONTS.sans.regular, agFont: FONTS.sans.regular },
+            { id: 'mono' as FontId, label: 'Mono', previewFont: FONTS.mono.regular, agFont: FONTS.mono.regular },
+            { id: 'comic' as FontId, label: 'Comic', previewFont: FONTS.comic.regular, agFont: FONTS.comic.regular },
           ]).map(item => {
             const on = settings.fontId === item.id;
             return (
@@ -327,7 +333,7 @@ export function SettingsScreen({ onClose }: Props) {
                 key={item.id}
                 onPress={() => settings.set('fontId', item.id)}
                 style={{
-                  width: 68, paddingVertical: 12, borderRadius: 18,
+                  width: 96, paddingVertical: 12, paddingHorizontal: 6, borderRadius: 18,
                   backgroundColor: on ? `${C.sage}1e` : C.surface2,
                   borderWidth: on ? 1.5 : 0.5,
                   borderColor: on ? C.sage : C.hair,
@@ -342,18 +348,20 @@ export function SettingsScreen({ onClose }: Props) {
                 }}>
                   Ag
                 </Text>
-                <Text style={{
+                <Text
+                  numberOfLines={2}
+                  style={{
                   fontFamily: item.previewFont,
                   fontSize: 11,
-                  color: on ? C.sage : C.muted,
-                  textTransform: 'capitalize',
+                  color: on ? C.link : C.muted,
+                  textAlign: 'center',
                 }}>
                   {item.label}
                 </Text>
               </Tap>
             );
           })}
-        </View>
+        </ScrollView>
 
       </Card>
       )}
@@ -393,13 +401,13 @@ export function SettingsScreen({ onClose }: Props) {
 
       <SectionHeader title="Appearance"/>
       <Card style={{ padding: 4 }}>
-        <SettingsRow icon={<Icon name="sparkles" size={18} stroke={C.cream}/>} label="Theme, accent, and font" onPress={() => setPanel('appearance')} isLast/>
+        <SettingsRow icon={<Icon name="sparkles" size={18} stroke={C.text}/>} label="Theme and font" onPress={() => setPanel('appearance')} isLast/>
       </Card>
 
       <SectionHeader title="Data"/>
       <Card style={{ padding: 4 }}>
         <SettingsRow icon={<Icon name="export" size={18} stroke={C.cream}/>} label="Export all data" detail="Every month, as CSV" onPress={async () => {
-          const path = FileSystem.cacheDirectory + 'expnsify-all.csv';
+          const path = FileSystem.cacheDirectory + 'vadri-all.csv';
           await FileSystem.writeAsStringAsync(path, expensesToCsv(expenses, lines, useRates.getState().convert, settings.preferredCurrency), { encoding: FileSystem.EncodingType.UTF8 });
           await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: 'Export all data' });
         }} isLast/>
@@ -407,7 +415,7 @@ export function SettingsScreen({ onClose }: Props) {
 
       <SectionHeader title="About"/>
       <Text style={{ textAlign: 'center', marginTop: 8, color: C.subtle, fontSize: 12 }}>
-        <Text style={{ fontFamily: C.fonts.serifItalic }}>expnsify</Text> · v{Constants.expoConfig?.version ?? '1.0.0'}
+        <Text style={{ fontFamily: C.fonts.serifItalic }}>Vadri</Text> · v{Constants.expoConfig?.version ?? '1.0.0'}
       </Text>
       </>
       )}
@@ -419,7 +427,16 @@ export function SettingsScreen({ onClose }: Props) {
       onClose={() => setCurrencyPickerOpen(false)}
     />
     <NotifySheet open={notifyOpen} onClose={() => setNotifyOpen(false)}/>
-    </>
+    {toast ? (
+      <View pointerEvents="none" style={{
+        position: 'absolute', left: 24, right: 24, bottom: 28,
+        backgroundColor: C.primary, borderRadius: 14,
+        paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center',
+      }}>
+        <Text style={{ color: C.onPrimary, fontSize: 14, fontFamily: C.fonts.medium }}>{toast}</Text>
+      </View>
+    ) : null}
+    </View>
   );
 }
 

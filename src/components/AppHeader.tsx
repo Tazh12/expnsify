@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, Image, useWindowDimensions } from 'react-native';
+import { View, Text, useWindowDimensions } from 'react-native';
 import { useTheme } from '../theme';
 import { Icon } from './Icon';
 import { Tap } from './Tap';
 import { useAuth } from '../store/useAuth';
+import { VadriMark } from './VadriLogo';
 
 export function AppHeader({
   month,
@@ -31,11 +32,7 @@ export function AppHeader({
     }}>
       {showBrand ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <Image
-            source={require('../../assets/app-icon-transparent.png')}
-            style={{ width: 24, height: 24 }}
-            resizeMode="contain"
-          />
+          <VadriMark width={26} dark={!C.isLight} />
         </View>
       ) : <View style={{ width: 8 }}/>}
 
@@ -85,7 +82,7 @@ export function AppHeader({
           backgroundColor: C.sage, alignItems: 'center', justifyContent: 'center', flexShrink: 0,
         }}
       >
-        <Text style={{ fontFamily: C.fonts.serifItalic, fontSize: 16, color: '#0E0E0C' }}>{initial}</Text>
+        <Text style={{ fontFamily: C.fonts.serifItalic, fontSize: 16, color: C.onPrimary }}>{initial}</Text>
       </Tap>
     </View>
   );

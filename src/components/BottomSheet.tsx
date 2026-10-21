@@ -46,7 +46,7 @@ export function BottomSheet({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
         <Pressable
-          style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.35)' }]}
+          style={[StyleSheet.absoluteFill, { backgroundColor: C.scrimSoft }]}
           onPress={onClose}
           accessibilityRole="button"
           accessibilityLabel="Dismiss"

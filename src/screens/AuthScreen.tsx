@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TextInput, Pressable, StyleSheet, Image,
+  View, Text, TextInput, Pressable, StyleSheet,
   KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
 } from 'react-native';
 import { useTheme } from '../theme';
 import { useAuth } from '../store/useAuth';
+import { VadriLockup } from '../components/VadriLogo';
 
 const GoogleSignIn = Platform.OS === 'web'
   ? require('./WebGoogleSignIn').WebGoogleSignIn as typeof import('./WebGoogleSignIn').WebGoogleSignIn
@@ -50,13 +51,10 @@ export default function AuthScreen() {
 
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Image
-        source={require('../../assets/app-icon-transparent.png')}
-        style={s.brandIcon}
-        resizeMode="contain"
-      />
       <View style={s.inner}>
-        <Text style={s.wordmark}>expnsify</Text>
+        <View style={s.lockup}>
+          <VadriLockup width={220} dark={!theme.isLight} />
+        </View>
         <Text style={s.sub}>Track every expense effortlessly</Text>
 
         <View style={s.tabRow}>
@@ -128,7 +126,7 @@ export default function AuthScreen() {
             disabled={loading}
           >
             {loading
-              ? <ActivityIndicator color="#0E0E0C" />
+              ? <ActivityIndicator color={theme.onPrimary} />
               : <Text style={s.btnText}>{tab === 'login' ? 'Sign in' : 'Create account'}</Text>
             }
           </Pressable>
@@ -143,17 +141,10 @@ export default function AuthScreen() {
 function styles(theme: ReturnType<typeof useTheme>) {
   return StyleSheet.create({
     root: { flex: 1, width: '100%', backgroundColor: theme.bg },
-    brandIcon: {
-      position: 'absolute', top: Platform.OS === 'ios' ? 58 : 24, right: 24,
-      width: 38, height: 38,
-    },
+    lockup: { alignItems: 'center', marginBottom: 28 },
     inner: {
       flex: 1, alignSelf: 'stretch', maxWidth: 440,
       justifyContent: 'center', marginHorizontal: 20, paddingBottom: 40,
-    },
-    wordmark: {
-      fontFamily: theme.fonts.serifItalic,
-      fontSize: 52, color: theme.cream, textAlign: 'center', letterSpacing: -1, marginBottom: 4,
     },
     sub: {
       fontFamily: theme.fonts.regular, fontSize: 14,
@@ -183,6 +174,6 @@ function styles(theme: ReturnType<typeof useTheme>) {
       backgroundColor: theme.sage, borderRadius: 12,
       paddingVertical: 14, alignItems: 'center', marginTop: 4,
     },
-    btnText: { color: '#0E0E0C', fontFamily: theme.fonts.semibold, fontSize: 15 },
+    btnText: { color: theme.onPrimary, fontFamily: theme.fonts.semibold, fontSize: 15 },
   });
 }

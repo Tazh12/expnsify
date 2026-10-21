@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text } from 'react-native';
-import { useTheme } from '../theme';
+import { amountStyle, useTheme } from '../theme';
 import { Tap } from './Tap';
 import { Icon } from './Icon';
 import { fmt } from '../services/format';
@@ -25,7 +25,7 @@ export function BudgetRow({
   const isIncome = line.section === 'income';
   const planned = convert(line.expected, line.currency || 'USD');
   const left = isIncome ? actual - planned : planned - actual;
-  const leftColor = overspend ? C.rose : left === 0 && !isIncome ? C.muted : C.cream;
+  const leftColor = overspend ? C.alertInk : left === 0 && !isIncome ? C.muted : C.success;
   const due = line.dueDay != null ? ordinalDay(line.dueDay) : null;
   const cadence = line.recurring ? repeatHint(line.repeatEvery ?? 'month') : null;
 
@@ -49,19 +49,19 @@ export function BudgetRow({
             ) : null}
           </View>
         </View>
-        <Text style={{ flex: 1, textAlign: 'right', fontSize: 14, color: C.muted, fontVariant: ['tabular-nums'] }}>
+        <Text style={{ flex: 1, textAlign: 'right', fontSize: 14, color: C.muted, ...amountStyle() }}>
           {fmt(planned, preferredCurrency)}
         </Text>
-        <Text style={{ flex: 1, textAlign: 'right', fontSize: 14, color: C.cream, fontVariant: ['tabular-nums'] }}>
+        <Text style={{ flex: 1, textAlign: 'right', fontSize: 14, color: C.text, ...amountStyle() }}>
           {fmt(actual, preferredCurrency)}
         </Text>
-        <Text style={{ flex: 1, textAlign: 'right', fontSize: 14, color: leftColor, fontVariant: ['tabular-nums'] }}>
+        <Text style={{ flex: 1, textAlign: 'right', fontSize: 14, color: leftColor, ...amountStyle() }}>
           {fmt(left, preferredCurrency)}
         </Text>
         <Text style={{ width: 72, textAlign: 'right', fontSize: 12, color: C.muted }}>
           {due ?? '—'}
         </Text>
-        <Text style={{ width: 72, textAlign: 'right', fontSize: 12, color: line.paid ? C.sage : overspend ? C.rose : C.muted }}>
+        <Text style={{ width: 72, textAlign: 'right', fontSize: 12, color: line.paid ? C.success : overspend ? C.alertInk : C.muted }}>
           {line.paid ? 'Paid' : overspend ? 'Over' : line.automated && !isIncome ? 'Auto-pay' : 'Open'}
         </Text>
       </Tap>
@@ -90,10 +90,10 @@ export function BudgetRow({
         </Text>
       </View>
       <View style={{ alignItems: 'flex-end' }}>
-        <Text style={{ fontSize: 15, color: leftColor, fontWeight: '500', fontVariant: ['tabular-nums'] }}>
+        <Text style={{ fontSize: 15, color: leftColor, ...amountStyle() }}>
           {fmt(isIncome ? actual : left, preferredCurrency)}
         </Text>
-        <Text style={{ fontSize: 11, color: C.muted, marginTop: 2, fontVariant: ['tabular-nums'] }}>
+        <Text style={{ fontSize: 11, color: C.muted, marginTop: 2, ...amountStyle('regular') }}>
           {fmt(actual, preferredCurrency)} / {fmt(planned, preferredCurrency)}
         </Text>
       </View>
@@ -106,11 +106,11 @@ function PaidCheck({ paid, onPress }: { paid: boolean; onPress: () => void }) {
   return (
     <Tap onPress={onPress} haptic style={{
       width: 22, height: 22, borderRadius: 6,
-      borderWidth: 1.5, borderColor: paid ? C.sage : C.subtle,
-      backgroundColor: paid ? C.sage : 'transparent',
+      borderWidth: 1.5, borderColor: paid ? C.success : C.subtle,
+      backgroundColor: paid ? C.success : 'transparent',
       alignItems: 'center', justifyContent: 'center',
     }}>
-      {paid ? <Icon name="check" size={12} stroke="#0E0E0C" sw={3}/> : null}
+      {paid ? <Icon name="check" size={12} stroke={C.onSuccess} sw={3}/> : null}
     </Tap>
   );
 }

@@ -1,13 +1,12 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { FONT_IDS, type PaletteId, type AccentId, type FontId } from '../theme';
+import { FONT_IDS, migratePalette, type PaletteId, type FontId } from '../theme';
 import { useRates } from './useRates';
 
 export type { FontId };
 
 export interface Settings {
   palette: PaletteId;
-  accent: AccentId;
   fontId: FontId;
   showRecap: boolean;
   autoCategories: boolean;
@@ -21,9 +20,8 @@ export interface Settings {
 }
 
 const DEFAULTS: Settings = {
-  palette: 'midnight',
-  accent: 'sage',
-  fontId: 'default',
+  palette: 'forest',
+  fontId: 'vadri',
   showRecap: true,
   autoCategories: true,
   receiptOcr: true,
@@ -46,7 +44,6 @@ interface SettingsState extends Settings {
 function snapshot(current: SettingsState): Settings {
   return {
     palette: current.palette,
-    accent: current.accent,
     fontId: current.fontId,
     showRecap: current.showRecap,
     autoCategories: current.autoCategories,
@@ -68,11 +65,24 @@ export const useSettings = create<SettingsState>((setState, get) => ({
     try {
       const raw = await AsyncStorage.getItem(KEY);
       if (raw) {
-        const saved = JSON.parse(raw) as Partial<Settings>;
-        const fontId = FONT_IDS.includes(saved.fontId as FontId)
-          ? (saved.fontId as FontId)
-          : DEFAULTS.fontId;
-        setState({ ...DEFAULTS, ...saved, fontId, loaded: true });
+        const saved = JSON.parse(raw) as Partial<Settings> & { accent?: unknown; palette?: unknown };
+        const savedFont = saved.fontId;
+        // A stored "default" stays on that option. Only a missing font, or a new install, uses Vadri.
+        const fontId = FONT_IDS.includes(savedFont as FontId)
+          ? (savedFont as FontId)
+          : 'vadri';
+        const palette = migratePalette(saved.palette);
+        const next: Settings = {
+          ...DEFAULTS,
+          ...saved,
+          palette,
+          fontId,
+        };
+        delete (next as { accent?: unknown }).accent;
+        setState({ ...next, loaded: true });
+        if (saved.palette !== palette || Object.prototype.hasOwnProperty.call(saved, 'accent')) {
+          await AsyncStorage.setItem(KEY, JSON.stringify(next));
+        }
       } else {
         setState({ loaded: true });
       }

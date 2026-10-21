@@ -107,7 +107,7 @@ export function GoesToPicker({
                     backgroundColor: C.sage, opacity: draft.trim() ? 1 : 0.45,
                   }}
                 >
-                  <Text style={{ color: '#0E0E0C', fontWeight: '600', fontSize: 14 }}>{saving ? '…' : 'Add'}</Text>
+                  <Text style={{ color: C.onPrimary, fontWeight: '600', fontSize: 14 }}>{saving ? '…' : 'Add'}</Text>
                 </Tap>
               </View>
         </ScrollView>

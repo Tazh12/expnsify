@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, Image } from 'react-native';
+import { View, Text } from 'react-native';
 import { useTheme } from '../theme';
 import { Tap } from './Tap';
 import { Icon } from './Icon';
 import { TabBar, type TabId } from './TabBar';
+import { VadriMark, VadriWordmark } from './VadriLogo';
 
 const NAV: { id: TabId; icon: string; label: string }[] = [
   { id: 'today', icon: 'cal', label: 'Today' },
@@ -39,14 +40,8 @@ export function AppShell({
         paddingTop: 24, paddingHorizontal: 14, backgroundColor: C.bgElev,
       }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 8, marginBottom: 28 }}>
-          <Image
-            source={require('../../assets/app-icon-transparent.png')}
-            style={{ width: 22, height: 22 }}
-            resizeMode="contain"
-          />
-          <Text style={{ fontSize: 14, fontWeight: '500', color: C.cream, letterSpacing: 0.02 }}>
-            expnsify
-          </Text>
+          <VadriMark width={22} dark={!C.isLight} />
+          <VadriWordmark width={78} dark={!C.isLight} />
         </View>
 
         {NAV.map(item => {
@@ -74,7 +69,7 @@ export function AppShell({
           marginTop: 18, backgroundColor: C.sage, borderRadius: 14,
           paddingVertical: 12, alignItems: 'center',
         }}>
-          <Text style={{ color: '#0E0E0C', fontWeight: '600', fontSize: 14 }}>Scan / Add</Text>
+          <Text style={{ color: C.onPrimary, fontWeight: '600', fontSize: 14 }}>Scan / Add</Text>
         </Tap>
       </View>
       <View style={{ flex: 1 }}>{children}</View>

@@ -209,7 +209,7 @@ export function LineEditor({
                       accessibilityLabel={`Move to ${guessed.label}`}
                       style={{ marginTop: -4, marginBottom: 14 }}
                     >
-                      <Text style={{ fontSize: 13, color: C.sage }}>
+                      <Text style={{ fontSize: 13, color: C.link }}>
                         Looks like {guessed.label}, move it?
                       </Text>
                     </Tap>
@@ -285,7 +285,7 @@ export function LineEditor({
                   start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }}
                   style={{ height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', opacity: name.trim() ? 1 : 0.5 }}
                 >
-                  <Text style={{ fontSize: 15, fontWeight: '600', color: '#0E0E0C' }}>{cta}</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: C.onPrimary }}>{cta}</Text>
                 </LinearGradient>
               </Tap>
 
@@ -353,7 +353,7 @@ function Field({
               justifyContent: 'center',
             }}
           >
-            <Text style={{ fontSize: 12, color: C.sage, fontWeight: '600' }}>{action.label}</Text>
+            <Text style={{ fontSize: 12, color: C.link, fontWeight: '600' }}>{action.label}</Text>
           </Tap>
         ) : null}
       </View>
@@ -428,7 +428,7 @@ function FrequencySeg({
             >
               <Text style={{
                 fontSize: 12, fontWeight: '600',
-                color: on ? '#0E0E0C' : C.muted,
+                color: on ? C.onPrimary : C.muted,
                 textAlign: 'center',
               }}>
                 {opt.label}

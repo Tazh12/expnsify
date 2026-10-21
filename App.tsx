@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, StatusBar, Modal, SafeAreaView, ActivityIndicator,
-  AppState, Platform,
+  View, StatusBar, Modal, SafeAreaView, Image, AppState, Platform, useColorScheme,
 } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
 import { useFonts, InstrumentSerif_400Regular, InstrumentSerif_400Regular_Italic } from '@expo-google-fonts/instrument-serif';
 import { Geist_400Regular, Geist_500Medium, Geist_600SemiBold, Geist_700Bold } from '@expo-google-fonts/geist';
 import { GeistMono_400Regular, GeistMono_500Medium } from '@expo-google-fonts/geist-mono';
 import { ComicNeue_400Regular, ComicNeue_400Regular_Italic, ComicNeue_700Bold } from '@expo-google-fonts/comic-neue';
 import { ThemeContext, buildTheme } from './src/theme';
+import { SPLASH_LOGO_SIZE } from './src/components/VadriLogo';
 import { useSettings } from './src/store/useSettings';
 import { useRates } from './src/store/useRates';
 import { useCategories } from './src/store/useCategories';
@@ -31,7 +32,13 @@ import { useAiUsage } from './src/store/useAiUsage';
 import { useViewMonth } from './src/store/useViewMonth';
 import { useNotificationSync } from './src/hooks/useNotificationSync';
 
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
+const SPLASH_LIGHT = '#FBF6EA';
+const SPLASH_DARK = '#2B2238';
+
 export default function App() {
+  const colorScheme = useColorScheme();
   const [fontsLoaded, fontError] = useFonts({
     InstrumentSerif_400Regular,
     InstrumentSerif_400Regular_Italic,
@@ -44,6 +51,9 @@ export default function App() {
     ComicNeue_400Regular,
     ComicNeue_400Regular_Italic,
     ComicNeue_700Bold,
+    'BodoniModa-Regular': require('./assets/vadri-brand/fonts/BodoniModa-Regular.ttf'),
+    'BodoniModa-SemiBold': require('./assets/vadri-brand/fonts/BodoniModa-SemiBold.ttf'),
+    'BodoniModa-SemiBoldItalic': require('./assets/vadri-brand/fonts/BodoniModa-SemiBoldItalic.ttf'),
   });
   const [fontWaitOver, setFontWaitOver] = useState(false);
   useEffect(() => {
@@ -56,6 +66,9 @@ export default function App() {
   const { isWide } = useLayout();
   useNotificationSync();
   const { setUser, setInitializing, initializing, user } = useAuth();
+  useEffect(() => {
+    if (fontsReady && !initializing) SplashScreen.hideAsync().catch(() => {});
+  }, [fontsReady, initializing]);
   const { subscribe: subCats, reset: resetCats } = useCategories();
   const { subscribe: subExp, reset: resetExp } = useExpenses();
   const { subscribe: subBudget, reset: resetBudget } = useBudget();
@@ -155,13 +168,25 @@ export default function App() {
     };
   }, []);
 
-  const theme = buildTheme(settings.palette, settings.accent, settings.fontId);
-  const isLight = settings.palette === 'cream';
+  const theme = buildTheme(settings.palette, settings.fontId);
+  const isLight = theme.isLight;
 
   if (!fontsReady || initializing) {
+    const splashDark = colorScheme === 'dark';
     return (
-      <View style={{ flex: 1, backgroundColor: '#0E0E0C', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color="#B8D4B0" />
+      <View style={{
+        flex: 1,
+        backgroundColor: splashDark ? SPLASH_DARK : SPLASH_LIGHT,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+        <Image
+          source={splashDark
+            ? require('./assets/vadri-brand/lockup-dark.png')
+            : require('./assets/vadri-brand/lockup.png')}
+          style={{ width: SPLASH_LOGO_SIZE, height: SPLASH_LOGO_SIZE }}
+          resizeMode="contain"
+        />
       </View>
     );
   }
@@ -169,7 +194,7 @@ export default function App() {
   if (!user) {
     return (
       <ThemeContext.Provider value={theme}>
-        <StatusBar barStyle="light-content" backgroundColor="#0E0E0C" />
+        <StatusBar barStyle={isLight ? 'dark-content' : 'light-content'} backgroundColor={theme.background} />
         <AuthScreen />
       </ThemeContext.Provider>
     );

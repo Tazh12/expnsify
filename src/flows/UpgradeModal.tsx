@@ -16,7 +16,7 @@ export function UpgradeModal() {
     : 'next month';
   const title = blocked.code === 'rate_limited' ? 'Slow down a moment' : 'AI actions used up';
   const body = blocked.code === 'rate_limited'
-    ? 'Tally limits how many AI requests can run in a minute. Wait a bit, then try again. Adding an expense by hand still works.'
+    ? 'Vadri limits how many AI requests can run in a minute. Wait a bit, then try again. Adding an expense by hand still works.'
     : `You have used ${blocked.used} of ${blocked.limit} AI actions this month. They reset on ${when}. Manual entry, budgets, charts, and export keep working. Paid plans are not available yet.`;
 
   return (
@@ -25,7 +25,7 @@ export function UpgradeModal() {
         <View style={{
           backgroundColor: C.bgElev, borderRadius: 24, borderWidth: 0.5, borderColor: C.hairStrong, padding: 22,
         }}>
-          <Text style={{ fontSize: 11, color: C.sage, letterSpacing: 0.06, textTransform: 'uppercase' }}>Free plan</Text>
+          <Text style={{ fontSize: 11, color: C.link, letterSpacing: 0.06, textTransform: 'uppercase' }}>Free plan</Text>
           <Text style={{ fontFamily: C.fonts.serif, fontSize: 28, color: C.cream, marginTop: 8, letterSpacing: -0.3 }}>{title}</Text>
           <Text style={{ color: C.muted, fontSize: 15, lineHeight: 22, marginTop: 12 }}>{body}</Text>
           <Tap
@@ -33,7 +33,7 @@ export function UpgradeModal() {
             haptic
             style={{ marginTop: 20, paddingVertical: 14, borderRadius: 14, backgroundColor: C.sage, alignItems: 'center' }}
           >
-            <Text style={{ color: '#0E0E0C', fontSize: 15, fontWeight: '600' }}>Got it</Text>
+            <Text style={{ color: C.onPrimary, fontSize: 15, fontWeight: '600' }}>Got it</Text>
           </Tap>
         </View>
       </BlurView>

@@ -127,7 +127,7 @@ export function DatePicker({
                   <Text style={{
                     fontSize: 15,
                     fontWeight: selected || isToday ? '600' : '400',
-                    color: selected ? '#0E0E0C' : C.cream,
+                    color: selected ? C.onPrimary : C.cream,
                   }}>
                     {day}
                   </Text>
@@ -148,7 +148,7 @@ export function DatePicker({
           </Tap>
         ) : null}
         <Tap onPress={jumpToday} accessibilityLabel="Jump to today">
-          <Text style={{ fontSize: 13, color: C.sage }}>Jump to today</Text>
+          <Text style={{ fontSize: 13, color: C.link }}>Jump to today</Text>
         </Tap>
       </View>
     </>
@@ -180,7 +180,7 @@ export function DatePicker({
             maxWidth: 380,
             ...Platform.select({
               ios: {
-                shadowColor: '#000',
+                shadowColor: C.shadow,
                 shadowOffset: { width: 0, height: 16 },
                 shadowOpacity: C.isLight ? 0.12 : 0.4,
                 shadowRadius: 28,

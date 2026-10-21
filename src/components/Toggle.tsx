@@ -37,7 +37,7 @@ export function Toggle({ on, onChange }: ToggleProps) {
           position: 'absolute',
           left: pos,
           width: 19, height: 19, borderRadius: 9.5,
-          backgroundColor: on ? '#0E0E0C' : C.cream,
+          backgroundColor: on ? C.onPrimary : C.cream,
         }}/>
       </Animated.View>
     </Pressable>
