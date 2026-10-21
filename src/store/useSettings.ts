@@ -21,7 +21,7 @@ export interface Settings {
 
 const DEFAULTS: Settings = {
   palette: 'forest',
-  fontId: 'default',
+  fontId: 'vadri',
   showRecap: true,
   autoCategories: true,
   receiptOcr: true,
@@ -66,9 +66,11 @@ export const useSettings = create<SettingsState>((setState, get) => ({
       const raw = await AsyncStorage.getItem(KEY);
       if (raw) {
         const saved = JSON.parse(raw) as Partial<Settings> & { accent?: unknown; palette?: unknown };
-        const fontId = FONT_IDS.includes(saved.fontId as FontId)
-          ? (saved.fontId as FontId)
-          : DEFAULTS.fontId;
+        const savedFont = saved.fontId;
+        // A stored "default" stays on that option. Only a missing font, or a new install, uses Vadri.
+        const fontId = FONT_IDS.includes(savedFont as FontId)
+          ? (savedFont as FontId)
+          : 'vadri';
         const palette = migratePalette(saved.palette);
         const next: Settings = {
           ...DEFAULTS,

@@ -315,12 +315,17 @@ export function SettingsScreen({ onClose }: Props) {
         <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.06, textTransform: 'uppercase', marginBottom: 12 }}>
           Font style
         </Text>
-        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 10 }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ flexDirection: 'row', gap: 10, paddingRight: 4 }}
+        >
           {([
-            { id: 'default' as FontId, label: 'Default', previewFont: FONTS.default.regular, agFont: FONTS.default.serif },
-            { id: 'sans'    as FontId, label: 'Sans',    previewFont: FONTS.sans.regular,    agFont: FONTS.sans.regular },
-            { id: 'mono'    as FontId, label: 'Mono',    previewFont: FONTS.mono.regular,    agFont: FONTS.mono.regular },
-            { id: 'comic'   as FontId, label: 'Comic',   previewFont: FONTS.comic.regular,   agFont: FONTS.comic.regular },
+            { id: 'vadri' as FontId, label: 'Vadri', previewFont: FONTS.vadri.serif, agFont: FONTS.vadri.serif },
+            { id: 'default' as FontId, label: 'Instrument Serif', previewFont: FONTS.default.regular, agFont: FONTS.default.serif },
+            { id: 'sans' as FontId, label: 'Sans', previewFont: FONTS.sans.regular, agFont: FONTS.sans.regular },
+            { id: 'mono' as FontId, label: 'Mono', previewFont: FONTS.mono.regular, agFont: FONTS.mono.regular },
+            { id: 'comic' as FontId, label: 'Comic', previewFont: FONTS.comic.regular, agFont: FONTS.comic.regular },
           ]).map(item => {
             const on = settings.fontId === item.id;
             return (
@@ -328,7 +333,7 @@ export function SettingsScreen({ onClose }: Props) {
                 key={item.id}
                 onPress={() => settings.set('fontId', item.id)}
                 style={{
-                  width: 68, paddingVertical: 12, borderRadius: 18,
+                  width: 96, paddingVertical: 12, paddingHorizontal: 6, borderRadius: 18,
                   backgroundColor: on ? `${C.sage}1e` : C.surface2,
                   borderWidth: on ? 1.5 : 0.5,
                   borderColor: on ? C.sage : C.hair,
@@ -343,18 +348,20 @@ export function SettingsScreen({ onClose }: Props) {
                 }}>
                   Ag
                 </Text>
-                <Text style={{
+                <Text
+                  numberOfLines={2}
+                  style={{
                   fontFamily: item.previewFont,
                   fontSize: 11,
                   color: on ? C.link : C.muted,
-                  textTransform: 'capitalize',
+                  textAlign: 'center',
                 }}>
                   {item.label}
                 </Text>
               </Tap>
             );
           })}
-        </View>
+        </ScrollView>
 
       </Card>
       )}

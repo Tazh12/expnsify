@@ -6,11 +6,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   slug: 'tally',
   version: '1.0.0',
   orientation: 'portrait',
-  icon: './assets/icon.png',
-  userInterfaceStyle: 'light',
+  icon: './assets/vadri-brand/app-icon-1024.png',
+  userInterfaceStyle: 'automatic',
   newArchEnabled: true,
   splash: {
-    image: './assets/icon.png',
+    image: './assets/vadri-brand/lockup.png',
     resizeMode: 'contain',
     backgroundColor: '#FBF6EA',
   },
@@ -28,12 +28,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     package: 'com.expensify.expensetracker',
     adaptiveIcon: {
-      foregroundImage: './assets/adaptive-icon.png',
-      backgroundColor: '#6B5FE6',
+      foregroundImage: './assets/vadri-brand/adaptive-icon-foreground-1024.png',
+      backgroundColor: '#FBF6EA',
     },
   },
   web: {
-    favicon: './assets/favicon.png',
+    favicon: './assets/vadri-brand/favicon-48.png',
     bundler: 'metro',
   },
   plugins: [
@@ -58,9 +58,22 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       },
     ],
     [
+      'expo-splash-screen',
+      {
+        backgroundColor: '#FBF6EA',
+        image: './assets/vadri-brand/lockup.png',
+        resizeMode: 'contain',
+        imageWidth: 248,
+        dark: {
+          backgroundColor: '#2B2238',
+          image: './assets/vadri-brand/lockup-dark.png',
+        },
+      },
+    ],
+    [
       'expo-notifications',
       {
-        icon: './assets/icon.png',
+        icon: './assets/vadri-brand/app-icon-1024.png',
         color: '#2A4343',
       },
     ],

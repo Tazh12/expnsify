@@ -24,9 +24,9 @@ export {
   paletteSwatches,
 } from './palettes';
 
-export type FontId = 'default' | 'sans' | 'mono' | 'comic';
+export type FontId = 'vadri' | 'default' | 'sans' | 'mono' | 'comic';
 
-export const FONT_IDS: FontId[] = ['default', 'sans', 'mono', 'comic'];
+export const FONT_IDS: FontId[] = ['vadri', 'default', 'sans', 'mono', 'comic'];
 
 export interface FontMap {
   regular: string;
@@ -38,14 +38,24 @@ export interface FontMap {
   serifItalic: string;
 }
 
+const GEIST_BODY = {
+  regular: 'Geist_400Regular',
+  medium: 'Geist_500Medium',
+  semibold: 'Geist_600SemiBold',
+  bold: 'Geist_700Bold',
+  italic: 'Geist_400Regular',
+};
+
 export const FONTS: Record<FontId, FontMap> = {
+  // Headings and the wordmark are Bodoni. Body and small labels stay Geist so small sizes stay clear.
+  vadri: {
+    ...GEIST_BODY,
+    serif: 'BodoniModa-SemiBold',
+    serifItalic: 'BodoniModa-SemiBoldItalic',
+  },
   default: {
-    regular:     'Geist_400Regular',
-    medium:      'Geist_500Medium',
-    semibold:    'Geist_600SemiBold',
-    bold:        'Geist_700Bold',
-    italic:      'Geist_400Regular',
-    serif:       'InstrumentSerif_400Regular',
+    ...GEIST_BODY,
+    serif: 'InstrumentSerif_400Regular',
     serifItalic: 'InstrumentSerif_400Regular_Italic',
   },
   sans: {
@@ -77,7 +87,7 @@ export const FONTS: Record<FontId, FontMap> = {
   },
 };
 
-/** Amounts stay in the Default face with tabular figures, whatever font style is selected. */
+/** Amounts stay in Geist, the numeric face, with tabular figures in every font style. */
 export function amountStyle(weight: 'regular' | 'medium' | 'semibold' | 'bold' = 'medium'): TextStyle {
   return {
     fontFamily: FONTS.default[weight],
@@ -154,7 +164,7 @@ export function buildTheme(paletteId: unknown, fontId: FontId = 'default'): Them
     glassBottom: withAlpha('#FFFFFF', isLight ? 0.22 : 0),
     glassStroke: isLight ? withAlpha('#FFFFFF', 0.7) : hairStrong,
     glassFill: withAlpha('#FFFFFF', isLight ? 0.3 : 0.06),
-    fonts: FONTS[fontId] ?? FONTS.default,
+    fonts: FONTS[fontId] ?? FONTS.vadri,
     bg: palette.background,
     bgElev: palette.surface,
     surface2: surfaceMuted,
@@ -169,7 +179,7 @@ export function buildTheme(paletteId: unknown, fontId: FontId = 'default'): Them
   };
 }
 
-export const ThemeContext = React.createContext<Theme>(buildTheme('forest', 'default'));
+export const ThemeContext = React.createContext<Theme>(buildTheme('forest', 'vadri'));
 
 export function useTheme(): Theme {
   return React.useContext(ThemeContext);
