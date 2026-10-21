@@ -45,7 +45,7 @@ export function AppShell({
             resizeMode="contain"
           />
           <Text style={{ fontSize: 14, fontWeight: '500', color: C.cream, letterSpacing: 0.02 }}>
-            expnsify
+            Vadri
           </Text>
         </View>
 

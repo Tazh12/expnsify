@@ -116,7 +116,7 @@ export function TodayScreen({
                 Build {monthTitle(key)}'s plan →
               </Text>
               <Text style={{ marginTop: 8, color: C.muted, fontSize: 15, lineHeight: 22 }}>
-                Give every dollar a job, then Today can tell you what’s left.
+                Plan every franc before you spend it, then Today can tell you what’s left.
               </Text>
             </Card>
           </Tap>
@@ -148,7 +148,7 @@ export function TodayScreen({
             >
               <Text style={{ fontSize: 13, color: summary.leftToBudget < 0 ? C.rose : C.cream }}>
                 {summary.leftToBudget === 0
-                  ? '✓ Every dollar assigned'
+                  ? '✓ Everything planned'
                   : summary.leftToBudget < 0
                     ? `Over-assigned by ${fmt(Math.abs(summary.leftToBudget), preferredCurrency)} →`
                     : `${fmt(summary.leftToBudget, preferredCurrency)} to assign →`}

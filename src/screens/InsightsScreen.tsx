@@ -148,7 +148,7 @@ export function InsightsScreen() {
   const monthLabel = month.toLocaleString('en-US', { month: 'long', year: 'numeric' });
 
   const exportCsv = async () => {
-    const path = FileSystem.cacheDirectory + 'expnsify-budget.csv';
+    const path = FileSystem.cacheDirectory + 'vadri-budget.csv';
     await FileSystem.writeAsStringAsync(path, expensesToCsv(monthExpenses, lines, convert, preferredCurrency), { encoding: FileSystem.EncodingType.UTF8 });
     await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: 'Export budget' });
   };

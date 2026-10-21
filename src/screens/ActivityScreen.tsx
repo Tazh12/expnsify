@@ -148,7 +148,7 @@ export function ActivityScreen({ onScan }: { onScan?: () => void }) {
       setAskedIds(ids);
     } catch (e) {
       if (!(e instanceof AiLimitError)) {
-        Alert.alert('Could not ask Tally', 'Try again in a moment.');
+        Alert.alert('Could not ask Vadri', 'Try again in a moment.');
       }
     } finally {
       setAsking(false);
@@ -274,7 +274,7 @@ export function ActivityScreen({ onScan }: { onScan?: () => void }) {
                       onEdit={() => setEditTarget(t)}
                       onDelete={() => Alert.alert(
                         'Delete expense?',
-                        `Remove "${t.merchant}" from your tally?`,
+                        `Remove "${t.merchant}" from your expenses?`,
                         [
                           { text: 'Cancel', style: 'cancel' },
                           { text: 'Delete', style: 'destructive', onPress: () => remove(t.id) },
@@ -307,7 +307,7 @@ export function ActivityScreen({ onScan }: { onScan?: () => void }) {
                 {q.trim().length > 0 && !askedIds && (
                   <View style={{ alignItems: 'center', marginTop: -12 }}>
                     <Tap onPress={ask} haptic style={{ minHeight: 44, paddingHorizontal: 18, borderRadius: 14, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }}>
-                      {asking ? <ActivityIndicator color={C.cream}/> : <Text style={{ color: C.cream, fontSize: 14, fontWeight: '600' }}>Ask Tally</Text>}
+                      {asking ? <ActivityIndicator color={C.cream}/> : <Text style={{ color: C.cream, fontSize: 14, fontWeight: '600' }}>Ask Vadri</Text>}
                     </Tap>
                     <Text style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>Uses one AI action</Text>
                   </View>
@@ -348,7 +348,7 @@ export function ActivityScreen({ onScan }: { onScan?: () => void }) {
           const target = detailExpense;
           Alert.alert(
             'Delete expense?',
-            `Remove "${target.merchant}" from your tally?`,
+            `Remove "${target.merchant}" from your expenses?`,
             [
               { text: 'Cancel', style: 'cancel' },
               { text: 'Delete', style: 'destructive', onPress: () => { remove(target.id); setDetailExpense(null); } },

@@ -16,7 +16,7 @@ export function UpgradeModal() {
     : 'next month';
   const title = blocked.code === 'rate_limited' ? 'Slow down a moment' : 'AI actions used up';
   const body = blocked.code === 'rate_limited'
-    ? 'Tally limits how many AI requests can run in a minute. Wait a bit, then try again. Adding an expense by hand still works.'
+    ? 'Vadri limits how many AI requests can run in a minute. Wait a bit, then try again. Adding an expense by hand still works.'
     : `You have used ${blocked.used} of ${blocked.limit} AI actions this month. They reset on ${when}. Manual entry, budgets, charts, and export keep working. Paid plans are not available yet.`;
 
   return (

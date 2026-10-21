@@ -56,7 +56,7 @@ export default function AuthScreen() {
         resizeMode="contain"
       />
       <View style={s.inner}>
-        <Text style={s.wordmark}>expnsify</Text>
+        <Text style={s.wordmark}>Vadri</Text>
         <Text style={s.sub}>Track every expense effortlessly</Text>
 
         <View style={s.tabRow}>

@@ -399,7 +399,7 @@ export function SettingsScreen({ onClose }: Props) {
       <SectionHeader title="Data"/>
       <Card style={{ padding: 4 }}>
         <SettingsRow icon={<Icon name="export" size={18} stroke={C.cream}/>} label="Export all data" detail="Every month, as CSV" onPress={async () => {
-          const path = FileSystem.cacheDirectory + 'expnsify-all.csv';
+          const path = FileSystem.cacheDirectory + 'vadri-all.csv';
           await FileSystem.writeAsStringAsync(path, expensesToCsv(expenses, lines, useRates.getState().convert, settings.preferredCurrency), { encoding: FileSystem.EncodingType.UTF8 });
           await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: 'Export all data' });
         }} isLast/>
@@ -407,7 +407,7 @@ export function SettingsScreen({ onClose }: Props) {
 
       <SectionHeader title="About"/>
       <Text style={{ textAlign: 'center', marginTop: 8, color: C.subtle, fontSize: 12 }}>
-        <Text style={{ fontFamily: C.fonts.serifItalic }}>expnsify</Text> · v{Constants.expoConfig?.version ?? '1.0.0'}
+        <Text style={{ fontFamily: C.fonts.serifItalic }}>Vadri</Text> · v{Constants.expoConfig?.version ?? '1.0.0'}
       </Text>
       </>
       )}

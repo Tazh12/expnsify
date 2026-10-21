@@ -700,7 +700,7 @@ function ScanPhase({ method }: { method: Method | null }) {
         {lines[step]}
       </Text>
       <Text style={{ marginTop: 18, fontSize: 11, color: C.subtle, letterSpacing: 0.06, textTransform: 'uppercase' }}>
-        ✦ powered by tally intelligence
+        ✦ powered by Vadri intelligence
       </Text>
     </View>
   );
