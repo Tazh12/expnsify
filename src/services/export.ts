@@ -76,7 +76,7 @@ export async function exportMonthPdf(args: {
   </style>
 </head>
 <body>
-  <h1>expnsify</h1>
+  <h1>Vadri</h1>
   <p>${escapeHtml(monthLabel)}</p>
   <div class="total">${escapeHtml(fmt(spent, currency))} spent · ${escapeHtml(fmt(leftToBudget, currency))} left to budget</div>
   <table>

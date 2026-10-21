@@ -7,7 +7,7 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>$(DEVELOPMENT_LANGUAGE)</string>
     <key>CFBundleDisplayName</key>
-    <string>Tally</string>
+    <string>Vadri</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
@@ -51,13 +51,13 @@
       <true/>
     </dict>
     <key>NSCameraUsageDescription</key>
-    <string>Tally uses the camera to scan receipts.</string>
+    <string>Vadri uses the camera to scan receipts.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>Expnsify can save where a purchase happened, only if you turn that on.</string>
+    <string>Vadri can save where a purchase happened, only if you turn that on.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Expnsify lets you log spending by voice.</string>
+    <string>Vadri lets you log spending by voice.</string>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>Tally reads receipts from your photo library.</string>
+    <string>Vadri reads receipts from your photo library.</string>
     <key>RCTNewArchEnabled</key>
     <true/>
     <key>UILaunchStoryboardName</key>
