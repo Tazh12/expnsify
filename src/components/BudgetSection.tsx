@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Animated, { Easing, FadeInDown } from 'react-native-reanimated';
 import { amountStyle, useTheme } from '../theme';
 import { Card } from './Card';
 import { Tap } from './Tap';
@@ -12,6 +13,7 @@ import type { BudgetLine, BudgetSection } from '../store/budgetTypes';
 import { SECTIONS } from '../store/budgetTypes';
 
 const OPEN_KEY = '@tally:plan-sections-open';
+const ROW_ENTER = FadeInDown.duration(260).easing(Easing.bezier(0.23, 1, 0.32, 1));
 const openCache = new Map<string, boolean>();
 let openLoaded = false;
 let openLoading: Promise<void> | null = null;
@@ -42,7 +44,7 @@ function rememberOpen(section: string, open: boolean) {
 }
 
 export function BudgetSection({
-  section, label, hint, lines, actuals, preferredCurrency, onPressLine, onTogglePaid, wide, onAddLine,
+  section, label, hint, lines, actuals, preferredCurrency, onPressLine, onTogglePaid, wide, onAddLine, animateRows,
 }: {
   section: BudgetSection;
   label?: string;
@@ -54,6 +56,8 @@ export function BudgetSection({
   onTogglePaid: (line: BudgetLine) => void;
   wide?: boolean;
   onAddLine?: () => void;
+  /** Rows added after mount slide in. Off in the Plan tab, where lines change often. */
+  animateRows?: boolean;
 }) {
   const C = useTheme();
   const { convert } = useRates();
@@ -124,7 +128,7 @@ export function BudgetSection({
             const planned = convert(line.expected, line.currency || 'USD');
             const remaining = planned - act;
             const overspend = !!(line.section !== 'income' && act > planned && planned > 0);
-            return (
+            const row = (
               <BudgetRow
                 key={line.id}
                 line={line}
@@ -137,6 +141,9 @@ export function BudgetSection({
                 wide={wide}
               />
             );
+            return animateRows
+              ? <Animated.View key={line.id} entering={ROW_ENTER}>{row}</Animated.View>
+              : row;
           })}
           {lines.length === 0 && (
             <View style={{ padding: 20, alignItems: 'center' }}>

@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Text, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { amountStyle, useTheme } from '../theme';
+import { useTheme } from '../theme';
 import { Card, CarryIncomeCard, Tap, PageHeader } from '../components';
 import { BudgetSection } from '../components/BudgetSection';
+import { AssignSummary } from '../components/AssignSummary';
 import { UpcomingPayments } from '../components/UpcomingPayments';
 import { LineEditor } from '../flows/LineEditor';
 import { useBudget } from '../store/useBudget';
@@ -11,7 +12,6 @@ import { useExpenses } from '../store/useExpenses';
 import { useRates } from '../store/useRates';
 import { useSettings } from '../store/useSettings';
 import { useBudgetGroups } from '../store/useBudgetGroups';
-import { fmt } from '../services/format';
 import { monthKey } from '../services/month';
 import { useViewMonth } from '../store/useViewMonth';
 import { incomeCarryOffers, lineActual, summarizeMonth } from '../services/budget';
@@ -124,8 +124,6 @@ export function PlanScreen() {
     return incomeCarryOffers(allLines, key).filter(o => !declined.has(o.templateKey));
   }, [allLines, key, skipCarry, declinedCarry]);
 
-  const left = summary.leftToBudget;
-  const leftColor = left < 0 ? C.alertInk : C.success;
   const saveLine = useSaveBudgetLine();
 
   const togglePaid = async (line: BudgetLine) => {
@@ -150,18 +148,11 @@ export function PlanScreen() {
         showsVerticalScrollIndicator={false}
       >
         <PageHeader title="Plan"/>
-        <Card style={{ padding: 16, marginTop: 8, marginBottom: 8 }}>
-          <Text style={{ fontSize: 15, color: C.text, lineHeight: 22 }}>
-            Income <Text style={amountStyle()}>{fmt(summary.expectedIncome, preferredCurrency)}</Text>
-            {'  −  '}
-            Assigned <Text style={amountStyle()}>{fmt(summary.assigned, preferredCurrency)}</Text>
-            {'  =  '}
-            <Text style={{ color: leftColor, ...amountStyle('semibold') }}>
-              {fmt(left, preferredCurrency)}
-            </Text>
-            <Text style={{ color: leftColor, fontFamily: C.fonts.semibold }}> to assign</Text>
-          </Text>
-        </Card>
+        <AssignSummary
+          income={summary.expectedIncome}
+          assigned={summary.assigned}
+          currency={preferredCurrency}
+        />
 
         {lines.length === 0 && (
           <Tap

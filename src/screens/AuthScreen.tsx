@@ -13,11 +13,17 @@ const GoogleSignIn = Platform.OS === 'web'
 
 type Tab = 'login' | 'register';
 
-export default function AuthScreen() {
+export default function AuthScreen({
+  initialTab = 'login',
+  onBack,
+}: {
+  initialTab?: Tab;
+  onBack?: () => void;
+} = {}) {
   const theme = useTheme();
   const { signInEmail, registerEmail, sendPasswordReset } = useAuth();
 
-  const [tab, setTab] = useState<Tab>('login');
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -53,9 +59,9 @@ export default function AuthScreen() {
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={s.inner}>
         <View style={s.lockup}>
-          <VadriLockup width={220} dark={!theme.isLight} />
+          <VadriLockup width={onBack ? 180 : 220} dark={!theme.isLight} />
         </View>
-        <Text style={s.sub}>Track every expense effortlessly</Text>
+        <Text style={s.sub}>Every dollar, a plan.</Text>
 
         <View style={s.tabRow}>
           {(['login', 'register'] as Tab[]).map(t => (
@@ -132,6 +138,12 @@ export default function AuthScreen() {
           </Pressable>
 
           <GoogleSignIn loading={loading} setLoading={setLoading} />
+
+          {onBack && (
+            <Pressable style={s.backBtn} onPress={onBack} disabled={loading}>
+              <Text style={s.forgot}>Back</Text>
+            </Pressable>
+          )}
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -162,6 +174,7 @@ function styles(theme: ReturnType<typeof useTheme>) {
     tabActive: { backgroundColor: theme.bg },
     tabText: { fontFamily: theme.fonts.regular, fontSize: 14, color: theme.muted, textAlign: 'center', width: '100%' },
     forgotBtn: { alignSelf: 'flex-end', minHeight: 44, justifyContent: 'center' },
+    backBtn: { alignSelf: 'center', minHeight: 44, minWidth: 88, alignItems: 'center', justifyContent: 'center' },
     forgot: { color: theme.muted, fontSize: 13 },
     tabTextActive: { color: theme.cream, fontFamily: theme.fonts.medium },
     form: { width: '100%', gap: 12 },

@@ -1,10 +1,10 @@
 import { create } from 'zustand';
 import { fetchUsage, type AiUsage } from '../services/groq';
-import { setAiUsageListeners } from '../services/aiUsageBridge';
+import { setAiUsageListeners, type AiBlockCode } from '../services/aiUsageBridge';
 
 interface AiUsageState extends AiUsage {
   loaded: boolean;
-  blocked: { used: number; limit: number; resetsAt: string; code: 'limit_reached' | 'rate_limited' } | null;
+  blocked: { used: number; limit: number; resetsAt: string; code: AiBlockCode } | null;
   refresh: () => Promise<void>;
   apply: (usage: AiUsage) => void;
   showBlock: (block: NonNullable<AiUsageState['blocked']>) => void;
@@ -26,7 +26,7 @@ export const useAiUsage = create<AiUsageState>((set) => ({
 
   apply: (usage) => set({ ...usage, loaded: true }),
 
-  showBlock: (blocked) => set({
+  showBlock: (blocked) => set(blocked.code === 'account_required' ? { blocked } : {
     blocked,
     used: blocked.used,
     limit: blocked.limit,

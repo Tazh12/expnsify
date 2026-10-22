@@ -26,6 +26,9 @@ import { ActivityScreen } from './src/screens/ActivityScreen';
 import { InsightsScreen } from './src/screens/InsightsScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import AuthScreen from './src/screens/AuthScreen';
+import { OnboardingScreen } from './src/screens/onboarding/OnboardingScreen';
+import { useOnboarding } from './src/store/useOnboarding';
+import { CreateAccountSheet } from './src/flows/CreateAccountSheet';
 import { AddSheet } from './src/flows/AddSheet';
 import { UpgradeModal } from './src/flows/UpgradeModal';
 import { useAiUsage } from './src/store/useAiUsage';
@@ -36,6 +39,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const SPLASH_LIGHT = '#FBF6EA';
 const SPLASH_DARK = '#2B2238';
+const ONBOARDING_THEME = buildTheme('forest', 'vadri');
 
 export default function App() {
   const colorScheme = useColorScheme();
@@ -66,9 +70,19 @@ export default function App() {
   const { isWide } = useLayout();
   useNotificationSync();
   const { setUser, setInitializing, initializing, user } = useAuth();
+  const onboardingLoaded = useOnboarding(s => s.loaded);
+  const [emailSignIn, setEmailSignIn] = useState(false);
   useEffect(() => {
-    if (fontsReady && !initializing) SplashScreen.hideAsync().catch(() => {});
-  }, [fontsReady, initializing]);
+    useOnboarding.getState().load();
+  }, []);
+  useEffect(() => {
+    if (user) setEmailSignIn(false);
+  }, [user]);
+  // Keep the splash until we know whether to show onboarding, so returning users never see it flash.
+  const booting = !fontsReady || initializing || !onboardingLoaded;
+  useEffect(() => {
+    if (!booting) SplashScreen.hideAsync().catch(() => {});
+  }, [booting]);
   const { subscribe: subCats, reset: resetCats } = useCategories();
   const { subscribe: subExp, reset: resetExp } = useExpenses();
   const { subscribe: subBudget, reset: resetBudget } = useBudget();
@@ -78,6 +92,7 @@ export default function App() {
   const unsubExp = useRef<(() => void) | null>(null);
   const unsubBudget = useRef<(() => void) | null>(null);
   const unsubGroups = useRef<(() => void) | null>(null);
+  const subscribedUid = useRef<string | null>(null);
 
   const [tab, setTab] = useState<TabId>('today');
   const [addOpen, setAddOpen] = useState(false);
@@ -113,13 +128,28 @@ export default function App() {
         setUser(firebaseUser);
         setInitializing(false);
 
+        // A guest can switch straight to another account, so drop the old listeners first.
+        if (subscribedUid.current && subscribedUid.current !== firebaseUser?.uid) {
+          unsubCats.current?.();
+          unsubExp.current?.();
+          unsubBudget.current?.();
+          unsubGroups.current?.();
+          resetCats();
+          resetExp();
+          resetBudget();
+          resetGroups();
+        }
+
         if (firebaseUser) {
           useAiUsage.getState().refresh();
+          if (subscribedUid.current === firebaseUser.uid) return;
+          subscribedUid.current = firebaseUser.uid;
           unsubCats.current = subCats(firebaseUser.uid);
           unsubExp.current = subExp(firebaseUser.uid);
           unsubBudget.current = subBudget(firebaseUser.uid);
           unsubGroups.current = subGroups(firebaseUser.uid);
         } else {
+          subscribedUid.current = null;
           unsubCats.current?.();
           unsubExp.current?.();
           unsubBudget.current?.();
@@ -171,7 +201,7 @@ export default function App() {
   const theme = buildTheme(settings.palette, settings.fontId);
   const isLight = theme.isLight;
 
-  if (!fontsReady || initializing) {
+  if (booting) {
     const splashDark = colorScheme === 'dark';
     return (
       <View style={{
@@ -192,10 +222,21 @@ export default function App() {
   }
 
   if (!user) {
+    if (emailSignIn) {
+      return (
+        <ThemeContext.Provider value={theme}>
+          <StatusBar barStyle={isLight ? 'dark-content' : 'light-content'} backgroundColor={theme.background} />
+          <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+            <AuthScreen onBack={() => setEmailSignIn(false)} />
+          </SafeAreaView>
+        </ThemeContext.Provider>
+      );
+    }
+    // Onboarding is always Forest, whatever palette was saved on this device before.
     return (
-      <ThemeContext.Provider value={theme}>
-        <StatusBar barStyle={isLight ? 'dark-content' : 'light-content'} backgroundColor={theme.background} />
-        <AuthScreen />
+      <ThemeContext.Provider value={ONBOARDING_THEME}>
+        <StatusBar barStyle="dark-content" backgroundColor={ONBOARDING_THEME.bg} />
+        <OnboardingScreen onEmail={() => setEmailSignIn(true)} />
       </ThemeContext.Provider>
     );
   }
@@ -246,10 +287,11 @@ export default function App() {
 
         <AddSheet
           open={addOpen}
-          onClose={() => { setAddOpen(false); setPendingShare(null); }}
+          onClose={() => { setAddOpen(false); setPendingShare(null); useAiUsage.getState().clearBlock(); }}
           pendingShare={pendingShare}
         />
-        <UpgradeModal />
+        {!addOpen && <UpgradeModal />}
+        <CreateAccountSheet />
 
         <Modal visible={settingsOpen} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setSettingsOpen(false)}>
           <ThemeContext.Provider value={theme}>

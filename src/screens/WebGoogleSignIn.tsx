@@ -1,8 +1,43 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, Alert, ActivityIndicator } from 'react-native';
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { GoogleAuthProvider, linkWithPopup, signInWithPopup } from 'firebase/auth';
 import { useTheme } from '../theme';
-import { firebaseAuth } from '../store/useAuth';
+import { firebaseAuth, isCancelledSignIn, useAuth } from '../store/useAuth';
+import { useAiUsage } from '../store/useAiUsage';
+
+/** Starts Google sign-in. A guest is linked to the Google account so their data is kept. */
+export function useGoogleSignIn(setLoading: (v: boolean) => void) {
+  const start = async () => {
+    setLoading(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      const current = firebaseAuth.currentUser;
+      if (current?.isAnonymous) {
+        try {
+          const linked = await linkWithPopup(current, provider);
+          useAuth.setState(s => ({ user: linked.user, rev: s.rev + 1 }));
+          useAiUsage.getState().refresh();
+        } catch (e) {
+          const code = typeof e === 'object' && e && 'code' in e ? String((e as { code: string }).code) : '';
+          if (code !== 'auth/credential-already-in-use') throw e;
+          const existing = GoogleAuthProvider.credentialFromError(e as never);
+          if (existing) await useAuth.getState().signInWithProvider(existing);
+        }
+      } else {
+        await signInWithPopup(firebaseAuth, provider);
+      }
+    } catch (e: unknown) {
+      if (!isCancelledSignIn(e)) {
+        const msg = e instanceof Error ? e.message : 'Google sign-in failed.';
+        Alert.alert('Error', msg);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { ready: true, start: () => { start(); } };
+}
 
 export function WebGoogleSignIn({
   loading,
@@ -13,22 +48,7 @@ export function WebGoogleSignIn({
 }) {
   const theme = useTheme();
   const s = styles(theme);
-
-  const onPress = async () => {
-    setLoading(true);
-    try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(firebaseAuth, provider);
-    } catch (e: unknown) {
-      const code = typeof e === 'object' && e && 'code' in e ? String((e as { code: string }).code) : '';
-      if (code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
-        const msg = e instanceof Error ? e.message : 'Google sign-in failed.';
-        Alert.alert('Error', msg);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  const google = useGoogleSignIn(setLoading);
 
   return (
     <>
@@ -39,7 +59,7 @@ export function WebGoogleSignIn({
       </View>
       <Pressable
         style={({ pressed }) => [s.googleBtn, pressed && { opacity: 0.85 }]}
-        onPress={onPress}
+        onPress={google.start}
         disabled={loading}
       >
         {loading

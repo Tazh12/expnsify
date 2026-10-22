@@ -3,7 +3,7 @@ import type { BudgetLine } from '../store/budgetTypes';
 import type { Expense, LineItem } from '../store/useExpenses';
 import * as FileSystem from 'expo-file-system/legacy';
 import { auth } from './firebase';
-import { publishAiLimit, publishAiUsage, type UsageSnapshot } from './aiUsageBridge';
+import { publishAiLimit, publishAiUsage, type AiBlockCode, type UsageSnapshot } from './aiUsageBridge';
 
 const proxyUrl = process.env.EXPO_PUBLIC_PROXY_URL ?? '';
 
@@ -43,11 +43,15 @@ export class AiLimitError extends Error {
   used: number;
   limit: number;
   resetsAt: string;
-  code: 'limit_reached' | 'rate_limited';
+  code: AiBlockCode;
 
   constructor(body: { used?: number; limit?: number; resetsAt?: string; error?: string }) {
-    super(body.error === 'rate_limited' ? 'Too many AI requests. Wait a minute and try again.' : 'You have used this month’s AI actions.');
-    this.code = body.error === 'rate_limited' ? 'rate_limited' : 'limit_reached';
+    super(
+      body.error === 'rate_limited' ? 'Too many AI requests. Wait a minute and try again.'
+        : body.error === 'account_required' ? 'Create an account to use AI.'
+          : 'You have used this month’s AI actions.',
+    );
+    this.code = body.error === 'rate_limited' || body.error === 'account_required' ? body.error : 'limit_reached';
     this.used = body.used ?? 0;
     this.limit = body.limit ?? 10;
     this.resetsAt = body.resetsAt ?? '';
@@ -94,7 +98,22 @@ async function rejectIfNotOk(label: string, res: Response): Promise<void> {
   throw new ScanRequestError('unavailable', res.status);
 }
 
+// Guests can't use AI. Stop before the request so they see the account prompt, not an error.
+function rejectGuest(): void {
+  if (!auth.currentUser?.isAnonymous) return;
+  const error = new AiLimitError({ error: 'account_required' });
+  publishAiLimit(error);
+  throw error;
+}
+
 async function throwIfLimited(res: Response): Promise<void> {
+  if (res.status === 403) {
+    const body = await res.clone().json().catch(() => ({})) as { error?: string };
+    if (body.error !== 'account_required') return;
+    const error = new AiLimitError(body);
+    publishAiLimit(error);
+    throw error;
+  }
   if (res.status !== 429) return;
   let body: { used?: number; limit?: number; resetsAt?: string; error?: string } = {};
   try {
@@ -174,6 +193,7 @@ async function scan(body: {
   lines: ScanLine[];
 }): Promise<ScannedExpense | null> {
   try {
+    rejectGuest();
     const res = await fetch(`${proxyUrl}/scan`, {
       method: 'POST',
       headers: await authHeaders({ 'Content-Type': 'application/json' }),
@@ -241,6 +261,7 @@ function audioMeta(uri: string): { mimeType: string } {
 
 export async function transcribeAudio(uri: string): Promise<string | null> {
   try {
+    rejectGuest();
     const audioBase64 = await uriToBase64(uri);
     const { mimeType } = audioMeta(uri);
     const res = await fetch(`${proxyUrl}/transcribe`, {
@@ -265,7 +286,7 @@ export async function transcribeAudio(uri: string): Promise<string | null> {
 }
 
 export async function fetchUsage(): Promise<AiUsage | null> {
-  if (!proxyUrl || !auth.currentUser) return null;
+  if (!proxyUrl || !auth.currentUser || auth.currentUser.isAnonymous) return null;
   try {
     const res = await fetch(`${proxyUrl}/usage`, { headers: await authHeaders() });
     if (!res.ok) return null;
@@ -285,6 +306,7 @@ export async function fetchInsights(
   expenses: Pick<Expense, 'merchant' | 'amount' | 'currency' | 'date' | 'category_id' | 'note' | 'line_items'>[],
   categories: { id: string; name: string }[],
 ): Promise<string[]> {
+  rejectGuest();
   const res = await fetch(`${proxyUrl}/insights`, {
     method: 'POST',
     headers: await authHeaders({ 'Content-Type': 'application/json' }),
@@ -304,6 +326,7 @@ export async function askTally(
   question: string,
   expenses: Pick<Expense, 'id' | 'merchant' | 'amount' | 'date' | 'category_id' | 'note' | 'line_items'>[],
 ): Promise<string[]> {
+  rejectGuest();
   const res = await fetch(`${proxyUrl}/ask`, {
     method: 'POST',
     headers: await authHeaders({ 'Content-Type': 'application/json' }),

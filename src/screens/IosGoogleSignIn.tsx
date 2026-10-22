@@ -2,11 +2,34 @@ import React, { useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet, Alert } from 'react-native';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
-import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
+import { GoogleAuthProvider } from 'firebase/auth';
 import { useTheme } from '../theme';
-import { IOS_CLIENT_ID, firebaseAuth } from '../store/useAuth';
+import { IOS_CLIENT_ID, useAuth } from '../store/useAuth';
 
 WebBrowser.maybeCompleteAuthSession();
+
+/** Starts Google sign-in. A guest is linked to the Google account so their data is kept. */
+export function useGoogleSignIn(setLoading: (v: boolean) => void) {
+  const signInWithProvider = useAuth(s => s.signInWithProvider);
+  const [request, googleResponse, googlePromptAsync] = Google.useAuthRequest({
+    iosClientId: IOS_CLIENT_ID,
+  });
+
+  useEffect(() => {
+    if (googleResponse?.type !== 'success') return;
+    const { id_token } = googleResponse.params;
+    const credential = GoogleAuthProvider.credential(id_token);
+    setLoading(true);
+    signInWithProvider(credential)
+      .catch((e: unknown) => {
+        const msg = e instanceof Error ? e.message : 'Google sign-in failed.';
+        Alert.alert('Error', msg);
+      })
+      .finally(() => setLoading(false));
+  }, [googleResponse, setLoading, signInWithProvider]);
+
+  return { ready: !!request, start: () => { googlePromptAsync(); } };
+}
 
 export function IosGoogleSignIn({
   loading,
@@ -16,22 +39,7 @@ export function IosGoogleSignIn({
   setLoading: (v: boolean) => void;
 }) {
   const theme = useTheme();
-  const [, googleResponse, googlePromptAsync] = Google.useAuthRequest({
-    iosClientId: IOS_CLIENT_ID,
-  });
-
-  useEffect(() => {
-    if (googleResponse?.type !== 'success') return;
-    const { id_token } = googleResponse.params;
-    const credential = GoogleAuthProvider.credential(id_token);
-    setLoading(true);
-    signInWithCredential(firebaseAuth, credential)
-      .catch((e: unknown) => {
-        const msg = e instanceof Error ? e.message : 'Google sign-in failed.';
-        Alert.alert('Error', msg);
-      })
-      .finally(() => setLoading(false));
-  }, [googleResponse, setLoading]);
+  const google = useGoogleSignIn(setLoading);
 
   const s = styles(theme);
 
@@ -44,7 +52,7 @@ export function IosGoogleSignIn({
       </View>
       <Pressable
         style={({ pressed }) => [s.googleBtn, pressed && { opacity: 0.85 }]}
-        onPress={() => googlePromptAsync()}
+        onPress={google.start}
         disabled={loading}
       >
         <Text style={s.googleText}>Continue with Google</Text>
