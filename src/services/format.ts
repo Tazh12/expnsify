@@ -41,11 +41,12 @@ export function toLocalDateISO(d: Date): string {
 
 export function currencySymbol(code: string): string {
   try {
-    return (
-      new Intl.NumberFormat('en-US', { style: 'currency', currency: code, minimumFractionDigits: 0 })
-        .formatToParts(0)
-        .find(p => p.type === 'currency')?.value ?? code
-    );
+    const nf = new Intl.NumberFormat('en-US', { style: 'currency', currency: code, minimumFractionDigits: 0 });
+    // Hermes has no formatToParts on iOS, so strip the digits from a formatted zero instead.
+    const symbol = typeof nf.formatToParts === 'function'
+      ? nf.formatToParts(0).find(p => p.type === 'currency')?.value
+      : nf.format(0).replace(/[\d\s.,\u00a0]/g, '');
+    return symbol || code;
   } catch {
     return code;
   }

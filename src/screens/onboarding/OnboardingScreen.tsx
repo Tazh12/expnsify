@@ -21,7 +21,7 @@ import { Tap } from '../../components';
 import { VadriMark } from '../../components/VadriLogo';
 import { useOnboarding } from '../../store/useOnboarding';
 import { SignInChoices, TryFreeButton } from './SignInChoices';
-import { ScanVoiceArt, WelcomeArt, ZeroBasedArt } from './OnboardingArt';
+import { CaptureArt, PlanArt, WelcomeArt } from './OnboardingArt';
 
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 
@@ -29,18 +29,22 @@ const SLIDES = [
   {
     key: 'welcome',
     Art: WelcomeArt,
+    fill: false,
     title: 'Every dollar,\na plan.',
     body: 'Set up your month in minutes. No bank login, nothing to sync.',
   },
   {
     key: 'capture',
-    Art: ScanVoiceArt,
+    Art: CaptureArt,
+    fill: false,
     title: 'Snap it. Say it.\nLogged.',
     body: 'Scan a receipt or say “coffee 4.50”. Vadri puts it on the right line of your plan.',
   },
   {
     key: 'zero',
-    Art: ZeroBasedArt,
+    Art: PlanArt,
+    // The Plan tab runs to the top of the slide and is cropped by the copy below it.
+    fill: true,
     title: 'Give every dollar\na job.',
     body: 'Income minus what you assign. When it reaches zero, your whole month has a plan.',
   },
@@ -122,8 +126,10 @@ function IntroPager({
     <View style={s.root}>
       <SafeAreaView style={{ flex: 1 }}>
         <View style={s.topBar}>
-          <Animated.View entering={FadeIn.duration(400).easing(EASE_OUT)} style={markStyle}>
-            <VadriMark width={22} />
+          <Animated.View style={markStyle}>
+            <Animated.View entering={FadeIn.duration(400).easing(EASE_OUT)}>
+              <VadriMark width={22} />
+            </Animated.View>
           </Animated.View>
           {page < LAST && (
             <Tap
@@ -150,7 +156,15 @@ function IntroPager({
             style={{ flex: 1 }}
           >
             {SLIDES.map((slide, i) => (
-              <Slide key={slide.key} index={i} width={width} scrollX={scrollX} reduced={reduced} slide={slide} />
+              <Slide
+                key={slide.key}
+                index={i}
+                active={page === i}
+                width={width}
+                scrollX={scrollX}
+                reduced={reduced}
+                slide={slide}
+              />
             ))}
             <View style={{ width }}>
               <StartPage onEmail={onEmail} busy={busy} setBusy={setBusy} />
@@ -179,9 +193,10 @@ function IntroPager({
 }
 
 function Slide({
-  index, width, scrollX, reduced, slide,
+  index, active, width, scrollX, reduced, slide,
 }: {
   index: number;
+  active: boolean;
   width: number;
   scrollX: SharedValue<number>;
   reduced: boolean;
@@ -211,17 +226,19 @@ function Slide({
 
   return (
     <View style={[s.slide, { width }]}>
-      <Animated.View style={[s.artWrap, artStyle]}>
-        <Animated.View entering={first ? FadeIn.duration(500).easing(EASE_OUT) : undefined}>
-          <Art />
+      <Animated.View style={[slide.fill ? s.artFill : s.artWrap, artStyle]}>
+        <Animated.View
+          style={slide.fill ? { flex: 1 } : { alignSelf: 'stretch', alignItems: 'center' }}
+          entering={first ? FadeIn.duration(500).easing(EASE_OUT) : undefined}
+        >
+          <Art active={active} />
         </Animated.View>
       </Animated.View>
-      <Animated.View
-        style={[s.copy, textStyle]}
-        entering={first ? FadeInDown.delay(120).duration(500).easing(EASE_OUT) : undefined}
-      >
-        <Text style={s.title} accessibilityRole="header">{slide.title}</Text>
-        <Text style={s.body}>{slide.body}</Text>
+      <Animated.View style={[s.copy, textStyle]}>
+        <Animated.View entering={first ? FadeInDown.delay(120).duration(500).easing(EASE_OUT) : undefined}>
+          <Text style={s.title} accessibilityRole="header">{slide.title}</Text>
+          <Text style={s.body}>{slide.body}</Text>
+        </Animated.View>
       </Animated.View>
     </View>
   );
@@ -293,6 +310,7 @@ function styles(C: Theme) {
     skipText: { fontFamily: C.fonts.medium, fontSize: 15, color: C.muted },
     slide: { flex: 1, paddingHorizontal: 28, paddingBottom: FOOTER_HEIGHT },
     artWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    artFill: { flex: 1, paddingTop: 4, marginBottom: 20 },
     copy: { paddingBottom: 12, maxWidth: 420 },
     title: {
       fontFamily: C.fonts.serif, fontSize: 38, lineHeight: 44,

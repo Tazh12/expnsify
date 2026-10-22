@@ -1,119 +1,311 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { useTheme, type Theme } from '../../theme';
-import { Icon } from '../../components';
+import Animated, {
+  Easing,
+  FadeIn,
+  cancelAnimation,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from '../../theme';
+import { withAlpha } from '../../theme/palettes';
+import { Card } from '../../components';
 import { VadriMark } from '../../components/VadriLogo';
+import { AssignSummary } from '../../components/AssignSummary';
+import { BudgetSection } from '../../components/BudgetSection';
+import { AmountCard, ReviewRow } from '../../components/ReviewParts';
+import { VoiceWave, useVoiceLevels } from '../../components/VoiceWave';
+import { sectionColor, type BudgetLine, type BudgetSection as SectionId } from '../../store/budgetTypes';
+import { Receipt } from './Receipt';
 
-// Small product vignettes drawn with views, so they follow the theme and stay crisp at any size.
+const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
+const EASE_IN_OUT = Easing.bezier(0.77, 0, 0.175, 1);
+const CURRENCY = 'USD';
+const noop = () => {};
 
-export function WelcomeArt() {
+export type ArtProps = { active: boolean };
+
+// ─── Slide 1 ────────────────────────────────────────────────────────────────
+
+/** The mark holds still while the field behind it breathes. */
+export function WelcomeArt({ active }: ArtProps) {
   const C = useTheme();
+  const reduced = useReducedMotion();
+  const breath = useSharedValue(1);
+
+  useEffect(() => {
+    if (!active || reduced) {
+      cancelAnimation(breath);
+      breath.set(withTiming(1, { duration: 300, easing: EASE_OUT }));
+      return;
+    }
+    breath.set(withRepeat(
+      withSequence(
+        withTiming(1.04, { duration: 2400, easing: EASE_IN_OUT }),
+        withTiming(1, { duration: 2400, easing: EASE_IN_OUT }),
+      ),
+      -1,
+    ));
+    return () => cancelAnimation(breath);
+  }, [active, reduced, breath]);
+
+  const fieldStyle = useAnimatedStyle(() => ({ transform: [{ scale: breath.get() }] }));
+
   return (
-    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{
-        position: 'absolute', width: 236, height: 236, borderRadius: 118,
-        backgroundColor: C.amber, opacity: 0.32,
-      }} />
-      <View style={{
-        position: 'absolute', width: 176, height: 176, borderRadius: 88,
-        borderWidth: 1, borderColor: C.hair,
-      }} />
+    <View style={{ width: 260, height: 260, alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View style={[{
+        position: 'absolute', width: 236, height: 236, borderRadius: 118, backgroundColor: C.amber,
+        opacity: 0.38,
+      }, fieldStyle]} />
       <VadriMark width={112} />
     </View>
   );
 }
 
-export function ScanVoiceArt() {
+// ─── Slide 2 ────────────────────────────────────────────────────────────────
+
+type CaptureStep = 'framing' | 'scanned' | 'listening' | 'heard';
+const STEP_MS: Record<CaptureStep, number> = { framing: 1100, scanned: 2400, listening: 1900, heard: 2400 };
+const NEXT: Record<CaptureStep, CaptureStep> = { framing: 'scanned', scanned: 'listening', listening: 'heard', heard: 'framing' };
+
+/** The real review screen filling in, first from a receipt, then from a spoken line. */
+export function CaptureArt({ active }: ArtProps) {
   const C = useTheme();
-  const s = styles(C);
+  const reduced = useReducedMotion();
+  const [step, setStep] = useState<CaptureStep>(reduced ? 'scanned' : 'framing');
+  const { levels, push, reset } = useVoiceLevels(22);
+
+  useEffect(() => {
+    if (reduced) { setStep('scanned'); return; }
+    if (!active) { setStep('framing'); return; }
+    const t = setTimeout(() => setStep(s => NEXT[s]), STEP_MS[step]);
+    return () => clearTimeout(t);
+  }, [active, reduced, step]);
+
+  // A spoken phrase: syllables rise and fall, then trail off. Written to a shared value, not state.
+  useEffect(() => {
+    if (step === 'framing') reset();
+    if (step !== 'listening') return;
+    let t = 0;
+    const id = setInterval(() => {
+      t += 1;
+      const syllable = Math.abs(Math.sin(t * 0.9)) * (0.55 + 0.45 * Math.abs(Math.sin(t * 0.23)));
+      const trail = t > 22 ? Math.max(0, 1 - (t - 22) / 6) : 1;
+      push((0.12 + syllable * 0.85) * trail);
+    }, 70);
+    return () => clearInterval(id);
+  }, [step, push, reset]);
+
+  const fromVoice = step === 'listening' || step === 'heard';
+  const showResult = step === 'scanned' || step === 'heard';
+
+  const receiptStyle = useAnimatedStyle(() => ({
+    opacity: withTiming(fromVoice ? 0 : 1, { duration: 280, easing: EASE_OUT }),
+  }), [fromVoice]);
+  const voiceStyle = useAnimatedStyle(() => ({
+    opacity: withTiming(fromVoice ? 1 : 0, { duration: 280, easing: EASE_OUT }),
+  }), [fromVoice]);
+  const cornersStyle = useAnimatedStyle(() => ({
+    opacity: withTiming(step === 'framing' || step === 'scanned' ? 1 : 0, { duration: 240 }),
+    transform: [{ scale: withTiming(step === 'framing' && !reduced ? 1.06 : 1, { duration: 900, easing: EASE_OUT }) }],
+  }), [step, reduced]);
+  // The review stays put, waiting, and fills in when the receipt or the voice is read.
+  const resultStyle = useAnimatedStyle(() => ({
+    opacity: withTiming(showResult ? 1 : 0.45, { duration: showResult ? 320 : 200, easing: EASE_OUT }),
+  }), [showResult]);
+
   return (
-    <View style={{ width: 280, alignItems: 'center' }}>
-      <View style={s.row}>
-        <View style={[s.card, s.receipt]}>
-          <Icon name="receipt" size={16} stroke={C.muted} />
-          <Text style={s.receiptName}>Corner Café</Text>
-          <View style={s.rule} />
-          <View style={s.receiptLine}><Text style={s.small}>Flat white</Text><Text style={s.small}>4.50</Text></View>
-          <View style={s.rule} />
-          <View style={s.receiptLine}><Text style={s.smallStrong}>Total</Text><Text style={s.smallStrong}>$4.50</Text></View>
-        </View>
-        <View style={s.voice}>
-          <Icon name="mic" size={14} stroke={C.onPrimary} />
-          <Text style={s.voiceText}>“coffee 4.50”</Text>
-        </View>
+    <View style={{ width: '100%', maxWidth: 340, alignSelf: 'center' }}>
+      <View style={{ height: 164, alignItems: 'center', justifyContent: 'center' }}>
+        <Animated.View style={[StyleSheet.absoluteFillObject, { alignItems: 'center', justifyContent: 'center' }, receiptStyle]}>
+          <View style={{ transform: [{ scale: 0.62 }] }}>
+            <Receipt />
+          </View>
+          <Animated.View pointerEvents="none" style={[s.corners, cornersStyle]}>
+            <Corner color={C.sage} style={{ top: 0, left: 0 }} />
+            <Corner color={C.sage} style={{ top: 0, right: 0, transform: [{ rotate: '90deg' }] }} />
+            <Corner color={C.sage} style={{ bottom: 0, right: 0, transform: [{ rotate: '180deg' }] }} />
+            <Corner color={C.sage} style={{ bottom: 0, left: 0, transform: [{ rotate: '270deg' }] }} />
+          </Animated.View>
+        </Animated.View>
+
+        <Animated.View style={[StyleSheet.absoluteFillObject, { alignItems: 'center', justifyContent: 'center' }, voiceStyle]}>
+          <VoiceWave levels={levels} count={22} />
+          <Text style={[s.transcript, { color: step === 'heard' ? C.cream : C.muted }]}>
+            {step === 'heard' ? '“Coffee, four fifty”' : 'Listening…'}
+          </Text>
+        </Animated.View>
       </View>
 
-      <View style={s.arrow}>
-        <Icon name="chev-d" size={18} stroke={C.subtle} />
-      </View>
-
-      <View style={[s.card, s.line]}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <Text style={s.lineName}>Coffee</Text>
-          <Text style={s.small}><Text style={s.smallStrong}>$4.50</Text> of $40</Text>
-        </View>
-        <View style={s.track}>
-          <View style={[s.fill, { width: '11%' }]} />
-        </View>
-      </View>
+      <Animated.View style={[{ marginTop: 10 }, resultStyle]}>
+        <AmountCard amount={showResult ? '4.50' : ''} currencyCode={CURRENCY} />
+        <Card style={{ overflow: 'hidden' }}>
+          <ReviewRow label="Merchant" value={showResult ? (fromVoice ? 'Coffee' : 'Corner Café') : ''} muted={!showResult} last />
+        </Card>
+      </Animated.View>
     </View>
   );
 }
 
-export function ZeroBasedArt() {
-  const C = useTheme();
-  const s = styles(C);
+function Corner({ color, style }: { color: string; style: object }) {
   return (
-    <View style={[s.card, { width: 280, padding: 22 }]}>
-      <View style={s.eqRow}><Text style={s.eqLabel}>Income</Text><Text style={s.eqValue}>$3,200</Text></View>
-      <View style={s.eqRow}><Text style={s.eqLabel}>Assigned</Text><Text style={s.eqValue}>− $3,200</Text></View>
-      <View style={[s.rule, { marginVertical: 14 }]} />
-      <View style={[s.eqRow, { alignItems: 'baseline' }]}>
-        <Text style={s.eqLabel}>Left to assign</Text>
-        <Text style={s.zero}>$0</Text>
-      </View>
-      <View style={s.tag}>
-        <Icon name="check" size={12} stroke={C.success} sw={2.2} />
-        <Text style={s.tagText}>Every dollar has a job</Text>
-      </View>
+    <View style={[{ position: 'absolute', width: 22, height: 22 }, style]}>
+      <View style={{ position: 'absolute', top: 0, left: 0, width: 22, height: 3, borderRadius: 1.5, backgroundColor: color }} />
+      <View style={{ position: 'absolute', top: 0, left: 0, width: 3, height: 22, borderRadius: 1.5, backgroundColor: color }} />
     </View>
   );
 }
 
-function styles(C: Theme) {
-  return StyleSheet.create({
-    row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    card: {
-      backgroundColor: C.surface, borderRadius: 18,
-      borderWidth: StyleSheet.hairlineWidth, borderColor: C.hairStrong,
-      shadowColor: C.shadow, shadowOpacity: 0.06, shadowRadius: 16, shadowOffset: { width: 0, height: 6 },
-    },
-    receipt: { width: 132, padding: 14, transform: [{ rotate: '-4deg' }] },
-    receiptName: { fontFamily: C.fonts.semibold, fontSize: 13, color: C.cream, marginTop: 8 },
-    receiptLine: { flexDirection: 'row', justifyContent: 'space-between' },
-    rule: { height: StyleSheet.hairlineWidth, backgroundColor: C.hairStrong, marginVertical: 8 },
-    small: { fontFamily: C.fonts.regular, fontSize: 12, color: C.muted },
-    smallStrong: { fontFamily: C.fonts.semibold, fontSize: 12, color: C.cream },
-    voice: {
-      flexDirection: 'row', alignItems: 'center', gap: 6,
-      backgroundColor: C.sage, borderRadius: 999, paddingVertical: 10, paddingHorizontal: 14,
-      transform: [{ rotate: '3deg' }],
-    },
-    voiceText: { fontFamily: C.fonts.medium, fontSize: 13, color: C.onPrimary },
-    arrow: { marginVertical: 14 },
-    line: { width: 260, padding: 16 },
-    lineName: { fontFamily: C.fonts.semibold, fontSize: 15, color: C.cream },
-    track: { height: 6, borderRadius: 3, backgroundColor: C.surfaceMuted, marginTop: 12, overflow: 'hidden' },
-    fill: { height: 6, borderRadius: 3, backgroundColor: C.sageDeep },
-    eqRow: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 4 },
-    eqLabel: { fontFamily: C.fonts.regular, fontSize: 15, color: C.muted },
-    eqValue: { fontFamily: C.fonts.medium, fontSize: 15, color: C.cream, fontVariant: ['tabular-nums'] },
-    zero: { fontFamily: C.fonts.serif, fontSize: 40, color: C.success },
-    tag: {
-      flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
-      marginTop: 14, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 999,
-      backgroundColor: C.primarySoft,
-    },
-    tagText: { fontFamily: C.fonts.medium, fontSize: 12, color: C.cream },
-  });
+// ─── Slide 3 ────────────────────────────────────────────────────────────────
+
+const PLAN: Array<{ section: SectionId; name: string; expected: number; due?: number }> = [
+  { section: 'income', name: 'Paycheck', expected: 3200 },
+  { section: 'bills', name: 'Rent', expected: 1400, due: 1 },
+  { section: 'bills', name: 'Internet', expected: 60, due: 12 },
+  { section: 'bills', name: 'Phone', expected: 45, due: 18 },
+  { section: 'variable', name: 'Groceries', expected: 450 },
+  { section: 'variable', name: 'Coffee', expected: 40 },
+  { section: 'variable', name: 'Dining out', expected: 180 },
+  { section: 'variable', name: 'Transport', expected: 125 },
+  { section: 'investments', name: 'Savings', expected: 900 },
+];
+const GROUPS: Array<{ id: SectionId; label: string }> = [
+  { id: 'income', label: 'Income' },
+  { id: 'bills', label: 'Bills' },
+  { id: 'variable', label: 'Variable' },
+  { id: 'investments', label: 'Investments' },
+];
+const ACTUALS: Record<string, number> = { 'plan-5': 4.5 };
+const PLAN_SCALE = 0.78;
+const SUMMARY_SLACK = 20;
+
+function sampleLines(): BudgetLine[] {
+  return PLAN.map((l, i) => ({
+    id: `plan-${i}`,
+    month: '2026-10',
+    section: l.section,
+    name: l.name,
+    expected: l.expected,
+    actualOverride: null,
+    currency: CURRENCY,
+    dueDay: l.due ?? null,
+    automated: false,
+    notifyDaysBefore: null,
+    observation: null,
+    recurring: true,
+    repeatEvery: 'month',
+    sortOrder: i,
+    templateKey: l.name.toLowerCase().replace(/\s+/g, '-'),
+    paid: false,
+    paidAt: null,
+    paidSource: null,
+    color: sectionColor(l.section),
+  }));
 }
+
+/** The real Plan tab, filling in line by line until nothing is left to assign. */
+export function PlanArt({ active }: ArtProps) {
+  const C = useTheme();
+  const reduced = useReducedMotion();
+  const all = useMemo(sampleLines, []);
+  // Income is there from the start, so the count runs down from the whole paycheck.
+  const [shown, setShown] = useState(reduced ? all.length : 1);
+  const settle = useSharedValue(1);
+
+  useEffect(() => {
+    if (!active || shown >= all.length) return;
+    const t = setTimeout(() => setShown(n => n + 1), shown === 1 ? 420 : 170);
+    return () => clearTimeout(t);
+  }, [active, shown, all.length]);
+
+  useEffect(() => {
+    if (shown < all.length || reduced) return;
+    settle.set(withDelay(80, withSequence(
+      withTiming(1.035, { duration: 180, easing: EASE_OUT }),
+      withTiming(1, { duration: 320, easing: EASE_IN_OUT }),
+    )));
+  }, [shown, all.length, reduced, settle]);
+
+  const visible = all.slice(0, shown);
+  const income = visible.filter(l => l.section === 'income').reduce((s, l) => s + l.expected, 0);
+  const assigned = visible.filter(l => l.section !== 'income').reduce((s, l) => s + l.expected, 0);
+  const settleStyle = useAnimatedStyle(() => ({ transform: [{ scale: settle.get() }] }));
+
+  // The summary stays pinned; the lines scroll up as each one lands, so the newest is always in view.
+  const [width, setWidth] = useState(0);
+  const [viewportH, setViewportH] = useState(0);
+  const [contentH, setContentH] = useState(0);
+  const offset = useSharedValue(0);
+  useEffect(() => {
+    const target = Math.max(0, contentH * PLAN_SCALE - viewportH);
+    offset.set(reduced ? target : withTiming(target, { duration: 320, easing: EASE_OUT }));
+  }, [contentH, viewportH, reduced, offset]);
+  const scrollStyle = useAnimatedStyle(() => ({ transform: [{ translateY: -offset.get() }] }));
+
+  return (
+    <View
+      pointerEvents="none"
+      onLayout={e => setWidth(e.nativeEvent.layout.width)}
+      style={{ width: '100%', maxWidth: 380, alignSelf: 'center', flex: 1 }}
+    >
+      {width > 0 && (
+        <>
+          <View style={{ width: width / PLAN_SCALE, transform: [{ scale: PLAN_SCALE }], transformOrigin: 'top left' }}>
+            <Animated.View style={settleStyle}>
+              <AssignSummary income={income} assigned={assigned} currency={CURRENCY} />
+            </Animated.View>
+          </View>
+          {/* The scaled summary keeps its full-size layout box; pull the lines up under it. */}
+          <View
+            style={{ flex: 1, overflow: 'hidden', marginTop: 12 - SUMMARY_SLACK }}
+            onLayout={e => setViewportH(e.nativeEvent.layout.height)}
+          >
+            <Animated.View style={scrollStyle}>
+              {/* The Plan tab at a little under full size, like a screenshot, so more of the month fits. */}
+              <View
+                style={{ width: width / PLAN_SCALE, transform: [{ scale: PLAN_SCALE }], transformOrigin: 'top left' }}
+                onLayout={e => setContentH(e.nativeEvent.layout.height)}
+              >
+                {GROUPS.map(g => {
+                  const lines = visible.filter(l => l.section === g.id);
+                  if (lines.length === 0) return null;
+                  return (
+                    <Animated.View key={g.id} entering={reduced ? undefined : FadeIn.duration(220)}>
+                      <BudgetSection
+                        section={g.id}
+                        label={g.label}
+                        lines={lines}
+                        actuals={ACTUALS}
+                        preferredCurrency={CURRENCY}
+                        onPressLine={noop}
+                        onTogglePaid={noop}
+                        animateRows={!reduced}
+                      />
+                    </Animated.View>
+                  );
+                })}
+              </View>
+            </Animated.View>
+            {/* Scroll-edge fade, so whatever slides under the summary dissolves instead of being sliced. */}
+            <LinearGradient
+              colors={[C.bg, withAlpha(C.bg, 0)]}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 28 }}
+              pointerEvents="none"
+            />
+          </View>
+        </>
+      )}
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
+  corners: { position: 'absolute', width: 150, height: 160 },
+  transcript: { fontSize: 15, marginTop: 18, fontStyle: 'italic' },
+});

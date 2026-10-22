@@ -61,7 +61,7 @@ export default function AuthScreen({
         <View style={s.lockup}>
           <VadriLockup width={onBack ? 180 : 220} dark={!theme.isLight} />
         </View>
-        <Text style={s.sub}>Track every expense effortlessly</Text>
+        <Text style={s.sub}>Every dollar, a plan.</Text>
 
         <View style={s.tabRow}>
           {(['login', 'register'] as Tab[]).map(t => (

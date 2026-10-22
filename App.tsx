@@ -287,10 +287,10 @@ export default function App() {
 
         <AddSheet
           open={addOpen}
-          onClose={() => { setAddOpen(false); setPendingShare(null); }}
+          onClose={() => { setAddOpen(false); setPendingShare(null); useAiUsage.getState().clearBlock(); }}
           pendingShare={pendingShare}
         />
-        <UpgradeModal />
+        {!addOpen && <UpgradeModal />}
         <CreateAccountSheet />
 
         <Modal visible={settingsOpen} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setSettingsOpen(false)}>

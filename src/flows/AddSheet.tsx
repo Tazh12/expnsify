@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, Modal, TouchableOpacity, Pressable, ScrollView, Image,
+  View, Text, Modal, Pressable, ScrollView, Image,
   Animated, TextInput, Platform, Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,9 +21,15 @@ import { useRates, FRANKFURTER_CURRENCIES } from '../store/useRates';
 import { useAuth } from '../store/useAuth';
 import { scanImage, scanText, scanPdf, transcribeAudio, takeAiLimit, ScanRequestError, type ScannedExpense } from '../services/groq';
 import { capturePurchaseLocation } from '../services/location';
-import { uid, fmt, currencySymbol, parseLocalDate, toLocalDateISO } from '../services/format';
+import { uid, fmt, parseLocalDate, toLocalDateISO } from '../services/format';
 import { CurrencyPickerSheet } from '../components/CurrencyPicker';
+import { AmountCard, ReviewRow } from '../components/ReviewParts';
+import { VoiceWave, meterToLevel, useVoiceLevels } from '../components/VoiceWave';
+import type { SharedValue } from 'react-native-reanimated';
 import { CompletePaymentSheet } from './CompletePaymentSheet';
+import { AiBlockedCard } from './UpgradeModal';
+import { useAccountPrompt } from './CreateAccountSheet';
+import { useAiUsage } from '../store/useAiUsage';
 import { matchLine } from '../services/budget';
 import { monthKey, expenseMonthKey, slugKey, uniqueTemplateKey, monthTitle } from '../services/month';
 import { useViewMonth } from '../store/useViewMonth';
@@ -149,6 +155,9 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
   const C = useTheme();
   const [phase, setPhase] = useState<Phase>('pick');
   const [method, setMethod] = useState<Method | null>(null);
+  const [listening, setListening] = useState(false);
+  const blocked = useAiUsage(st => st.blocked);
+  const voice = useVoiceLevels();
   const [scanned, setScanned] = useState<ScannedExpense | null>(null);
   const [receiptUri, setReceiptUri] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'done'>('idle');
@@ -397,10 +406,15 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
       });
+      voice.reset();
+      setListening(true);
       const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY,
+        { ...Audio.RecordingOptionsPresets.HIGH_QUALITY, isMeteringEnabled: true },
+        (status) => { if (status.isRecording) voice.push(meterToLevel(status.metering)); },
+        60,
       );
       await new Promise(r => setTimeout(r, 5000));
+      setListening(false);
       await recording.stopAndUnloadAsync();
       const uri = recording.getURI();
       try {
@@ -420,6 +434,7 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
       const data = text;
       goReview(data, undefined, 'voice');
     } catch (e) {
+      setListening(false);
       console.error('voice error', e);
       const detail = e instanceof Error ? e.message.split('\n')[0] : 'Please try again.';
       failScan(detail, 'Could not record');
@@ -469,9 +484,27 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
     <>
       <BottomSheet visible={open} onClose={onClose}>
         <View style={{ paddingHorizontal: 20, position: 'relative' }}>
-          {phase === 'pick' && <PickPhase onPick={startScan} onClose={onClose} onDropFile={(uri, mime) => ingestFile(uri, mime, 'share')}/>}
+          {phase === 'pick' && blocked && (
+            // Shown in the sheet: iOS won't present the notice's own modal on top of this one.
+            <View style={{ paddingBottom: 8 }}>
+              <AiBlockedCard
+                blocked={blocked}
+                onDismiss={() => useAiUsage.getState().clearBlock()}
+                onCreateAccount={() => {
+                  useAiUsage.getState().clearBlock();
+                  onClose();
+                  setTimeout(() => useAccountPrompt.getState().show(), 450);
+                }}
+              />
+            </View>
+          )}
+          {phase === 'pick' && !blocked && <PickPhase onPick={startScan} onClose={onClose} onDropFile={(uri, mime) => ingestFile(uri, mime, 'share')}/>}
           {phase === 'coach' && <VoiceCoach onStart={startVoice} onClose={() => setPhase('pick')}/>}
-          {phase === 'scan' && <ScanPhase method={method}/>}
+          {phase === 'scan' && (
+            method === 'voice' && listening
+              ? <ListeningPhase levels={voice.levels}/>
+              : <ScanPhase method={method}/>
+          )}
           {phase === 'review' && !completeOpen && (
             <ReviewPhase
               scanned={scanned}
@@ -682,11 +715,26 @@ function VoiceCoach({ onStart, onClose }: { onStart: () => void; onClose: () => 
   );
 }
 
+function ListeningPhase({ levels }: { levels: SharedValue<number[]> }) {
+  const C = useTheme();
+  return (
+    <View style={{ paddingVertical: 28, alignItems: 'center' }}>
+      <VoiceWave levels={levels}/>
+      <Text style={{ fontFamily: C.fonts.serif, fontSize: 22, color: C.cream, textAlign: 'center', marginTop: 22 }}>
+        Listening…
+      </Text>
+      <Text style={{ fontSize: 13, color: C.muted, marginTop: 6, textAlign: 'center' }}>
+        Merchant, amount, and the budget line
+      </Text>
+    </View>
+  );
+}
+
 function ScanPhase({ method }: { method: Method | null }) {
   const C = useTheme();
   const [step, setStep] = useState(0);
   const lines = method === 'voice'
-    ? ['Listening…', 'Picking up the amount…', 'Matching your budget…']
+    ? ['Picking up the amount…', 'Matching your budget…', 'Almost done…']
     : ['Reading the receipt…', 'Matching a budget line…', 'Almost done…'];
 
   useEffect(() => {
@@ -843,31 +891,15 @@ function ReviewPhase({
           {scanned?.confidence != null ? `  ✦ ${Math.round(scanned.confidence * 100)}% sure` : ''}
         </Text>
 
-        <Card style={{ padding: 20, marginBottom: 12 }}>
-          <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.06, textTransform: 'uppercase' }}>Amount</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginTop: 20 }}>
-            <Text style={{ fontSize: 16, color: C.muted, lineHeight: 64 }}>
-              {currencySymbol(currencyCode)}
-            </Text>
-            <TextInput
-              value={amount}
-              onChangeText={setAmount}
-              keyboardType="decimal-pad"
-              style={{ ...amountStyle('semibold'), fontSize: 52, lineHeight: 64, color: C.text, flex: 1 }}
-              placeholderTextColor={C.muted}
-              placeholder="0.00"
-            />
-            <Tap onPress={() => setCurrencyPickerOpen(true)} accessibilityLabel="Change currency" style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 8, minHeight: 44 }}>
-              <Text style={{ fontSize: 13, color: C.muted }}>{currencyCode}</Text>
-              <Icon name="chev-r" size={11} stroke={C.muted}/>
-            </Tap>
-          </View>
-          {currencyCode !== preferredCurrency && !!amount && parseFloat(amount) > 0 && (
-            <Text style={{ fontSize: 12, color: C.muted, marginTop: 6, ...amountStyle('regular') }}>
-              ≈ {fmt(convert(parseFloat(amount) || 0, currencyCode), preferredCurrency)} converted
-            </Text>
-          )}
-        </Card>
+        <AmountCard
+          amount={amount}
+          currencyCode={currencyCode}
+          onChangeAmount={setAmount}
+          onPressCurrency={() => setCurrencyPickerOpen(true)}
+          footnote={currencyCode !== preferredCurrency && !!amount && parseFloat(amount) > 0
+            ? `≈ ${fmt(convert(parseFloat(amount) || 0, currencyCode), preferredCurrency)} converted`
+            : null}
+        />
 
         <Card style={{ overflow: 'hidden', marginBottom: 12 }}>
           <ReviewRow label="Merchant" value={merchant} onEdit={setMerchant} last/>
@@ -1245,28 +1277,3 @@ function BudgetLinePicker({
   );
 }
 
-function ReviewRow({ label, value, onEdit, onPress, muted, last }: { label: string; value: string; onEdit?: (v: string) => void; onPress?: () => void; muted?: boolean; last?: boolean }) {
-  const C = useTheme();
-  const [editing, setEditing] = useState(false);
-
-  return (
-    <TouchableOpacity onPress={() => (onPress ? onPress() : setEditing(true))} style={{
-      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-      padding: 14, paddingHorizontal: 16,
-      borderBottomWidth: last ? 0 : 0.5, borderBottomColor: C.hair,
-    }}>
-      <Text style={{ fontSize: 13, color: C.muted }}>{label}</Text>
-      {editing && onEdit && !onPress ? (
-        <TextInput
-          value={value}
-          onChangeText={onEdit}
-          onBlur={() => setEditing(false)}
-          autoFocus
-          style={{ fontSize: 14, color: C.cream, textAlign: 'right', minWidth: 120 }}
-        />
-      ) : (
-        <Text style={{ fontSize: 14, color: muted ? C.muted : C.cream }}>{value || '—'}</Text>
-      )}
-    </TouchableOpacity>
-  );
-}
