@@ -1,3 +1,5 @@
+export type AiBlockCode = 'limit_reached' | 'rate_limited' | 'account_required';
+
 export interface UsageSnapshot {
   used: number;
   limit: number;
@@ -6,7 +8,7 @@ export interface UsageSnapshot {
 }
 
 type UsageListener = (usage: UsageSnapshot) => void;
-type LimitListener = (block: { used: number; limit: number; resetsAt: string; code: 'limit_reached' | 'rate_limited' }) => void;
+type LimitListener = (block: { used: number; limit: number; resetsAt: string; code: AiBlockCode }) => void;
 
 let onUsage: UsageListener | null = null;
 let onLimit: LimitListener | null = null;
@@ -20,6 +22,6 @@ export function publishAiUsage(usage: UsageSnapshot) {
   onUsage?.(usage);
 }
 
-export function publishAiLimit(block: { used: number; limit: number; resetsAt: string; code: 'limit_reached' | 'rate_limited' }) {
+export function publishAiLimit(block: { used: number; limit: number; resetsAt: string; code: AiBlockCode }) {
   onLimit?.(block);
 }

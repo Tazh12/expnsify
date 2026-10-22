@@ -14,6 +14,7 @@ import { monthKey } from '../services/month';
 import { useAiUsage } from '../store/useAiUsage';
 import { aiRemainingLabel } from '../flows/UpgradeModal';
 import { deleteAccount } from '../services/account';
+import { useAccountPrompt } from '../flows/CreateAccountSheet';
 import { expensesToCsv } from '../services/export';
 import { LinesGroupsScreen } from './LinesGroupsScreen';
 import * as Sharing from 'expo-sharing';
@@ -37,6 +38,7 @@ export function SettingsScreen({ onClose }: Props) {
   const { expenses } = useExpenses();
   const { lines } = useBudget();
   const { user, signOut, updateDisplayName } = useAuth();
+  const showAccountPrompt = useAccountPrompt(st => st.show);
 
   const rates = useRates();
   const aiUsed = useAiUsage(s => s.used);
@@ -83,13 +85,27 @@ export function SettingsScreen({ onClose }: Props) {
   }
 
   function handleSignOut() {
+    if (isGuest) {
+      Alert.alert('Sign out of guest mode?', 'You have no account, so your plan and spending will be lost. Create an account to keep them.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign out and lose data', style: 'destructive', onPress: () => signOut() },
+      ]);
+      return;
+    }
     Alert.alert('Sign out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign out', style: 'destructive', onPress: () => signOut() },
     ]);
   }
 
-  const displayName = user?.displayName || user?.email?.split('@')[0] || 'You';
+  const isGuest = !!user?.isAnonymous;
+  const displayName = user?.displayName || user?.email?.split('@')[0] || (isGuest ? 'Guest' : 'You');
+
+  function openCreateAccount() {
+    onClose();
+    // Settings is its own modal. Let it close before the account sheet presents.
+    setTimeout(showAccountPrompt, 400);
+  }
 
   if (panel === 'lines') {
     return <LinesGroupsScreen onClose={() => setPanel('main')} />;
@@ -149,11 +165,24 @@ export function SettingsScreen({ onClose }: Props) {
               <Icon name="edit" size={12} stroke={C.subtle} sw={1.8}/>
             </View>
           </Tap>
-          <Text style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{user?.email ?? ''}</Text>
+          <Text style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+            {isGuest ? 'Create an account to keep your data' : user?.email ?? ''}
+          </Text>
+          {isGuest && (
+            <Tap onPress={handleSignOut} hitSlop={10} style={{ alignSelf: 'flex-start', marginTop: 6 }}>
+              <Text style={{ fontSize: 12, color: C.muted, textDecorationLine: 'underline' }}>Sign out</Text>
+            </Tap>
+          )}
         </View>
-        <Tap onPress={handleSignOut} style={{ padding: 6 }}>
-          <Text style={{ fontSize: 12, color: C.muted }}>Sign out</Text>
-        </Tap>
+        {isGuest ? (
+          <Tap onPress={openCreateAccount} haptic style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: C.sage }}>
+            <Text style={{ fontSize: 12, color: C.onPrimary, fontWeight: '600' }}>Create account</Text>
+          </Tap>
+        ) : (
+          <Tap onPress={handleSignOut} style={{ padding: 6 }}>
+            <Text style={{ fontSize: 12, color: C.muted }}>Sign out</Text>
+          </Tap>
+        )}
       </Card>
 
       {panel === 'main' && (

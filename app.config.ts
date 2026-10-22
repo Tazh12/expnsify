@@ -17,6 +17,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     bundleIdentifier: 'com.expensify.ExpenseTracker',
     supportsTablet: false,
+    usesAppleSignIn: true,
     googleServicesFile: './GoogleService-Info.plist',
     infoPlist: {
       NSCameraUsageDescription: 'Vadri uses the camera to scan receipts.',

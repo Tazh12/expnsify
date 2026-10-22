@@ -26,6 +26,9 @@ import { ActivityScreen } from './src/screens/ActivityScreen';
 import { InsightsScreen } from './src/screens/InsightsScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import AuthScreen from './src/screens/AuthScreen';
+import { OnboardingScreen } from './src/screens/onboarding/OnboardingScreen';
+import { useOnboarding } from './src/store/useOnboarding';
+import { CreateAccountSheet } from './src/flows/CreateAccountSheet';
 import { AddSheet } from './src/flows/AddSheet';
 import { UpgradeModal } from './src/flows/UpgradeModal';
 import { useAiUsage } from './src/store/useAiUsage';
@@ -36,6 +39,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const SPLASH_LIGHT = '#FBF6EA';
 const SPLASH_DARK = '#2B2238';
+const ONBOARDING_THEME = buildTheme('forest', 'vadri');
 
 export default function App() {
   const colorScheme = useColorScheme();
@@ -66,9 +70,19 @@ export default function App() {
   const { isWide } = useLayout();
   useNotificationSync();
   const { setUser, setInitializing, initializing, user } = useAuth();
+  const onboardingLoaded = useOnboarding(s => s.loaded);
+  const [emailSignIn, setEmailSignIn] = useState(false);
   useEffect(() => {
-    if (fontsReady && !initializing) SplashScreen.hideAsync().catch(() => {});
-  }, [fontsReady, initializing]);
+    useOnboarding.getState().load();
+  }, []);
+  useEffect(() => {
+    if (user) setEmailSignIn(false);
+  }, [user]);
+  // Keep the splash until we know whether to show onboarding, so returning users never see it flash.
+  const booting = !fontsReady || initializing || !onboardingLoaded;
+  useEffect(() => {
+    if (!booting) SplashScreen.hideAsync().catch(() => {});
+  }, [booting]);
   const { subscribe: subCats, reset: resetCats } = useCategories();
   const { subscribe: subExp, reset: resetExp } = useExpenses();
   const { subscribe: subBudget, reset: resetBudget } = useBudget();
@@ -171,7 +185,7 @@ export default function App() {
   const theme = buildTheme(settings.palette, settings.fontId);
   const isLight = theme.isLight;
 
-  if (!fontsReady || initializing) {
+  if (booting) {
     const splashDark = colorScheme === 'dark';
     return (
       <View style={{
@@ -192,10 +206,21 @@ export default function App() {
   }
 
   if (!user) {
+    if (emailSignIn) {
+      return (
+        <ThemeContext.Provider value={theme}>
+          <StatusBar barStyle={isLight ? 'dark-content' : 'light-content'} backgroundColor={theme.background} />
+          <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+            <AuthScreen onBack={() => setEmailSignIn(false)} />
+          </SafeAreaView>
+        </ThemeContext.Provider>
+      );
+    }
+    // Onboarding is always Forest, whatever palette was saved on this device before.
     return (
-      <ThemeContext.Provider value={theme}>
-        <StatusBar barStyle={isLight ? 'dark-content' : 'light-content'} backgroundColor={theme.background} />
-        <AuthScreen />
+      <ThemeContext.Provider value={ONBOARDING_THEME}>
+        <StatusBar barStyle="dark-content" backgroundColor={ONBOARDING_THEME.bg} />
+        <OnboardingScreen onEmail={() => setEmailSignIn(true)} />
       </ThemeContext.Provider>
     );
   }
@@ -250,6 +275,7 @@ export default function App() {
           pendingShare={pendingShare}
         />
         <UpgradeModal />
+        <CreateAccountSheet />
 
         <Modal visible={settingsOpen} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setSettingsOpen(false)}>
           <ThemeContext.Provider value={theme}>

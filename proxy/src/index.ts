@@ -92,9 +92,14 @@ async function verifyUid(req: Request, env: Env): Promise<string | Response> {
     },
   );
   if (!res.ok) return err('unauthorized', 401);
-  const body = await res.json() as { users?: { localId?: string }[] };
-  const uid = body.users?.[0]?.localId;
+  const body = await res.json() as {
+    users?: { localId?: string; email?: string; providerUserInfo?: unknown[] }[];
+  };
+  const user = body.users?.[0];
+  const uid = user?.localId;
   if (!uid) return err('unauthorized', 401);
+  // Guests (anonymous auth) have no linked provider. AI needs an account.
+  if (!user?.email && !user?.providerUserInfo?.length) return err('account_required', 403);
   return uid;
 }
 
