@@ -24,6 +24,8 @@ import { capturePurchaseLocation } from '../services/location';
 import { uid, fmt, parseLocalDate, toLocalDateISO } from '../services/format';
 import { CurrencyPickerSheet } from '../components/CurrencyPicker';
 import { AmountCard, ReviewRow } from '../components/ReviewParts';
+import { auth } from '../services/firebase';
+import { publishAiLimit } from '../services/aiUsageBridge';
 import { VoiceWave, meterToLevel, useVoiceLevels } from '../components/VoiceWave';
 import type { SharedValue } from 'react-native-reanimated';
 import { CompletePaymentSheet } from './CompletePaymentSheet';
@@ -312,6 +314,12 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
   };
 
   const startScan = async (m: Method) => {
+    // Guests can't use AI. Say so before the camera or the mic, not after.
+    if (m !== 'manual' && auth.currentUser?.isAnonymous) {
+      publishAiLimit({ used: 0, limit: 0, resetsAt: '', code: 'account_required' });
+      setPhase('pick');
+      return;
+    }
     if (m === 'voice') {
       setMethod(m);
       setPhase('coach');

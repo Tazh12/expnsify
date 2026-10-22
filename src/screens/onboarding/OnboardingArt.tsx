@@ -12,9 +12,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme';
-import { withAlpha } from '../../theme/palettes';
 import { Card } from '../../components';
 import { VadriMark } from '../../components/VadriLogo';
 import { AssignSummary } from '../../components/AssignSummary';
@@ -138,7 +136,7 @@ export function CaptureArt({ active }: ArtProps) {
         <Animated.View style={[StyleSheet.absoluteFillObject, { alignItems: 'center', justifyContent: 'center' }, voiceStyle]}>
           <VoiceWave levels={levels} count={22} />
           <Text style={[s.transcript, { color: step === 'heard' ? C.cream : C.muted }]}>
-            {step === 'heard' ? '“Coffee, four fifty”' : 'Listening…'}
+            {step === 'heard' ? '“Coffee 4.50”' : 'Listening…'}
           </Text>
         </Animated.View>
       </View>
@@ -183,7 +181,7 @@ const GROUPS: Array<{ id: SectionId; label: string }> = [
 ];
 const ACTUALS: Record<string, number> = { 'plan-5': 4.5 };
 const PLAN_SCALE = 0.78;
-const SUMMARY_SLACK = 20;
+const CARD_MARGIN = 8;
 
 function sampleLines(): BudgetLine[] {
   return PLAN.map((l, i) => ({
@@ -237,67 +235,71 @@ export function PlanArt({ active }: ArtProps) {
   const assigned = visible.filter(l => l.section !== 'income').reduce((s, l) => s + l.expected, 0);
   const settleStyle = useAnimatedStyle(() => ({ transform: [{ scale: settle.get() }] }));
 
-  // The summary stays pinned; the lines scroll up as each one lands, so the newest is always in view.
+  // The summary is pinned like a sticky header; the lines scroll up under it as each one lands,
+  // so the newest is always in view and the crop always sits at the card's edge.
   const [width, setWidth] = useState(0);
   const [viewportH, setViewportH] = useState(0);
+  const [headerH, setHeaderH] = useState(0);
+  const [cardH, setCardH] = useState(0);
   const [contentH, setContentH] = useState(0);
   const offset = useSharedValue(0);
   useEffect(() => {
-    const target = Math.max(0, contentH * PLAN_SCALE - viewportH);
+    const target = Math.max(0, headerH + 10 + contentH * PLAN_SCALE - viewportH);
     offset.set(reduced ? target : withTiming(target, { duration: 320, easing: EASE_OUT }));
-  }, [contentH, viewportH, reduced, offset]);
+  }, [headerH, contentH, viewportH, reduced, offset]);
   const scrollStyle = useAnimatedStyle(() => ({ transform: [{ translateY: -offset.get() }] }));
+  const scaled = { width: width / PLAN_SCALE, transform: [{ scale: PLAN_SCALE }], transformOrigin: 'top left' } as const;
 
   return (
     <View
       pointerEvents="none"
-      onLayout={e => setWidth(e.nativeEvent.layout.width)}
-      style={{ width: '100%', maxWidth: 380, alignSelf: 'center', flex: 1 }}
+      onLayout={e => {
+        setWidth(e.nativeEvent.layout.width);
+        setViewportH(e.nativeEvent.layout.height);
+      }}
+      style={{ width: '100%', maxWidth: 380, alignSelf: 'center', flex: 1, overflow: 'hidden' }}
     >
       {width > 0 && (
         <>
-          <View style={{ width: width / PLAN_SCALE, transform: [{ scale: PLAN_SCALE }], transformOrigin: 'top left' }}>
-            <Animated.View style={settleStyle}>
-              <AssignSummary income={income} assigned={assigned} currency={CURRENCY} />
-            </Animated.View>
-          </View>
-          {/* The scaled summary keeps its full-size layout box; pull the lines up under it. */}
-          <View
-            style={{ flex: 1, overflow: 'hidden', marginTop: 12 - SUMMARY_SLACK }}
-            onLayout={e => setViewportH(e.nativeEvent.layout.height)}
-          >
-            <Animated.View style={scrollStyle}>
-              {/* The Plan tab at a little under full size, like a screenshot, so more of the month fits. */}
-              <View
-                style={{ width: width / PLAN_SCALE, transform: [{ scale: PLAN_SCALE }], transformOrigin: 'top left' }}
-                onLayout={e => setContentH(e.nativeEvent.layout.height)}
+          <Animated.View style={[{ paddingTop: headerH + 10 }, scrollStyle]}>
+            {/* The Plan tab at a little under full size, like a screenshot, so more of the month fits. */}
+            <View style={scaled} onLayout={e => setContentH(e.nativeEvent.layout.height)}>
+              {GROUPS.map(g => {
+                const lines = visible.filter(l => l.section === g.id);
+                if (lines.length === 0) return null;
+                return (
+                  <Animated.View key={g.id} entering={reduced ? undefined : FadeIn.duration(220)}>
+                    <BudgetSection
+                      section={g.id}
+                      label={g.label}
+                      lines={lines}
+                      actuals={ACTUALS}
+                      preferredCurrency={CURRENCY}
+                      onPressLine={noop}
+                      onTogglePaid={noop}
+                      animateRows={!reduced}
+                    />
+                  </Animated.View>
+                );
+              })}
+            </View>
+          </Animated.View>
+
+          {/* An opaque band behind the card, ending exactly at its drawn bottom edge. */}
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 1, backgroundColor: C.bg }}>
+            {/* The scaled card keeps its full-size layout box (8pt bottom margin included); trim it to the drawn edge. */}
+            <View style={[scaled, { marginBottom: headerH - cardH }]}>
+              <Animated.View
+                style={settleStyle}
+                onLayout={e => {
+                  const h = e.nativeEvent.layout.height;
+                  setCardH(h);
+                  setHeaderH((h - CARD_MARGIN) * PLAN_SCALE);
+                }}
               >
-                {GROUPS.map(g => {
-                  const lines = visible.filter(l => l.section === g.id);
-                  if (lines.length === 0) return null;
-                  return (
-                    <Animated.View key={g.id} entering={reduced ? undefined : FadeIn.duration(220)}>
-                      <BudgetSection
-                        section={g.id}
-                        label={g.label}
-                        lines={lines}
-                        actuals={ACTUALS}
-                        preferredCurrency={CURRENCY}
-                        onPressLine={noop}
-                        onTogglePaid={noop}
-                        animateRows={!reduced}
-                      />
-                    </Animated.View>
-                  );
-                })}
-              </View>
-            </Animated.View>
-            {/* Scroll-edge fade, so whatever slides under the summary dissolves instead of being sliced. */}
-            <LinearGradient
-              colors={[C.bg, withAlpha(C.bg, 0)]}
-              style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 28 }}
-              pointerEvents="none"
-            />
+                <AssignSummary income={income} assigned={assigned} currency={CURRENCY} />
+              </Animated.View>
+            </View>
           </View>
         </>
       )}

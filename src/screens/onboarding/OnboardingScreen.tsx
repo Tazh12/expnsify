@@ -30,6 +30,7 @@ const SLIDES = [
     key: 'welcome',
     Art: WelcomeArt,
     fill: false,
+    artLabel: 'The Vadri mark.',
     title: 'Every dollar,\na plan.',
     body: 'Set up your month in minutes. No bank login, nothing to sync.',
   },
@@ -37,6 +38,7 @@ const SLIDES = [
     key: 'capture',
     Art: CaptureArt,
     fill: false,
+    artLabel: 'A café receipt, then a spoken entry, each filling in a $4.50 coffee expense.',
     title: 'Snap it. Say it.\nLogged.',
     body: 'Scan a receipt or say “coffee 4.50”. Vadri puts it on the right line of your plan.',
   },
@@ -45,6 +47,7 @@ const SLIDES = [
     Art: PlanArt,
     // The Plan tab runs to the top of the slide and is cropped by the copy below it.
     fill: true,
+    artLabel: 'The Plan tab. $3,200 of income, all of it assigned. $0 left to assign.',
     title: 'Give every dollar\na job.',
     body: 'Income minus what you assign. When it reaches zero, your whole month has a plan.',
   },
@@ -53,6 +56,7 @@ const SLIDES = [
 const PAGES = SLIDES.length + 1;
 const LAST = PAGES - 1;
 const FOOTER_HEIGHT = 115;
+const ART_GAP = 20;
 
 export function OnboardingScreen({ onEmail }: { onEmail: () => void }) {
   const C = useTheme();
@@ -223,20 +227,45 @@ function Slide({
 
   const { Art } = slide;
   const first = index === 0;
+  // With large text the real UI can outgrow its space; scale it down to fit rather than run into the copy.
+  const [room, setRoom] = useState(0);
+  const [natural, setNatural] = useState(0);
+  const space = room - ART_GAP;
+  const fit = room > 0 && natural > space ? space / natural : 1;
 
   return (
     <View style={[s.slide, { width }]}>
-      <Animated.View style={[slide.fill ? s.artFill : s.artWrap, artStyle]}>
+      <Animated.View
+        style={[slide.fill ? s.artFill : s.artWrap, fit < 1 && { justifyContent: 'flex-start' }, artStyle]}
+        onLayout={e => setRoom(e.nativeEvent.layout.height)}
+      >
         <Animated.View
           style={slide.fill ? { flex: 1 } : { alignSelf: 'stretch', alignItems: 'center' }}
           entering={first ? FadeIn.duration(500).easing(EASE_OUT) : undefined}
         >
-          <Art active={active} />
+          {/* The art reuses real, inert controls. VoiceOver reads it as one picture instead. */}
+          <View
+            accessible
+            accessibilityRole="image"
+            accessibilityLabel={slide.artLabel}
+            onLayout={slide.fill ? undefined : e => setNatural(e.nativeEvent.layout.height)}
+            style={slide.fill
+              ? { flex: 1, alignSelf: 'stretch' }
+              : { alignSelf: 'stretch', alignItems: 'center', transform: [{ scale: fit }], transformOrigin: 'top center' }}
+          >
+            <View
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+              style={slide.fill ? { flex: 1 } : { alignSelf: 'stretch', alignItems: 'center' }}
+            >
+              <Art active={active} />
+            </View>
+          </View>
         </Animated.View>
       </Animated.View>
       <Animated.View style={[s.copy, textStyle]}>
         <Animated.View entering={first ? FadeInDown.delay(120).duration(500).easing(EASE_OUT) : undefined}>
-          <Text style={s.title} accessibilityRole="header">{slide.title}</Text>
+          <Text style={s.title} accessibilityRole="header" maxFontSizeMultiplier={1.15}>{slide.title}</Text>
           <Text style={s.body}>{slide.body}</Text>
         </Animated.View>
       </Animated.View>
