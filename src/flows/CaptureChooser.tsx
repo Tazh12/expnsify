@@ -17,6 +17,7 @@ const GAP = 10;
 
 const OPTIONS: { id: CaptureMethod; icon: string; label: string }[] = [
   { id: 'photo', icon: 'cam', label: 'Scan receipt' },
+  { id: 'image', icon: 'image', label: 'Photo library' },
   { id: 'voice', icon: 'mic', label: 'Say it' },
   { id: 'manual', icon: 'edit', label: 'Type it' },
   { id: 'file', icon: 'doc', label: 'Upload PDF' },

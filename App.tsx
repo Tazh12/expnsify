@@ -103,6 +103,8 @@ export default function App() {
   const [chooserAnchor, setChooserAnchor] = useState<AddAnchor | null>(null);
   const [introOpen, setIntroOpen] = useState(false);
   const introAnchor = useRef<AddAnchor | null>(null);
+  // Where the menu opens from, so cancelling a method can bring it back in the same place.
+  const lastAnchor = useRef<AddAnchor | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const month = useViewMonth(s => s.month);
   const shiftMonth = useViewMonth(s => s.shiftMonth);
@@ -259,8 +261,15 @@ export default function App() {
     return { x: width / 2 - 28, y: height - 22 - 66, width: 56, height: 56 };
   };
   const continueCapture = (cameraFirst: boolean, anchor: AddAnchor | null) => {
+    lastAnchor.current = anchor ?? fallbackAnchor();
     if (cameraFirst) openAdd('photo');
-    else setChooserAnchor(anchor ?? fallbackAnchor());
+    else setChooserAnchor(lastAnchor.current);
+  };
+  const backToChoice = () => {
+    setAddOpen(false);
+    setAddMethod(undefined);
+    useAiUsage.getState().clearBlock();
+    setChooserAnchor(lastAnchor.current ?? fallbackAnchor());
   };
   const requestCapture = (anchor?: AddAnchor) => {
     // The camera can't open on web, so it always gets the full picker.
@@ -341,6 +350,7 @@ export default function App() {
           onClose={() => { setAddOpen(false); setAddMethod(undefined); setPendingShare(null); useAiUsage.getState().clearBlock(); }}
           pendingShare={pendingShare}
           initialMethod={addMethod}
+          onBackToChoice={backToChoice}
         />
         {!addOpen && <UpgradeModal />}
         <CreateAccountSheet />
