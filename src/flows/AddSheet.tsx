@@ -95,6 +95,7 @@ function initialSpendLineId(
 
 type Phase = 'pick' | 'coach' | 'scan' | 'review';
 type Method = 'photo' | 'image' | 'voice' | 'file' | 'manual';
+export type CaptureMethod = Method;
 
 async function uriToBase64(uri: string): Promise<string> {
   if (Platform.OS === 'web' || uri.startsWith('blob:') || uri.startsWith('data:')) {
@@ -151,9 +152,13 @@ interface AddSheetProps {
   onClose: () => void;
   editExpense?: Expense;
   pendingShare?: { uri: string; mimeType?: string } | null;
+  /** Start straight into this method on open. Without it the sheet shows its full picker. */
+  initialMethod?: Method;
+  /** With initialMethod: cancelling goes back to the capture menu instead of this sheet's picker. */
+  onBackToChoice?: () => void;
 }
 
-export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetProps) {
+export function AddSheet({ open, onClose, editExpense, pendingShare, initialMethod, onBackToChoice }: AddSheetProps) {
   const C = useTheme();
   const [phase, setPhase] = useState<Phase>('pick');
   const [method, setMethod] = useState<Method | null>(null);
@@ -182,9 +187,9 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
     setSaveState('idle');
     setCompleteOpen(false);
     setMatchedLine(null);
-    if (Platform.OS !== 'web' && !editExpense && !pendingShare?.uri && !launchedCamera.current) {
+    if (initialMethod && !editExpense && !pendingShare?.uri && !launchedCamera.current) {
       launchedCamera.current = true;
-      startScan('photo');
+      startScan(initialMethod);
     }
   }, [open]);
 
@@ -201,6 +206,14 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
     else doneScale.setValue(0.6);
   }, [saveState]);
 
+  // Started from the capture menu: there is no picker here to fall back to, so return to the menu.
+  const fromMenu = !!initialMethod && !!onBackToChoice;
+  const backToChoice = () => {
+    if (fromMenu) onBackToChoice!();
+    else setPhase('pick');
+  };
+  const cancel = fromMenu ? onBackToChoice! : onClose;
+
   const failScan = (
     message = 'Could not read that receipt. Try again, or enter it manually.',
     title = 'Could not read that receipt',
@@ -210,7 +223,7 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
       return;
     }
     Alert.alert(title, message);
-    setPhase('pick');
+    backToChoice();
   };
 
   const goReview = (data: ScannedExpense | null, uri?: string, src: TxnSource = 'manual') => {
@@ -236,7 +249,7 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
       "Scanning isn't available right now",
       'You can add it by hand.',
       [
-        { text: 'Not now', style: 'cancel', onPress: () => setPhase('pick') },
+        { text: 'Not now', style: 'cancel', onPress: backToChoice },
         { text: 'Type it', onPress: () => { setMethod('manual'); goReview(null); } },
       ],
     );
@@ -261,7 +274,7 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
       }
       if (e instanceof ScanRequestError && e.kind === 'auth') {
         Alert.alert('Please sign in again.');
-        setPhase('pick');
+        backToChoice();
         return null;
       }
       if (e instanceof ScanRequestError) {
@@ -332,12 +345,14 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
           const { status } = await ImagePicker.requestCameraPermissionsAsync();
           if (status !== 'granted') {
             Alert.alert('Camera access needed', 'Please enable camera access in Settings to scan receipts.');
+            backToChoice();
             return;
           }
         } else {
           const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
           if (status !== 'granted') {
             Alert.alert('Photo library access needed', 'Please enable photo library access in Settings to upload receipts.');
+            backToChoice();
             return;
           }
         }
@@ -346,7 +361,7 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
           ? await ImagePicker.launchCameraAsync({ base64: true, quality: 0.5, mediaTypes: ['images'] })
           : await ImagePicker.launchImageLibraryAsync({ base64: true, quality: 0.5, mediaTypes: ['images'] });
 
-        if (result.canceled || !result.assets[0]) return;
+        if (result.canceled || !result.assets[0]) { backToChoice(); return; }
         setPhase('scan');
         const asset = result.assets[0];
         const manipulated = await ImageManipulator.manipulateAsync(
@@ -375,7 +390,7 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
           ],
           copyToCacheDirectory: true,
         });
-        if (result.canceled || !result.assets?.[0]) return;
+        if (result.canceled || !result.assets?.[0]) { backToChoice(); return; }
         const asset = result.assets[0];
         await ingestFile(asset.uri, asset.mimeType ?? guessMime(asset.uri, asset.name), 'pdf');
       } else {
@@ -385,7 +400,7 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
       if (e instanceof ScanRequestError) {
         if (e.kind === 'auth') {
           Alert.alert('Please sign in again.');
-          setPhase('pick');
+          backToChoice();
         } else {
           offerManualEntry();
         }
@@ -397,7 +412,7 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
       } else {
         Alert.alert('Something went wrong', 'Could not process the file. Please try again.');
       }
-      setPhase('pick');
+      backToChoice();
     }
   };
 
@@ -406,7 +421,7 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
       const perm = await Audio.requestPermissionsAsync();
       if (perm.status !== 'granted') {
         Alert.alert('Microphone access needed', 'Please enable microphone access in Settings to log spending by voice.');
-        setPhase('pick');
+        backToChoice();
         return;
       }
       setPhase('scan');
@@ -490,14 +505,15 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
 
   return (
     <>
-      <BottomSheet visible={open} onClose={onClose}>
+      {/* From the menu, the sheet stays hidden while the camera or a picker is up, so nothing sits behind it. */}
+      <BottomSheet visible={open && (!fromMenu || phase !== 'pick' || !!blocked || saveState !== 'idle')} onClose={saveState === 'idle' ? cancel : onClose}>
         <View style={{ paddingHorizontal: 20, position: 'relative' }}>
           {phase === 'pick' && blocked && (
             // Shown in the sheet: iOS won't present the notice's own modal on top of this one.
             <View style={{ paddingBottom: 8 }}>
               <AiBlockedCard
                 blocked={blocked}
-                onDismiss={() => useAiUsage.getState().clearBlock()}
+                onDismiss={() => { useAiUsage.getState().clearBlock(); if (fromMenu) onBackToChoice!(); }}
                 onCreateAccount={() => {
                   useAiUsage.getState().clearBlock();
                   onClose();
@@ -507,7 +523,7 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
             </View>
           )}
           {phase === 'pick' && !blocked && <PickPhase onPick={startScan} onClose={onClose} onDropFile={(uri, mime) => ingestFile(uri, mime, 'share')}/>}
-          {phase === 'coach' && <VoiceCoach onStart={startVoice} onClose={() => setPhase('pick')}/>}
+          {phase === 'coach' && <VoiceCoach onStart={startVoice} onClose={backToChoice}/>}
           {phase === 'scan' && (
             method === 'voice' && listening
               ? <ListeningPhase levels={voice.levels}/>
@@ -520,7 +536,7 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
               matchedLine={matchedLine}
               method={method}
               onSave={onClose}
-              onClose={onClose}
+              onClose={cancel}
               setSaveState={setSaveState}
               editExpense={editExpense}
             />

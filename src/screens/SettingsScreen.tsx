@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, ScrollView, Alert, TextInput } from 'react-native';
+import { View, Text, ScrollView, Alert, TextInput, Platform } from 'react-native';
 import { BottomSheet } from '../components/BottomSheet';
 import { FONTS, PALETTES, THEME_OPTIONS, paletteSwatches, useTheme, type FontId } from '../theme';
 import { Card, Icon, Tap, Toggle, PageHeader, SectionHeader, SettingsRow } from '../components';
@@ -414,6 +414,17 @@ export function SettingsScreen({ onClose }: Props) {
           detail={settings.notifyBudget ? `Budget on the ${ordinalDay(settings.budgetReminderDay)}` : 'Off'}
           onPress={() => setNotifyOpen(true)}
         />
+        {Platform.OS !== 'web' && (
+          <SettingsRow
+            icon={<Icon name="cam" size={18} stroke={C.cream}/>}
+            label="Open camera right away"
+            detail={settings.openCameraRightAway ? 'On' : 'Off'}
+            control={<Toggle on={settings.openCameraRightAway} onChange={v => {
+              settings.set('openCameraRightAway', v);
+              settings.set('captureIntroSeen', true);
+            }}/>}
+          />
+        )}
         <SettingsRow
           icon={<Icon name="pin" size={18} stroke={C.cream}/>}
           label="Save purchase location"

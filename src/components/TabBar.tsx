@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -6,6 +6,7 @@ import { useTheme } from '../theme';
 import { Icon } from './Icon';
 
 export type TabId = 'today' | 'plan' | 'activity' | 'insights';
+export type AddAnchor = { x: number; y: number; width: number; height: number };
 
 const TABS: { id: TabId; icon: string; label: string }[] = [
   { id: 'today', icon: 'cal', label: 'Today' },
@@ -17,11 +18,17 @@ const TABS: { id: TabId; icon: string; label: string }[] = [
 interface Props {
   tab: TabId;
   onTab: (id: TabId) => void;
-  onAdd: () => void;
+  onAdd: (anchor?: AddAnchor) => void;
 }
 
 export function TabBar({ tab, onTab, onAdd }: Props) {
   const C = useTheme();
+  const addRef = useRef<View>(null);
+  const pressAdd = () => {
+    const node = addRef.current;
+    if (!node) return onAdd();
+    node.measureInWindow((x, y, width, height) => onAdd({ x, y, width, height }));
+  };
 
   return (
     <View style={{
@@ -53,7 +60,8 @@ export function TabBar({ tab, onTab, onAdd }: Props) {
         {TABS.slice(0, 2).map(t => <TabItem key={t.id} item={t} active={tab === t.id} onPress={() => onTab(t.id)}/>)}
 
         <TouchableOpacity
-          onPress={onAdd}
+          ref={addRef}
+          onPress={pressAdd}
           activeOpacity={0.8}
           accessibilityLabel="Scan"
           style={{ width: 56, height: 56, borderRadius: 28, overflow: 'hidden', marginHorizontal: 4 }}
