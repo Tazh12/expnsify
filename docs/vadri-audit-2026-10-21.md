@@ -104,7 +104,7 @@ Sizes: S = under half a day, M = 1–3 days, L = more than 3 days. "Needs you" m
 
 ### Phase 3: before the App Store (the long pole)
 
-**Step 10. RevenueCat + StoreKit (L, needs you).** `react-native-purchases` (native module, needs a dev/EAS build, not Expo Go). Use the Firebase uid as the RevenueCat app user id. One entitlement, e.g. `pro`. Products: $4.99/month, $34.99/year with a 7-day free trial, and nothing else: **no lifetime option** (your latest message). Both products sit in one subscription group, and the 7-day free trial is an introductory offer on the yearly plan, as decision 10 reads. Say so if the monthly plan should have the trial too. Build a real paywall (replace `UpgradeModal`), a `usePro()` store, **Restore purchases** in Settings, and Terms/Privacy links on the paywall (verify against guideline 3.1.2). Files: new `src/store/usePro.ts`, new paywall in `src/flows/`, `UpgradeModal.tsx`, `SettingsScreen.tsx`, `App.tsx`.
+**Step 10. RevenueCat + StoreKit (L, needs you).** `react-native-purchases` (native module, needs a dev/EAS build, not Expo Go). Use the Firebase uid as the RevenueCat app user id. One entitlement, e.g. `pro`. Products: $4.99/month and $34.99/year, each with a 7-day free trial, and nothing else: **no lifetime option** (your latest message). Both products sit in one subscription group, and the 7-day free trial is an introductory offer on **both** plans (confirmed). Check that RevenueCat treats the trial as once per Apple ID per subscription group, so a person cannot restart it by switching plans. Build a real paywall (replace `UpgradeModal`), a `usePro()` store, **Restore purchases** in Settings, and Terms/Privacy links on the paywall (verify against guideline 3.1.2). Files: new `src/store/usePro.ts`, new paywall in `src/flows/`, `UpgradeModal.tsx`, `SettingsScreen.tsx`, `App.tsx`.
 Needs you: Paid Applications agreement plus banking and tax info in App Store Connect (products do not load without them), subscription group and products, RevenueCat project and iOS public SDK key, App Store Connect API / In-App Purchase key for RevenueCat, and Small Business Program enrollment (15% instead of 30%). Test with sandbox accounts in a TestFlight build.
 
 **Step 11. Worker reads Pro from RevenueCat (M, needs you).** Replace the manual `plan:{uid}` flag. Two parts: (a) a `/rc-webhook` route that checks a shared-secret header and writes `plan:{uid}` with an expiry; (b) a fallback that calls RevenueCat's REST subscriber endpoint with the secret key when a user has no fresh KV plan (webhooks can lag right after purchase), then caches the result. Handle lapse and refund. Files: `proxy/src/index.ts:101-109`, `proxy/wrangler.toml` (secrets). Needs you: RevenueCat webhook URL and secret, `wrangler secret put`.
@@ -156,13 +156,18 @@ Needs you: Paid Applications agreement plus banking and tax info in App Store Co
 2. **Ask Vadri:** only on the empty search, as now. After a free user's 2 questions it is hidden and an upgrade prompt shows. Step 6.
 3. **Light/Dark/System:** a setting. Light = Forest, Dark = Plum night, System follows the iPhone. Pro themes stay locked. Step 12.
 4. **Monthly Review:** a card at the top of Insights at the start of each month, one AI sentence; Worker prompt changed to one sentence. Step 5.
-5. **Pricing:** monthly $4.99 and yearly $34.99 with a 7-day trial. **No lifetime option** (this replaces the earlier $99.99 / $79.99 answer). Step 10.
+5. **Pricing:** monthly $4.99 and yearly $34.99, both with a 7-day trial. **No lifetime option** (this replaces the earlier $99.99 / $79.99 answer). Step 10.
 6. **TestFlight:** external testers (30–50) via a public link. Step 7.
 7. **Budgets and tabs:** keep exactly as they are. No plan step touches them.
 
-### Small things I assumed (tell me if any is wrong)
+### Confirmed assumptions (2026-10-22)
 
-- The Review sentence is generated on tap, cached per month, and shown from the 1st until dismissed (step 5).
+- The Review sentence is generated on tap and cached for the month (step 5).
 - The default appearance is Light, so Forest stays the default (step 12).
 - Pro themes unlock for Pro subscribers once Pro exists (step 12).
-- Email/PDF/text parses keep counting as receipt scans (step 2).
+- Email/PDF/text parses count as receipt scans (step 2).
+- The 7-day trial applies to both the monthly and yearly plans (step 10).
+
+### Still my default, not explicitly confirmed
+
+- The Review card shows from the 1st of the month until dismissed, and only when the previous month has expenses (step 5).
