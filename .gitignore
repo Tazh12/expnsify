@@ -12,3 +12,6 @@ web-build/
 proxy/node_modules/
 .DS_Store
 Screenshot *.png
+
+# Strategy docs live in Notion
+docs/strategy/
