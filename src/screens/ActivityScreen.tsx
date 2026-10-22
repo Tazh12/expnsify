@@ -6,6 +6,7 @@ import {
 import { BottomSheet } from '../components/BottomSheet';
 import { amountStyle, useTheme } from '../theme';
 import { Card, Icon, Tap, TxnRow, PageHeader, EmptyState } from '../components';
+import { useOpenRow } from '../store/useOpenRow';
 import { useExpenses, type Expense } from '../store/useExpenses';
 import { useCategories } from '../store/useCategories';
 import { useBudget } from '../store/useBudget';
@@ -162,6 +163,7 @@ export function ActivityScreen({ onScan }: { onScan?: () => void }) {
     <>
       <ScrollView
         style={{ flex: 1 }}
+        onScrollBeginDrag={() => useOpenRow.getState().setOpen(null)}
         contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
       >
