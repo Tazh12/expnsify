@@ -92,6 +92,7 @@ export default function App() {
   const unsubExp = useRef<(() => void) | null>(null);
   const unsubBudget = useRef<(() => void) | null>(null);
   const unsubGroups = useRef<(() => void) | null>(null);
+  const subscribedUid = useRef<string | null>(null);
 
   const [tab, setTab] = useState<TabId>('today');
   const [addOpen, setAddOpen] = useState(false);
@@ -127,13 +128,28 @@ export default function App() {
         setUser(firebaseUser);
         setInitializing(false);
 
+        // A guest can switch straight to another account, so drop the old listeners first.
+        if (subscribedUid.current && subscribedUid.current !== firebaseUser?.uid) {
+          unsubCats.current?.();
+          unsubExp.current?.();
+          unsubBudget.current?.();
+          unsubGroups.current?.();
+          resetCats();
+          resetExp();
+          resetBudget();
+          resetGroups();
+        }
+
         if (firebaseUser) {
           useAiUsage.getState().refresh();
+          if (subscribedUid.current === firebaseUser.uid) return;
+          subscribedUid.current = firebaseUser.uid;
           unsubCats.current = subCats(firebaseUser.uid);
           unsubExp.current = subExp(firebaseUser.uid);
           unsubBudget.current = subBudget(firebaseUser.uid);
           unsubGroups.current = subGroups(firebaseUser.uid);
         } else {
+          subscribedUid.current = null;
           unsubCats.current?.();
           unsubExp.current?.();
           unsubBudget.current?.();

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Platform } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -17,6 +17,7 @@ import {
   type User,
 } from 'firebase/auth';
 import { auth } from '../services/firebase';
+import { useAiUsage } from './useAiUsage';
 
 // iOS client ID from GoogleService-Info.plist
 const IOS_CLIENT_ID = '731021875778-laus2dhcqbcbc81pvqj3ddb8vepfaokm.apps.googleusercontent.com';
@@ -38,6 +39,21 @@ interface AuthState {
   sendPasswordReset: (email: string) => Promise<void>;
 }
 
+/** A guest's data can't move into an account that already exists. Ask before leaving it behind. */
+function confirmLeaveGuest(): Promise<boolean> {
+  const title = 'Switch to your existing account?';
+  const message = 'This account already has Vadri data. What you added as a guest won’t come over.';
+  if (Platform.OS === 'web') {
+    return Promise.resolve(typeof window !== 'undefined' && window.confirm(`${title}\n\n${message}`));
+  }
+  return new Promise(resolve => {
+    Alert.alert(title, message, [
+      { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+      { text: 'Switch', style: 'destructive', onPress: () => resolve(true) },
+    ], { cancelable: true, onDismiss: () => resolve(false) });
+  });
+}
+
 function errorCode(e: unknown): string {
   return typeof e === 'object' && e && 'code' in e ? String((e as { code: unknown }).code) : '';
 }
@@ -50,6 +66,7 @@ export const useAuth = create<AuthState>((set, get) => ({
   setInitializing: (v) => set({ initializing: v }),
 
   signInEmail: async (email, password) => {
+    if (auth.currentUser?.isAnonymous && !(await confirmLeaveGuest())) return;
     await signInWithEmailAndPassword(auth, email, password);
   },
 
@@ -61,6 +78,7 @@ export const useAuth = create<AuthState>((set, get) => ({
       : await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(cred.user, { displayName });
     set({ user: cred.user, rev: get().rev + 1 });
+    if (current?.isAnonymous) useAiUsage.getState().refresh();
   },
 
   signInGuest: async () => {
@@ -76,9 +94,11 @@ export const useAuth = create<AuthState>((set, get) => ({
     try {
       const linked = await linkWithCredential(current, credential);
       set({ user: linked.user, rev: get().rev + 1 });
+      useAiUsage.getState().refresh();
     } catch (e) {
       if (errorCode(e) !== 'auth/credential-already-in-use') throw e;
-      // That Apple or Google account already has Vadri data. Switch to it.
+      // That Apple or Google account already has Vadri data. Switch to it if they agree.
+      if (!(await confirmLeaveGuest())) return;
       const existing = OAuthProvider.credentialFromError(e as never)
         ?? GoogleAuthProvider.credentialFromError(e as never)
         ?? credential;

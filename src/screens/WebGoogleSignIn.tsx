@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet, Alert, ActivityIndicator } from 'rea
 import { GoogleAuthProvider, linkWithPopup, signInWithPopup } from 'firebase/auth';
 import { useTheme } from '../theme';
 import { firebaseAuth, isCancelledSignIn, useAuth } from '../store/useAuth';
+import { useAiUsage } from '../store/useAiUsage';
 
 /** Starts Google sign-in. A guest is linked to the Google account so their data is kept. */
 export function useGoogleSignIn(setLoading: (v: boolean) => void) {
@@ -15,6 +16,7 @@ export function useGoogleSignIn(setLoading: (v: boolean) => void) {
         try {
           const linked = await linkWithPopup(current, provider);
           useAuth.setState(s => ({ user: linked.user, rev: s.rev + 1 }));
+          useAiUsage.getState().refresh();
         } catch (e) {
           const code = typeof e === 'object' && e && 'code' in e ? String((e as { code: string }).code) : '';
           if (code !== 'auth/credential-already-in-use') throw e;
