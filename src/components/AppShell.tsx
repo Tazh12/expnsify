@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { View, Text } from 'react-native';
 import { useTheme } from '../theme';
 import { Tap } from './Tap';
 import { Icon } from './Icon';
-import { TabBar, type TabId } from './TabBar';
+import { TabBar, type TabId, type AddAnchor } from './TabBar';
 import { VadriMark, VadriWordmark } from './VadriLogo';
 
 const NAV: { id: TabId; icon: string; label: string }[] = [
@@ -18,11 +18,12 @@ export function AppShell({
 }: {
   tab: TabId;
   onTab: (id: TabId) => void;
-  onAdd: () => void;
+  onAdd: (anchor?: AddAnchor) => void;
   isWide: boolean;
   children: React.ReactNode;
 }) {
   const C = useTheme();
+  const addRef = useRef<View>(null);
 
   if (!isWide) {
     return (
@@ -65,12 +66,16 @@ export function AppShell({
           );
         })}
 
-        <Tap onPress={onAdd} haptic accessibilityLabel="Scan or add an expense" style={{
-          marginTop: 18, backgroundColor: C.sage, borderRadius: 14,
-          paddingVertical: 12, alignItems: 'center',
-        }}>
-          <Text style={{ color: C.onPrimary, fontWeight: '600', fontSize: 14 }}>Scan / Add</Text>
-        </Tap>
+        <View ref={addRef} collapsable={false} style={{ marginTop: 18 }}>
+          <Tap
+            onPress={() => addRef.current?.measureInWindow((x, y, width, height) => onAdd({ x, y, width, height }))}
+            haptic
+            accessibilityLabel="Scan or add an expense"
+            style={{ backgroundColor: C.sage, borderRadius: 14, paddingVertical: 12, alignItems: 'center' }}
+          >
+            <Text style={{ color: C.onPrimary, fontWeight: '600', fontSize: 14 }}>Scan / Add</Text>
+          </Tap>
+        </View>
       </View>
       <View style={{ flex: 1 }}>{children}</View>
     </View>

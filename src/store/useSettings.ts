@@ -17,6 +17,8 @@ export interface Settings {
   budgetReminderDay: number;
   notifyDueDates: boolean;
   captureLocation: boolean;
+  openCameraRightAway: boolean;
+  captureIntroSeen: boolean;
 }
 
 const DEFAULTS: Settings = {
@@ -31,6 +33,8 @@ const DEFAULTS: Settings = {
   budgetReminderDay: 1,
   notifyDueDates: true,
   captureLocation: false,
+  openCameraRightAway: true,
+  captureIntroSeen: false,
 };
 
 const KEY = '@tally:settings';
@@ -54,6 +58,8 @@ function snapshot(current: SettingsState): Settings {
     budgetReminderDay: current.budgetReminderDay,
     notifyDueDates: current.notifyDueDates,
     captureLocation: current.captureLocation,
+    openCameraRightAway: current.openCameraRightAway,
+    captureIntroSeen: current.captureIntroSeen,
   };
 }
 

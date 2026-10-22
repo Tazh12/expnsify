@@ -95,6 +95,7 @@ function initialSpendLineId(
 
 type Phase = 'pick' | 'coach' | 'scan' | 'review';
 type Method = 'photo' | 'image' | 'voice' | 'file' | 'manual';
+export type CaptureMethod = Method;
 
 async function uriToBase64(uri: string): Promise<string> {
   if (Platform.OS === 'web' || uri.startsWith('blob:') || uri.startsWith('data:')) {
@@ -151,9 +152,11 @@ interface AddSheetProps {
   onClose: () => void;
   editExpense?: Expense;
   pendingShare?: { uri: string; mimeType?: string } | null;
+  /** Start straight into this method on open. Without it the sheet shows its full picker. */
+  initialMethod?: Method;
 }
 
-export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetProps) {
+export function AddSheet({ open, onClose, editExpense, pendingShare, initialMethod }: AddSheetProps) {
   const C = useTheme();
   const [phase, setPhase] = useState<Phase>('pick');
   const [method, setMethod] = useState<Method | null>(null);
@@ -182,9 +185,9 @@ export function AddSheet({ open, onClose, editExpense, pendingShare }: AddSheetP
     setSaveState('idle');
     setCompleteOpen(false);
     setMatchedLine(null);
-    if (Platform.OS !== 'web' && !editExpense && !pendingShare?.uri && !launchedCamera.current) {
+    if (initialMethod && !editExpense && !pendingShare?.uri && !launchedCamera.current) {
       launchedCamera.current = true;
-      startScan('photo');
+      startScan(initialMethod);
     }
   }, [open]);
 

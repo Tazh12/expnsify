@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, StatusBar, Modal, SafeAreaView, Image, AppState, Platform, useColorScheme,
+  View, StatusBar, Modal, SafeAreaView, Image, AppState, Platform, useColorScheme, Dimensions,
 } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts, InstrumentSerif_400Regular, InstrumentSerif_400Regular_Italic } from '@expo-google-fonts/instrument-serif';
@@ -19,7 +19,7 @@ import { useAuth, onAuthStateChanged, firebaseAuth } from './src/store/useAuth';
 import { useLayout } from './src/hooks/useLayout';
 import { AppShell } from './src/components/AppShell';
 import { AppHeader } from './src/components/AppHeader';
-import type { TabId } from './src/components/TabBar';
+import type { TabId, AddAnchor } from './src/components/TabBar';
 import { TodayScreen } from './src/screens/TodayScreen';
 import { PlanScreen } from './src/screens/PlanScreen';
 import { ActivityScreen } from './src/screens/ActivityScreen';
@@ -29,10 +29,13 @@ import AuthScreen from './src/screens/AuthScreen';
 import { OnboardingScreen } from './src/screens/onboarding/OnboardingScreen';
 import { useOnboarding } from './src/store/useOnboarding';
 import { CreateAccountSheet } from './src/flows/CreateAccountSheet';
-import { AddSheet } from './src/flows/AddSheet';
+import { AddSheet, type CaptureMethod } from './src/flows/AddSheet';
+import { CaptureChooser } from './src/flows/CaptureChooser';
+import { CaptureIntroSheet } from './src/flows/CaptureIntroSheet';
 import { UpgradeModal } from './src/flows/UpgradeModal';
 import { useAiUsage } from './src/store/useAiUsage';
 import { useViewMonth } from './src/store/useViewMonth';
+import { useOpenRow } from './src/store/useOpenRow';
 import { useNotificationSync } from './src/hooks/useNotificationSync';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -96,6 +99,10 @@ export default function App() {
 
   const [tab, setTab] = useState<TabId>('today');
   const [addOpen, setAddOpen] = useState(false);
+  const [addMethod, setAddMethod] = useState<CaptureMethod | undefined>(undefined);
+  const [chooserAnchor, setChooserAnchor] = useState<AddAnchor | null>(null);
+  const [introOpen, setIntroOpen] = useState(false);
+  const introAnchor = useRef<AddAnchor | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const month = useViewMonth(s => s.month);
   const shiftMonth = useViewMonth(s => s.shiftMonth);
@@ -241,6 +248,32 @@ export default function App() {
     );
   }
 
+  const openAdd = (m?: CaptureMethod) => {
+    setAddMethod(m);
+    setAddOpen(true);
+  };
+
+  // Where the capture button leads: the camera, or a choice of method. Asked once, then remembered.
+  const fallbackAnchor = (): AddAnchor => {
+    const { width, height } = Dimensions.get('window');
+    return { x: width / 2 - 28, y: height - 22 - 66, width: 56, height: 56 };
+  };
+  const continueCapture = (cameraFirst: boolean, anchor: AddAnchor | null) => {
+    if (cameraFirst) openAdd('photo');
+    else setChooserAnchor(anchor ?? fallbackAnchor());
+  };
+  const requestCapture = (anchor?: AddAnchor) => {
+    // The camera can't open on web, so it always gets the full picker.
+    if (Platform.OS === 'web') return openAdd();
+    const { captureIntroSeen, openCameraRightAway } = useSettings.getState();
+    if (!captureIntroSeen) {
+      introAnchor.current = anchor ?? null;
+      setIntroOpen(true);
+      return;
+    }
+    continueCapture(openCameraRightAway, anchor ?? null);
+  };
+
   const screen = (() => {
     switch (tab) {
       case 'today':
@@ -248,7 +281,7 @@ export default function App() {
       case 'plan':
         return <PlanScreen />;
       case 'activity':
-        return <ActivityScreen onScan={() => setAddOpen(true)} />;
+        return <ActivityScreen onScan={() => requestCapture()} />;
       case 'insights':
         return <InsightsScreen />;
     }
@@ -266,7 +299,8 @@ export default function App() {
   return (
     <ThemeContext.Provider value={theme}>
       <StatusBar barStyle={isLight ? 'dark-content' : 'light-content'} backgroundColor={theme.bg} />
-      <View style={{ flex: 1, backgroundColor: theme.bg }}>
+      {/* Any touch outside an open swipe row closes it. */}
+      <View style={{ flex: 1, backgroundColor: theme.bg }} onTouchStart={() => useOpenRow.getState().closeIfOutside()}>
         {!isWide && (
           <SafeAreaView style={{ backgroundColor: theme.bg }}>
             {header}
@@ -276,7 +310,7 @@ export default function App() {
         <AppShell
           tab={tab}
           onTab={setTab}
-          onAdd={() => setAddOpen(true)}
+          onAdd={requestCapture}
           isWide={isWide}
         >
           <View style={{ flex: 1 }}>
@@ -285,10 +319,28 @@ export default function App() {
           </View>
         </AppShell>
 
+        <CaptureChooser
+          anchor={chooserAnchor}
+          onClose={() => setChooserAnchor(null)}
+          onPick={(m) => { setChooserAnchor(null); openAdd(m); }}
+        />
+        <CaptureIntroSheet
+          open={introOpen}
+          onClose={() => setIntroOpen(false)}
+          onContinue={(cameraFirst) => {
+            const { set } = useSettings.getState();
+            set('openCameraRightAway', cameraFirst);
+            set('captureIntroSeen', true);
+            setIntroOpen(false);
+            // Let the intro's modal finish closing; iOS won't present the next one over it.
+            setTimeout(() => continueCapture(cameraFirst, introAnchor.current), 400);
+          }}
+        />
         <AddSheet
           open={addOpen}
-          onClose={() => { setAddOpen(false); setPendingShare(null); useAiUsage.getState().clearBlock(); }}
+          onClose={() => { setAddOpen(false); setAddMethod(undefined); setPendingShare(null); useAiUsage.getState().clearBlock(); }}
           pendingShare={pendingShare}
+          initialMethod={addMethod}
         />
         {!addOpen && <UpgradeModal />}
         <CreateAccountSheet />
