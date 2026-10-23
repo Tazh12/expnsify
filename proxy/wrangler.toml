@@ -8,6 +8,7 @@ enabled = true
 
 [vars]
 # GROQ_API_KEY set via: wrangler secret put GROQ_API_KEY
+# PRO_TESTER_UIDS (comma-separated Firebase UIDs) set via: wrangler secret put PRO_TESTER_UIDS
 # Public Firebase web API key. It identifies the project; it is not a secret.
 FIREBASE_API_KEY = "AIzaSyAoWSmnr7S-dkGR2JcKYaimgYbzzt53k_A"
 SCAN_MODEL = "qwen/qwen3.8-27b"

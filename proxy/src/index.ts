@@ -1,3 +1,6 @@
+import { countStatementRows, normalizeCurrency, STATEMENT_MIN_ROWS } from './statement.ts';
+import { decodeBase64, extractJpegFromPdf, extractPdfText, looksLikePaymentText } from './pdf.ts';
+
 interface Env {
   GROQ_API_KEY: string;
   FIREBASE_API_KEY: string;
@@ -5,6 +8,9 @@ interface Env {
   SCAN_MODEL?: string;
   TEXT_MODEL?: string;
   AUDIO_MODEL?: string;
+  // Secret, comma-separated Firebase UIDs that get Pro caps for testing.
+  // Set via: wrangler secret put PRO_TESTER_UIDS
+  PRO_TESTER_UIDS?: string;
 }
 
 // Replaced from wrangler [vars] when a model is retired. These match the last
@@ -43,8 +49,15 @@ function chatPayload(
   return body;
 }
 
+// Groq's on_demand tier caps output tokens per minute (1000 for the scan model),
+// counted against max_tokens. A worst-case scan (25 line items) is about 550 tokens.
+const SCAN_MAX_TOKENS = 700;
+const SCAN_MAX_LINE_ITEMS = 25;
+const MAX_RETRY_WAIT_MS = 5000;
+const CHAT_URL = 'https://api.groq.com/openai/v1/chat/completions';
+
 const FREE_LIMIT = 10;
-const PAID_LIMIT = 300;
+const PAID_LIMIT = 200;
 const PER_MINUTE = 10;
 
 const CORS = {
@@ -63,6 +76,11 @@ function ok(body: unknown, status = 200, extra?: Record<string, string>): Respon
 
 function err(msg: string, status = 400): Response {
   return ok({ error: msg }, status);
+}
+
+// 422s are not ok, so the action isn't counted against the month.
+function statement(transactions: number | null): Response {
+  return ok({ error: 'statement', transactions }, 422);
 }
 
 function monthKey(d = new Date()): string {
@@ -103,7 +121,15 @@ async function verifyUid(req: Request, env: Env): Promise<string | Response> {
   return uid;
 }
 
+function isProTester(env: Env, uid: string): boolean {
+  const uids = (env.PRO_TESTER_UIDS ?? '').split(',').map(id => id.trim()).filter(Boolean);
+  return uids.includes(uid);
+}
+
+// 'paid' is the Pro plan on the wire; shipped builds already read it.
+// uid comes from the verified ID token only, never from the request.
 async function planFor(env: Env, uid: string): Promise<'free' | 'paid'> {
+  if (isProTester(env, uid)) return 'paid';
   if (!env.USAGE) return 'free';
   const plan = await env.USAGE.get(`plan:${uid}`);
   return plan === 'paid' ? 'paid' : 'free';
@@ -165,10 +191,73 @@ function withHeaders(res: Response, headers: Record<string, string>): Response {
   return new Response(res.body, { status: res.status, headers: next });
 }
 
+type GroqResult = { ok: true; res: Response } | { ok: false; reply: Response };
+
+function retryAfterSeconds(res: Response): number {
+  const raw = Number(res.headers.get('retry-after'));
+  return Number.isFinite(raw) && raw >= 0 ? raw : 2;
+}
+
+function busy(retryAfter: number): Response {
+  return ok({
+    error: 'ai_busy',
+    message: 'Vadri’s AI is busy. Try again in a minute.',
+    retryAfter: Math.ceil(retryAfter),
+  }, 503);
+}
+
+/**
+ * Calls Groq, retrying once on a rate limit when the wait is short.
+ * Never 429 to the app: shipped builds read any 429 as "AI actions used up".
+ */
+async function callGroq(
+  route: string,
+  model: string,
+  maxTokens: number | null,
+  url: string,
+  init: RequestInit,
+): Promise<GroqResult> {
+  for (let attempt = 1; ; attempt++) {
+    const res = await fetch(url, init);
+    const log: Record<string, unknown> = { route, model, attempt, status: res.status, max_tokens: maxTokens };
+    if (res.ok) {
+      const json = await res.clone().json().catch(() => null) as {
+        usage?: { prompt_tokens?: number; completion_tokens?: number };
+        choices?: { finish_reason?: string }[];
+      } | null;
+      log.prompt_tokens = json?.usage?.prompt_tokens ?? null;
+      log.completion_tokens = json?.usage?.completion_tokens ?? null;
+      log.finish_reason = json?.choices?.[0]?.finish_reason ?? null;
+      if (log.finish_reason === 'length') console.warn('groq output cut off', JSON.stringify(log));
+      else console.log('groq', JSON.stringify(log));
+      return { ok: true, res };
+    }
+
+    const text = await res.text();
+    console.error('groq failed', JSON.stringify(log), text.slice(0, 300));
+    if (res.status !== 429) return { ok: false, reply: err('ai_unavailable', 502) };
+
+    // "Request too large" means max_tokens alone exceeds the per-minute cap: waiting won't help.
+    const wait = retryAfterSeconds(res);
+    if (/request too large/i.test(text) || attempt > 1 || wait * 1000 > MAX_RETRY_WAIT_MS) {
+      return { ok: false, reply: busy(wait) };
+    }
+    await new Promise(r => setTimeout(r, wait * 1000));
+  }
+}
+
+function chatInit(env: Env, body: Record<string, unknown>): RequestInit {
+  return {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.GROQ_API_KEY}` },
+    body: JSON.stringify(body),
+  };
+}
+
 function sanitizeLineItems(raw: unknown): { name: string; amount: number }[] {
   if (!Array.isArray(raw)) return [];
   return raw
-    .slice(0, 40)
+    .slice(0, SCAN_MAX_LINE_ITEMS)
     .map(item => {
       const row = item as { name?: unknown; amount?: unknown };
       return {
@@ -243,19 +332,24 @@ async function handleScan(req: Request, env: Env): Promise<Response> {
   let imageMime = body.mimeType ?? 'image/jpeg';
 
   if (body.pdfBase64 && !text && !imageBase64) {
-    const extracted = await extractPdfText(body.pdfBase64);
+    const { text: extracted, error } = await extractPdfText(body.pdfBase64);
     const jpeg = extractJpegFromPdf(body.pdfBase64);
     if (extracted && looksLikePaymentText(extracted)) {
       text = extracted;
     } else if (jpeg) {
       imageBase64 = jpeg;
       imageMime = 'image/jpeg';
-    } else if (extracted && extracted.trim().length > 12) {
+    } else if (extracted) {
       text = extracted;
     } else {
-      return err('Could not read that PDF. Try a screenshot of the confirmation.');
+      // Not counted (422) and no Groq call: there is nothing to send it.
+      console.error('pdf unreadable', JSON.stringify({ error: error ?? 'no text or image', bytes: body.pdfBase64.length }));
+      return err('pdf_unreadable', 422);
     }
   }
+
+  const rows = text ? countStatementRows(text) : 0;
+  if (rows >= STATEMENT_MIN_ROWS) return statement(rows);
 
   const categories = body.categories ?? [];
   const lines = body.lines ?? [];
@@ -268,12 +362,12 @@ async function handleScan(req: Request, env: Env): Promise<Response> {
       ).join('\n')
     : '(no budget lines this month)';
 
-  const system = `You extract a single money movement from a receipt, bank screenshot, payment confirmation email/PDF, or short user note.
+  const system = `You extract a single money movement from a paper receipt, a photo of a checkout or POS terminal screen, a phone screenshot (banking or payment app), an invoice, a payment confirmation email/PDF, or a short user note.
 Return ONLY JSON with this exact shape:
 {
   "merchant": string,
   "amount": number,
-  "currency": "USD",
+  "currency": string | null,
   "date": string,
   "category": {
     "id": string,
@@ -286,6 +380,8 @@ Return ONLY JSON with this exact shape:
   "lineId": string | null,
   "matchConfidence": number,
   "isPaymentConfirmation": boolean,
+  "document_type": "receipt" | "invoice" | "payment_confirmation" | "statement" | "other",
+  "transaction_count": number,
   "line_items": [{ "name": string, "amount": number }]
 }
 
@@ -296,14 +392,19 @@ This month's budget lines (prefer matching one of these; use the line's id as li
 ${lineList}
 
 Rules:
+- amount: the total actually paid, as a positive number. Totals may be labelled in any language: Total, Summe, Zu zahlen, Betrag, Total à payer, À payer, Totale, Importo. If you cannot find a total, use 0 and confidence 0.
+- currency: the ISO 4217 code of the currency printed on the document (CHF for "Fr." or "SFr.", EUR for "€"). Use null if no currency is shown. Never assume USD.
+- merchant: the store or company name, from the logo, header, or a brand prefix on item names. A screen photo still has a merchant.
 - If an existing category fits, set category.id to that id and isNew=false. suggestedColor is ignored when isNew=false.
 - If you must invent one, use a single short lowercase word (a-z only) as id, Title Case as name, isNew=true, and pick a tasteful hex color for suggestedColor.
 - date: ISO 8601 using today's date ${new Date().toISOString().slice(0, 10)} if unclear.
 - confidence: 0..1 based on image/text clarity.
 - lineId: id of the best matching unpaid budget line, or null if none fit. Prefer unpaid lines whose name/merchant is close and whose expected amount is within ~5%.
 - matchConfidence: 0..1 for that line match.
-- isPaymentConfirmation: true if this is a bill/receipt/email confirming a payment already made (mark the line complete), false if it is a new spend to log.
+- isPaymentConfirmation: true only for a bill, invoice, or payment-sent confirmation for a recurring payment (rent, utilities, insurance, subscription), so the budget line can be marked paid. A store receipt or a checkout screen is a new spend: false.
+- document_type "statement": the document lists several separate transactions on different dates (bank or card statement, transaction list). Set transaction_count to how many, amount to 0, and line_items to []. Otherwise transaction_count is 1.
 - If the receipt shows itemized line items, extract them as an array of { name, amount }.
+- Return at most ${SCAN_MAX_LINE_ITEMS} line_items. On a longer receipt, keep the most expensive ones.
 - If you can only read a total, return an empty array for line_items.
 - Do not include the grand total as a line item.`;
 
@@ -328,20 +429,11 @@ Rules:
     return err('Provide imageBase64, pdfBase64, or text');
   }
 
-  const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${env.GROQ_API_KEY}`,
-    },
-    body: JSON.stringify(chatPayload(scanModel(env), messages, { temperature: 0.1, max_tokens: 1024 })),
-  });
-
-  if (!groqRes.ok) {
-    const groqText = await groqRes.text();
-    console.error('groq scan failed', groqRes.status, groqText.slice(0, 300));
-    return err(`Groq error: ${groqText}`, 502);
-  }
+  const model = scanModel(env);
+  const groq = await callGroq('/scan', model, SCAN_MAX_TOKENS, CHAT_URL, chatInit(env,
+    chatPayload(model, messages, { temperature: 0.1, max_tokens: SCAN_MAX_TOKENS })));
+  if (!groq.ok) return groq.reply;
+  const groqRes = groq.res;
 
   const groqJson = await groqRes.json() as {
     choices: { message: { content?: string | null; reasoning?: string | null } }[];
@@ -354,12 +446,25 @@ Rules:
   }
 
   try {
-    const parsed = parseModelJson(raw) as { amount?: unknown; line_items?: unknown };
-    if (!Number.isFinite(Number(parsed?.amount))) {
-      console.error('groq scan missing amount', raw.slice(0, 300));
-      return err('Groq scan had no amount', 502);
+    const parsed = parseModelJson(raw) as {
+      amount?: unknown; currency?: unknown; line_items?: unknown;
+      document_type?: unknown; transaction_count?: unknown;
+    };
+    if (parsed?.document_type === 'statement') {
+      const count = Number(parsed.transaction_count);
+      return statement(Number.isFinite(count) && count > 0 ? count : null);
     }
-    return ok({ ...parsed, line_items: sanitizeLineItems(parsed.line_items) });
+    const amount = Number(parsed?.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      console.error('groq scan had no amount', String(parsed?.document_type ?? ''));
+      return err('unreadable', 422);
+    }
+    return ok({
+      ...parsed,
+      amount,
+      currency: normalizeCurrency(parsed.currency),
+      line_items: sanitizeLineItems(parsed.line_items),
+    });
   } catch {
     console.error('groq scan parse failed', raw.slice(0, 300));
     return err('Failed to parse Groq response', 502);
@@ -377,75 +482,6 @@ function parseModelJson(raw: string): unknown {
     if (objectMatch) return JSON.parse(objectMatch[0]);
     throw new Error('parse failed');
   }
-}
-
-async function extractPdfText(b64: string): Promise<string | null> {
-  try {
-    const binary = decodeBase64(b64);
-    const mod = await import('unpdf').catch(() => null);
-    if (mod) {
-      const pdf = await mod.getDocumentProxy(binary);
-      const result = await mod.extractText(pdf, { mergePages: true });
-      const text = Array.isArray(result.text) ? result.text.join('\n') : String(result.text ?? '');
-      if (text.trim().length > 12) return text;
-    }
-  } catch (e) {
-    console.error('unpdf failed', e);
-  }
-  return naivePdfText(b64);
-}
-
-function looksLikePaymentText(text: string): boolean {
-  return /(?:\$|usd|eur|gbp|cad|mxn)?\s*\d{1,7}(?:[.,]\d{2})\b|\b(total|paid|amount|invoice|receipt)\b/i.test(text);
-}
-
-function extractJpegFromPdf(b64: string): string | null {
-  try {
-    const bytes = decodeBase64(b64);
-    let best: Uint8Array | null = null;
-    for (let i = 0; i < bytes.length - 1; i++) {
-      if (bytes[i] !== 0xFF || bytes[i + 1] !== 0xD8) continue;
-      for (let j = i + 2; j < bytes.length - 1; j++) {
-        if (bytes[j] === 0xFF && bytes[j + 1] === 0xD9) {
-          const slice = bytes.subarray(i, j + 2);
-          if (slice.length > 8000 && (!best || slice.length > best.length)) best = slice;
-          i = j;
-          break;
-        }
-      }
-    }
-    return best ? encodeBase64(best) : null;
-  } catch (e) {
-    console.error('pdf jpeg extract failed', e);
-    return null;
-  }
-}
-
-function naivePdfText(b64: string): string | null {
-  try {
-    const raw = atob(b64);
-    const strings = [...raw.matchAll(/\(([^)]{3,120})\)/g)].map(m => m[1]);
-    const joined = strings.join(' ').replace(/\\n/g, ' ').trim();
-    return joined.length > 20 ? joined : null;
-  } catch {
-    return null;
-  }
-}
-
-function decodeBase64(b64: string): Uint8Array {
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
-
-function encodeBase64(bytes: Uint8Array): string {
-  let binary = '';
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-  }
-  return btoa(binary);
 }
 
 async function handleTranscribe(req: Request, env: Env): Promise<Response> {
@@ -482,17 +518,13 @@ async function handleTranscribe(req: Request, env: Env): Promise<Response> {
   groqForm.append('model', audioModel(env));
   groqForm.append('response_format', 'json');
 
-  const groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+  const groq = await callGroq('/transcribe', audioModel(env), null, 'https://api.groq.com/openai/v1/audio/transcriptions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${env.GROQ_API_KEY}` },
     body: groqForm,
   });
-
-  if (!groqRes.ok) {
-    const text = await groqRes.text();
-    console.error('groq transcribe failed', groqRes.status, text.slice(0, 300));
-    return err(`Groq transcription error: ${text}`, 502);
-  }
+  if (!groq.ok) return groq.reply;
+  const groqRes = groq.res;
 
   const json = await groqRes.json() as { text: string };
   return ok({ text: json.text });
@@ -508,22 +540,16 @@ async function handleInsights(req: Request, env: Env): Promise<Response> {
 
   const expenses = Array.isArray(body.expenses) ? body.expenses.slice(0, 200) : [];
   const categories = body.categories ?? [];
-  const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${env.GROQ_API_KEY}`,
-    },
-    body: JSON.stringify(chatPayload(textModel(env), [
+  const model = textModel(env);
+  const groq = await callGroq('/insights', model, 400, CHAT_URL, chatInit(env, chatPayload(model, [
       {
         role: 'system',
         content: `You summarize personal spending. Return ONLY JSON: { "insights": string[] } with 3 or 4 short sentences. Use the category names. Do not invent purchases that are not in the data. Categories: ${categories.map(c => `${c.id}=${c.name}`).join(', ') || 'none'}.`,
       },
       { role: 'user', content: JSON.stringify(expenses) },
-    ], { temperature: 0.3, max_tokens: 400 })),
-  });
-
-  if (!groqRes.ok) return err(`Groq error: ${await groqRes.text()}`, 502);
+    ], { temperature: 0.3, max_tokens: 400 })));
+  if (!groq.ok) return groq.reply;
+  const groqRes = groq.res;
   const groqJson = await groqRes.json() as {
     choices: { message: { content?: string | null; reasoning?: string | null } }[];
   };
@@ -551,22 +577,16 @@ async function handleAsk(req: Request, env: Env): Promise<Response> {
   const expenses = Array.isArray(body.expenses) ? body.expenses.slice(0, 100) : [];
   const allowed = new Set(expenses.map(e => e.id).filter((id): id is string => typeof id === 'string'));
 
-  const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${env.GROQ_API_KEY}`,
-    },
-    body: JSON.stringify(chatPayload(textModel(env), [
+  const model = textModel(env);
+  const groq = await callGroq('/ask', model, 400, CHAT_URL, chatInit(env, chatPayload(model, [
       {
         role: 'system',
         content: 'Match a question to expenses. Return ONLY JSON: { "ids": string[] } using ids from the provided expenses. Match merchant, note, and item names. If nothing matches, return an empty array.',
       },
       { role: 'user', content: JSON.stringify({ question, expenses }) },
-    ], { temperature: 0.1, max_tokens: 400 })),
-  });
-
-  if (!groqRes.ok) return err(`Groq error: ${await groqRes.text()}`, 502);
+    ], { temperature: 0.1, max_tokens: 400 })));
+  if (!groq.ok) return groq.reply;
+  const groqRes = groq.res;
   const groqJson = await groqRes.json() as {
     choices: { message: { content?: string | null; reasoning?: string | null } }[];
   };

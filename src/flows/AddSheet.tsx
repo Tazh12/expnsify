@@ -20,6 +20,8 @@ import { useSettings } from '../store/useSettings';
 import { useRates, FRANKFURTER_CURRENCIES } from '../store/useRates';
 import { useAuth } from '../store/useAuth';
 import { scanImage, scanText, scanPdf, transcribeAudio, takeAiLimit, ScanRequestError, type ScannedExpense } from '../services/groq';
+import { scanFailureCopy, type ScanFailure } from '../services/scanErrors';
+import { reviewCurrency } from '../services/scanResult';
 import { capturePurchaseLocation } from '../services/location';
 import { uid, fmt, parseLocalDate, toLocalDateISO } from '../services/format';
 import { CurrencyPickerSheet } from '../components/CurrencyPicker';
@@ -28,7 +30,8 @@ import { auth } from '../services/firebase';
 import { publishAiLimit } from '../services/aiUsageBridge';
 import { VoiceWave, meterToLevel, useVoiceLevels } from '../components/VoiceWave';
 import type { SharedValue } from 'react-native-reanimated';
-import { CompletePaymentSheet } from './CompletePaymentSheet';
+import { CompletePaymentCard } from './CompletePaymentSheet';
+import { sheetBody, type SheetPhase } from './addSheetBody';
 import { AiBlockedCard } from './UpgradeModal';
 import { useAccountPrompt } from './CreateAccountSheet';
 import { useAiUsage } from '../store/useAiUsage';
@@ -93,9 +96,14 @@ function initialSpendLineId(
   return id;
 }
 
-type Phase = 'pick' | 'coach' | 'scan' | 'review';
+type Phase = SheetPhase;
 type Method = 'photo' | 'image' | 'voice' | 'file' | 'manual';
 export type CaptureMethod = Method;
+
+// Temporary: traces the Add sheet on device. Watch in Console.app, filter "[SHEET]".
+function sheetLog(event: string, detail: Record<string, unknown>) {
+  console.log(`[SHEET] ${event} ${JSON.stringify(detail)}`);
+}
 
 async function uriToBase64(uri: string): Promise<string> {
   if (Platform.OS === 'web' || uri.startsWith('blob:') || uri.startsWith('data:')) {
@@ -170,6 +178,7 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'done'>('idle');
   const [completeOpen, setCompleteOpen] = useState(false);
   const [matchedLine, setMatchedLine] = useState<BudgetLine | null>(null);
+  const [scanError, setScanError] = useState<ScanFailure | null>(null);
 
   const doneScale = useRef(new Animated.Value(0.6)).current;
 
@@ -187,6 +196,7 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
     setSaveState('idle');
     setCompleteOpen(false);
     setMatchedLine(null);
+    setScanError(null);
     if (initialMethod && !editExpense && !pendingShare?.uri && !launchedCamera.current) {
       launchedCamera.current = true;
       startScan(initialMethod);
@@ -214,6 +224,13 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
   };
   const cancel = fromMenu ? onBackToChoice! : onClose;
 
+  // Scan failures show inside the sheet. A native Alert over the sheet, followed by closing the
+  // sheet from its button, left an empty sheet stuck on screen (iOS can't dismiss a modal mid-alert).
+  const showScanError = (failure: ScanFailure) => {
+    setScanError(failure);
+    setPhase('error');
+  };
+
   const failScan = (
     message = 'Could not read that receipt. Try again, or enter it manually.',
     title = 'Could not read that receipt',
@@ -222,8 +239,13 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
       setPhase('pick');
       return;
     }
-    Alert.alert(title, message);
-    backToChoice();
+    showScanError({ title, message });
+  };
+
+  const typeItInstead = () => {
+    setScanError(null);
+    setMethod('manual');
+    goReview(null);
   };
 
   const goReview = (data: ScannedExpense | null, uri?: string, src: TxnSource = 'manual') => {
@@ -235,6 +257,9 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
         ?? matchLine(data.merchant, data.amount, data.date, monthLines)?.line ?? null
       : null;
     setMatchedLine(match);
+    sheetLog('review', {
+      paymentConfirmation: !!data?.isPaymentConfirmation, modelLineId: data?.lineId ?? null, matched: !!match,
+    });
     if (data?.isPaymentConfirmation && match && !editExpense) {
       setCompleteOpen(true);
       setPhase('review');
@@ -242,17 +267,6 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
       return;
     }
     setPhase('review');
-  };
-
-  const offerManualEntry = () => {
-    Alert.alert(
-      "Scanning isn't available right now",
-      'You can add it by hand.',
-      [
-        { text: 'Not now', style: 'cancel', onPress: backToChoice },
-        { text: 'Type it', onPress: () => { setMethod('manual'); goReview(null); } },
-      ],
-    );
   };
 
   const finishScan = async (
@@ -272,13 +286,8 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
         setPhase('pick');
         return null;
       }
-      if (e instanceof ScanRequestError && e.kind === 'auth') {
-        Alert.alert('Please sign in again.');
-        backToChoice();
-        return null;
-      }
       if (e instanceof ScanRequestError) {
-        offerManualEntry();
+        showScanError(scanFailureCopy(e.error));
         return null;
       }
       throw e;
@@ -357,9 +366,14 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
           }
         }
 
+        const pickerStarted = Date.now();
         const result = m === 'photo'
           ? await ImagePicker.launchCameraAsync({ base64: true, quality: 0.5, mediaTypes: ['images'] })
           : await ImagePicker.launchImageLibraryAsync({ base64: true, quality: 0.5, mediaTypes: ['images'] });
+        sheetLog('picker returned', {
+          method: m, canceled: result.canceled, ms: Date.now() - pickerStarted,
+          width: result.assets?.[0]?.width, height: result.assets?.[0]?.height, mime: result.assets?.[0]?.mimeType,
+        });
 
         if (result.canceled || !result.assets[0]) { backToChoice(); return; }
         setPhase('scan');
@@ -398,21 +412,15 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
       }
     } catch (e) {
       if (e instanceof ScanRequestError) {
-        if (e.kind === 'auth') {
-          Alert.alert('Please sign in again.');
-          backToChoice();
-        } else {
-          offerManualEntry();
-        }
+        showScanError(scanFailureCopy(e.error));
         return;
       }
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.toLowerCase().includes('simulator') || msg.toLowerCase().includes('not available')) {
-        Alert.alert('Camera unavailable', 'The camera does not work in the simulator. Test on a real iPhone.');
+        showScanError({ title: 'Camera unavailable', message: 'The camera does not work in the simulator. Test on a real iPhone.' });
       } else {
-        Alert.alert('Something went wrong', 'Could not process the file. Please try again.');
+        failScan('Could not process the file. Please try again.', 'Something went wrong');
       }
-      backToChoice();
     }
   };
 
@@ -420,8 +428,8 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
     try {
       const perm = await Audio.requestPermissionsAsync();
       if (perm.status !== 'granted') {
-        Alert.alert('Microphone access needed', 'Please enable microphone access in Settings to log spending by voice.');
-        backToChoice();
+        // The coach screen is up, so say it in the sheet, not in an Alert over it.
+        showScanError({ title: 'Microphone access needed', message: 'Please enable microphone access in Settings to log spending by voice.' });
         return;
       }
       setPhase('scan');
@@ -501,14 +509,44 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
     setTimeout(onClose, 1400);
   };
 
+  const visible = open && (!fromMenu || phase !== 'pick' || !!blocked || saveState !== 'idle');
+  const sheet = {
+    phase,
+    blocked: !!blocked,
+    listening,
+    isVoice: method === 'voice',
+    completeOpen,
+    canComplete: !!matchedLine && !!scanned,
+    hasScanError: !!scanError,
+    saving: false,
+  };
+  const body = sheetBody(sheet);
+  const empty = visible && sheetBody({ ...sheet, saving: saveState !== 'idle' }) === 'none';
+
+  useEffect(() => {
+    sheetLog('state', { open, visible, phase, body, completeOpen, blocked: !!blocked, saveState });
+  }, [open, visible, phase, body, completeOpen, !!blocked, saveState]);
+
+  // Should never happen. If a state ever leaves nothing to draw, close instead of showing a bare handle.
+  useEffect(() => {
+    if (!empty) return;
+    console.warn('[SHEET] empty sheet, closing', JSON.stringify({ phase, completeOpen, saveState }));
+    cancel();
+  }, [empty]);
+
   if (!open) return null;
 
   return (
     <>
       {/* From the menu, the sheet stays hidden while the camera or a picker is up, so nothing sits behind it. */}
-      <BottomSheet visible={open && (!fromMenu || phase !== 'pick' || !!blocked || saveState !== 'idle')} onClose={saveState === 'idle' ? cancel : onClose}>
+      <BottomSheet
+        visible={visible}
+        onClose={saveState === 'idle' ? cancel : onClose}
+        onShow={() => sheetLog('modal shown', { phase })}
+        onDismiss={() => sheetLog('modal dismissed', { phase })}
+      >
         <View style={{ paddingHorizontal: 20, position: 'relative' }}>
-          {phase === 'pick' && blocked && (
+          {body === 'blocked' && blocked && (
             // Shown in the sheet: iOS won't present the notice's own modal on top of this one.
             <View style={{ paddingBottom: 8 }}>
               <AiBlockedCard
@@ -522,14 +560,23 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
               />
             </View>
           )}
-          {phase === 'pick' && !blocked && <PickPhase onPick={startScan} onClose={onClose} onDropFile={(uri, mime) => ingestFile(uri, mime, 'share')}/>}
-          {phase === 'coach' && <VoiceCoach onStart={startVoice} onClose={backToChoice}/>}
-          {phase === 'scan' && (
-            method === 'voice' && listening
-              ? <ListeningPhase levels={voice.levels}/>
-              : <ScanPhase method={method}/>
+          {body === 'pick' && <PickPhase onPick={startScan} onClose={onClose} onDropFile={(uri, mime) => ingestFile(uri, mime, 'share')}/>}
+          {body === 'coach' && <VoiceCoach onStart={startVoice} onClose={backToChoice}/>}
+          {body === 'listening' && <ListeningPhase levels={voice.levels}/>}
+          {body === 'scan' && <ScanPhase method={method}/>}
+          {body === 'error' && scanError && (
+            <ScanErrorCard failure={scanError} onTypeIt={typeItInstead} onDismiss={backToChoice}/>
           )}
-          {phase === 'review' && !completeOpen && (
+          {body === 'complete' && matchedLine && scanned && (
+            <CompletePaymentCard
+              line={matchedLine}
+              scanned={scanned}
+              preferredCurrency={useSettings.getState().preferredCurrency}
+              onConfirm={markPaid}
+              onEdit={() => setCompleteOpen(false)}
+            />
+          )}
+          {body === 'review' && (
             <ReviewPhase
               scanned={scanned}
               receiptUri={receiptUri}
@@ -563,15 +610,6 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
           )}
         </View>
       </BottomSheet>
-      <CompletePaymentSheet
-        open={completeOpen}
-        line={matchedLine}
-        scanned={scanned}
-        preferredCurrency={useSettings.getState().preferredCurrency}
-        onConfirm={markPaid}
-        onEdit={() => setCompleteOpen(false)}
-        onClose={() => { setCompleteOpen(false); onClose(); }}
-      />
     </>
   );
 }
@@ -754,6 +792,30 @@ function ListeningPhase({ levels }: { levels: SharedValue<number[]> }) {
   );
 }
 
+function ScanErrorCard({ failure, onTypeIt, onDismiss }: {
+  failure: ScanFailure;
+  onTypeIt: () => void;
+  onDismiss: () => void;
+}) {
+  const C = useTheme();
+  return (
+    <View style={{ paddingBottom: 8 }}>
+      <Text style={{ fontFamily: C.fonts.serif, fontSize: 26, color: C.cream, letterSpacing: -0.3 }}>{failure.title}</Text>
+      <Text style={{ color: C.muted, fontSize: 15, lineHeight: 22, marginTop: 10 }}>{failure.message}</Text>
+      <Tap
+        onPress={onTypeIt}
+        haptic
+        style={{ marginTop: 20, paddingVertical: 14, borderRadius: 14, backgroundColor: C.sage, alignItems: 'center' }}
+      >
+        <Text style={{ color: C.onPrimary, fontSize: 15, fontWeight: '600' }}>Type it</Text>
+      </Tap>
+      <Tap onPress={onDismiss} style={{ marginTop: 8, paddingVertical: 14, alignItems: 'center' }}>
+        <Text style={{ color: C.muted, fontSize: 15, fontWeight: '500' }}>Not now</Text>
+      </Tap>
+    </View>
+  );
+}
+
 function ScanPhase({ method }: { method: Method | null }) {
   const C = useTheme();
   const [step, setStep] = useState(0);
@@ -798,11 +860,13 @@ function ReviewPhase({
   const { user } = useAuth();
 
   const [currencyCode, setCurrencyCode] = useState(() => {
-    const scannedCurrency = scanned?.currency;
-    if (scannedCurrency && (FRANKFURTER_CURRENCIES as readonly string[]).includes(scannedCurrency)) {
-      return scannedCurrency;
-    }
-    return editExpense?.currency ?? preferredCurrency;
+    if (editExpense && !scanned) return editExpense.currency;
+    return reviewCurrency({
+      scanned: scanned?.currency,
+      lineCurrencies: useBudget.getState().forMonth(monthKey(new Date())).map(l => l.currency),
+      preferred: preferredCurrency,
+      supported: FRANKFURTER_CURRENCIES,
+    });
   });
   const [currencyPickerOpen, setCurrencyPickerOpen] = useState(false);
   const [merchant, setMerchant] = useState(scanned?.merchant ?? editExpense?.merchant ?? '');
