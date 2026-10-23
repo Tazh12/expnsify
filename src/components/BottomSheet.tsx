@@ -8,10 +8,14 @@ import { useTheme } from '../theme';
 export function BottomSheet({
   visible,
   onClose,
+  onShow,
+  onDismiss,
   children,
 }: {
   visible: boolean;
   onClose: () => void;
+  onShow?: () => void;
+  onDismiss?: () => void;
   children: React.ReactNode;
 }) {
   const C = useTheme();
@@ -43,7 +47,7 @@ export function BottomSheet({
   const scrollMax = Math.max(160, Math.round(windowHeight * 0.9) - 36 - bottomPad - keyboard);
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} onShow={onShow} onDismiss={onDismiss} statusBarTranslucent>
       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
         <Pressable
           style={[StyleSheet.absoluteFill, { backgroundColor: C.scrimSoft }]}
