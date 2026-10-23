@@ -5,6 +5,9 @@ interface Env {
   SCAN_MODEL?: string;
   TEXT_MODEL?: string;
   AUDIO_MODEL?: string;
+  // Secret, comma-separated Firebase UIDs that get Pro caps for testing.
+  // Set via: wrangler secret put PRO_TESTER_UIDS
+  PRO_TESTER_UIDS?: string;
 }
 
 // Replaced from wrangler [vars] when a model is retired. These match the last
@@ -44,7 +47,7 @@ function chatPayload(
 }
 
 const FREE_LIMIT = 10;
-const PAID_LIMIT = 300;
+const PAID_LIMIT = 200;
 const PER_MINUTE = 10;
 
 const CORS = {
@@ -103,7 +106,15 @@ async function verifyUid(req: Request, env: Env): Promise<string | Response> {
   return uid;
 }
 
+function isProTester(env: Env, uid: string): boolean {
+  const uids = (env.PRO_TESTER_UIDS ?? '').split(',').map(id => id.trim()).filter(Boolean);
+  return uids.includes(uid);
+}
+
+// 'paid' is the Pro plan on the wire; shipped builds already read it.
+// uid comes from the verified ID token only, never from the request.
 async function planFor(env: Env, uid: string): Promise<'free' | 'paid'> {
+  if (isProTester(env, uid)) return 'paid';
   if (!env.USAGE) return 'free';
   const plan = await env.USAGE.get(`plan:${uid}`);
   return plan === 'paid' ? 'paid' : 'free';

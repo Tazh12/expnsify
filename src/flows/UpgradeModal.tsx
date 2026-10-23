@@ -18,6 +18,7 @@ export function AiBlockedCard({
 }) {
   const C = useTheme();
   const needsAccount = blocked.code === 'account_required';
+  const isPro = useAiUsage(s => s.plan) === 'paid';
 
   const when = blocked.resetsAt
     ? new Date(blocked.resetsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
@@ -28,11 +29,11 @@ export function AiBlockedCard({
     ? 'Scanning receipts, voice entry and insights need a free account. Everything you added as a guest stays. Typing an expense works now.'
     : blocked.code === 'rate_limited'
     ? 'Vadri limits how many AI requests can run in a minute. Wait a bit, then try again. Adding an expense by hand still works.'
-    : `You have used ${blocked.used} of ${blocked.limit} AI actions this month. They reset on ${when}. Manual entry, budgets, charts, and export keep working. Paid plans are not available yet.`;
+    : `You have used ${blocked.used} of ${blocked.limit} AI actions this month. They reset on ${when}. Manual entry, budgets, charts, and export keep working.${isPro ? '' : ' Paid plans are not available yet.'}`;
 
   return (
     <View>
-      <Text style={{ fontSize: 11, color: C.link, letterSpacing: 0.06, textTransform: 'uppercase' }}>{needsAccount ? 'Guest' : 'Free plan'}</Text>
+      <Text style={{ fontSize: 11, color: C.link, letterSpacing: 0.06, textTransform: 'uppercase' }}>{needsAccount ? 'Guest' : isPro ? 'Pro plan' : 'Free plan'}</Text>
       <Text style={{ fontFamily: C.fonts.serif, fontSize: 28, color: C.cream, marginTop: 8, letterSpacing: -0.3 }}>{title}</Text>
       <Text style={{ color: C.muted, fontSize: 15, lineHeight: 22, marginTop: 12 }}>{body}</Text>
       {needsAccount && (
@@ -88,8 +89,8 @@ export function UpgradeModal() {
   );
 }
 
-export function aiRemainingLabel(used: number, limit: number, loaded: boolean): string {
+export function aiRemainingLabel(used: number, limit: number, loaded: boolean, plan: 'free' | 'paid'): string {
   if (!loaded) return 'Checking this month’s AI actions';
   const left = Math.max(0, limit - used);
-  return `${left} of ${limit} left this month`;
+  return `${plan === 'paid' ? 'Pro' : 'Free'} · ${left} of ${limit} left this month`;
 }

@@ -44,6 +44,7 @@ export function SettingsScreen({ onClose }: Props) {
   const aiUsed = useAiUsage(s => s.used);
   const aiLimit = useAiUsage(s => s.limit);
   const aiLoaded = useAiUsage(s => s.loaded);
+  const aiPlan = useAiUsage(s => s.plan);
   useEffect(() => { useAiUsage.getState().refresh(); }, []);
   const [currencyPickerOpen, setCurrencyPickerOpen] = useState(false);
   const [editNameOpen, setEditNameOpen] = useState(false);
@@ -434,7 +435,7 @@ export function SettingsScreen({ onClose }: Props) {
         <SettingsRow
           icon={<Icon name="sparkles" size={18} stroke={C.sage}/>}
           label="AI actions"
-          detail={aiRemainingLabel(aiUsed, aiLimit, aiLoaded)}
+          detail={aiRemainingLabel(aiUsed, aiLimit, aiLoaded, aiPlan)}
           isLast
         />
       </Card>
