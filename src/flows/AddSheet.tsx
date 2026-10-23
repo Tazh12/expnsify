@@ -21,6 +21,7 @@ import { useRates, FRANKFURTER_CURRENCIES } from '../store/useRates';
 import { useAuth } from '../store/useAuth';
 import { scanImage, scanText, scanPdf, transcribeAudio, takeAiLimit, ScanRequestError, type ScannedExpense } from '../services/groq';
 import { scanFailureCopy, type ScanFailure } from '../services/scanErrors';
+import { reviewCurrency } from '../services/scanResult';
 import { capturePurchaseLocation } from '../services/location';
 import { uid, fmt, parseLocalDate, toLocalDateISO } from '../services/format';
 import { CurrencyPickerSheet } from '../components/CurrencyPicker';
@@ -29,7 +30,8 @@ import { auth } from '../services/firebase';
 import { publishAiLimit } from '../services/aiUsageBridge';
 import { VoiceWave, meterToLevel, useVoiceLevels } from '../components/VoiceWave';
 import type { SharedValue } from 'react-native-reanimated';
-import { CompletePaymentSheet } from './CompletePaymentSheet';
+import { CompletePaymentCard } from './CompletePaymentSheet';
+import { sheetBody, type SheetPhase } from './addSheetBody';
 import { AiBlockedCard } from './UpgradeModal';
 import { useAccountPrompt } from './CreateAccountSheet';
 import { useAiUsage } from '../store/useAiUsage';
@@ -94,7 +96,7 @@ function initialSpendLineId(
   return id;
 }
 
-type Phase = 'pick' | 'coach' | 'scan' | 'review' | 'error';
+type Phase = SheetPhase;
 type Method = 'photo' | 'image' | 'voice' | 'file' | 'manual';
 export type CaptureMethod = Method;
 
@@ -277,7 +279,7 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
         return null;
       }
       if (e instanceof ScanRequestError) {
-        showScanError(scanFailureCopy(e.kind));
+        showScanError(scanFailureCopy(e.error));
         return null;
       }
       throw e;
@@ -397,7 +399,7 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
       }
     } catch (e) {
       if (e instanceof ScanRequestError) {
-        showScanError(scanFailureCopy(e.kind));
+        showScanError(scanFailureCopy(e.error));
         return;
       }
       const msg = e instanceof Error ? e.message : String(e);
@@ -494,14 +496,35 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
     setTimeout(onClose, 1400);
   };
 
+  const visible = open && (!fromMenu || phase !== 'pick' || !!blocked || saveState !== 'idle');
+  const sheet = {
+    phase,
+    blocked: !!blocked,
+    listening,
+    isVoice: method === 'voice',
+    completeOpen,
+    canComplete: !!matchedLine && !!scanned,
+    hasScanError: !!scanError,
+    saving: false,
+  };
+  const body = sheetBody(sheet);
+  const empty = visible && sheetBody({ ...sheet, saving: saveState !== 'idle' }) === 'none';
+
+  // Should never happen. If a state ever leaves nothing to draw, close instead of showing a bare handle.
+  useEffect(() => {
+    if (!empty) return;
+    console.warn('[SHEET] empty sheet, closing', JSON.stringify({ phase, completeOpen, saveState }));
+    cancel();
+  }, [empty]);
+
   if (!open) return null;
 
   return (
     <>
       {/* From the menu, the sheet stays hidden while the camera or a picker is up, so nothing sits behind it. */}
-      <BottomSheet visible={open && (!fromMenu || phase !== 'pick' || !!blocked || saveState !== 'idle')} onClose={saveState === 'idle' ? cancel : onClose}>
+      <BottomSheet visible={visible} onClose={saveState === 'idle' ? cancel : onClose}>
         <View style={{ paddingHorizontal: 20, position: 'relative' }}>
-          {phase === 'pick' && blocked && (
+          {body === 'blocked' && blocked && (
             // Shown in the sheet: iOS won't present the notice's own modal on top of this one.
             <View style={{ paddingBottom: 8 }}>
               <AiBlockedCard
@@ -515,17 +538,23 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
               />
             </View>
           )}
-          {phase === 'pick' && !blocked && <PickPhase onPick={startScan} onClose={onClose} onDropFile={(uri, mime) => ingestFile(uri, mime, 'share')}/>}
-          {phase === 'coach' && <VoiceCoach onStart={startVoice} onClose={backToChoice}/>}
-          {phase === 'scan' && (
-            method === 'voice' && listening
-              ? <ListeningPhase levels={voice.levels}/>
-              : <ScanPhase method={method}/>
-          )}
-          {phase === 'error' && scanError && (
+          {body === 'pick' && <PickPhase onPick={startScan} onClose={onClose} onDropFile={(uri, mime) => ingestFile(uri, mime, 'share')}/>}
+          {body === 'coach' && <VoiceCoach onStart={startVoice} onClose={backToChoice}/>}
+          {body === 'listening' && <ListeningPhase levels={voice.levels}/>}
+          {body === 'scan' && <ScanPhase method={method}/>}
+          {body === 'error' && scanError && (
             <ScanErrorCard failure={scanError} onTypeIt={typeItInstead} onDismiss={backToChoice}/>
           )}
-          {phase === 'review' && !completeOpen && (
+          {body === 'complete' && matchedLine && scanned && (
+            <CompletePaymentCard
+              line={matchedLine}
+              scanned={scanned}
+              preferredCurrency={useSettings.getState().preferredCurrency}
+              onConfirm={markPaid}
+              onEdit={() => setCompleteOpen(false)}
+            />
+          )}
+          {body === 'review' && (
             <ReviewPhase
               scanned={scanned}
               receiptUri={receiptUri}
@@ -559,15 +588,6 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
           )}
         </View>
       </BottomSheet>
-      <CompletePaymentSheet
-        open={completeOpen}
-        line={matchedLine}
-        scanned={scanned}
-        preferredCurrency={useSettings.getState().preferredCurrency}
-        onConfirm={markPaid}
-        onEdit={() => setCompleteOpen(false)}
-        onClose={() => { setCompleteOpen(false); onClose(); }}
-      />
     </>
   );
 }
@@ -818,11 +838,13 @@ function ReviewPhase({
   const { user } = useAuth();
 
   const [currencyCode, setCurrencyCode] = useState(() => {
-    const scannedCurrency = scanned?.currency;
-    if (scannedCurrency && (FRANKFURTER_CURRENCIES as readonly string[]).includes(scannedCurrency)) {
-      return scannedCurrency;
-    }
-    return editExpense?.currency ?? preferredCurrency;
+    if (editExpense && !scanned) return editExpense.currency;
+    return reviewCurrency({
+      scanned: scanned?.currency,
+      lineCurrencies: useBudget.getState().forMonth(monthKey(new Date())).map(l => l.currency),
+      preferred: preferredCurrency,
+      supported: FRANKFURTER_CURRENCIES,
+    });
   });
   const [currencyPickerOpen, setCurrencyPickerOpen] = useState(false);
   const [merchant, setMerchant] = useState(scanned?.merchant ?? editExpense?.merchant ?? '');

@@ -4,14 +4,16 @@ import type { Expense, LineItem } from '../store/useExpenses';
 import * as FileSystem from 'expo-file-system/legacy';
 import { auth } from './firebase';
 import { publishAiLimit, publishAiUsage, type AiBlockCode, type UsageSnapshot } from './aiUsageBridge';
-import { scanErrorKind, scanFailureCopy, type ScanErrorKind } from './scanErrors';
+import { scanErrorKind, scanFailureCopy, type ScanError, type ScanErrorKind } from './scanErrors';
+import { isUsableScan } from './scanResult';
 
 const proxyUrl = process.env.EXPO_PUBLIC_PROXY_URL ?? '';
 
 export interface ScannedExpense {
   merchant: string;
   amount: number;
-  currency: string;
+  /** As printed on the document; null when it shows none. */
+  currency: string | null;
   date: string;
   category: {
     id: string;
@@ -31,11 +33,13 @@ export type AiUsage = UsageSnapshot;
 
 export class ScanRequestError extends Error {
   kind: ScanErrorKind;
+  error: ScanError;
   status?: number;
 
-  constructor(kind: ScanErrorKind, status?: number) {
-    super(scanFailureCopy(kind).title);
-    this.kind = kind;
+  constructor(error: ScanError, status?: number) {
+    super(scanFailureCopy(error).title);
+    this.kind = error.kind;
+    this.error = error;
     this.status = status;
   }
 }
@@ -211,13 +215,12 @@ async function scan(body: {
     remember(res);
     const json = await res.json() as ScannedExpense;
     const amount = Number(json.amount);
-    if (!Number.isFinite(amount)) {
-      console.error('scan missing amount', res.status);
-      return null;
-    }
+    // Older Workers return a 0 or missing amount as a result. It isn't one.
+    if (!isUsableScan({ amount, confidence: json.confidence })) throw new ScanRequestError({ kind: 'unreadable' });
     return {
       ...json,
       amount,
+      currency: typeof json.currency === 'string' && json.currency.trim() ? json.currency.trim().toUpperCase() : null,
       lineId: json.lineId ?? null,
       matchConfidence: json.matchConfidence ?? null,
       isPaymentConfirmation: Boolean(json.isPaymentConfirmation),
@@ -230,7 +233,7 @@ async function scan(body: {
     }
     if (e instanceof ScanRequestError) throw e;
     console.error('scan error', e instanceof Error ? e.message : e);
-    throw new ScanRequestError('unavailable');
+    throw new ScanRequestError({ kind: 'unavailable' });
   }
 }
 
@@ -281,7 +284,7 @@ export async function transcribeAudio(uri: string): Promise<string | null> {
     }
     if (e instanceof ScanRequestError) throw e;
     console.error('transcribe error', e instanceof Error ? e.message : e);
-    throw new ScanRequestError('unavailable');
+    throw new ScanRequestError({ kind: 'unavailable' });
   }
 }
 

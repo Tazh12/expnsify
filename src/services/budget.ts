@@ -153,7 +153,7 @@ export function matchLine(
   for (const line of spendable) {
     let score = 0;
     const n = norm(line.name);
-    if (n && (m.includes(n) || n.includes(m))) score += 0.55;
+    if (n && m && (m.includes(n) || n.includes(m))) score += 0.55;
     else if (n && m.length > 2) {
       const shorter = n.length < m.length ? n : m;
       const longer = n.length < m.length ? m : n;

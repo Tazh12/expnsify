@@ -1,3 +1,5 @@
+import { countStatementRows, normalizeCurrency, STATEMENT_MIN_ROWS } from './statement.ts';
+
 interface Env {
   GROQ_API_KEY: string;
   FIREBASE_API_KEY: string;
@@ -73,6 +75,11 @@ function ok(body: unknown, status = 200, extra?: Record<string, string>): Respon
 
 function err(msg: string, status = 400): Response {
   return ok({ error: msg }, status);
+}
+
+// 422s are not ok, so the action isn't counted against the month.
+function statement(transactions: number | null): Response {
+  return ok({ error: 'statement', transactions }, 422);
 }
 
 function monthKey(d = new Date()): string {
@@ -338,6 +345,9 @@ async function handleScan(req: Request, env: Env): Promise<Response> {
     }
   }
 
+  const rows = text ? countStatementRows(text) : 0;
+  if (rows >= STATEMENT_MIN_ROWS) return statement(rows);
+
   const categories = body.categories ?? [];
   const lines = body.lines ?? [];
   const categoryList = categories.length > 0
@@ -349,12 +359,12 @@ async function handleScan(req: Request, env: Env): Promise<Response> {
       ).join('\n')
     : '(no budget lines this month)';
 
-  const system = `You extract a single money movement from a receipt, bank screenshot, payment confirmation email/PDF, or short user note.
+  const system = `You extract a single money movement from a paper receipt, a photo of a checkout or POS terminal screen, a phone screenshot (banking or payment app), an invoice, a payment confirmation email/PDF, or a short user note.
 Return ONLY JSON with this exact shape:
 {
   "merchant": string,
   "amount": number,
-  "currency": "USD",
+  "currency": string | null,
   "date": string,
   "category": {
     "id": string,
@@ -367,6 +377,8 @@ Return ONLY JSON with this exact shape:
   "lineId": string | null,
   "matchConfidence": number,
   "isPaymentConfirmation": boolean,
+  "document_type": "receipt" | "invoice" | "payment_confirmation" | "statement" | "other",
+  "transaction_count": number,
   "line_items": [{ "name": string, "amount": number }]
 }
 
@@ -377,13 +389,17 @@ This month's budget lines (prefer matching one of these; use the line's id as li
 ${lineList}
 
 Rules:
+- amount: the total actually paid, as a positive number. Totals may be labelled in any language: Total, Summe, Zu zahlen, Betrag, Total à payer, À payer, Totale, Importo. If you cannot find a total, use 0 and confidence 0.
+- currency: the ISO 4217 code of the currency printed on the document (CHF for "Fr." or "SFr.", EUR for "€"). Use null if no currency is shown. Never assume USD.
+- merchant: the store or company name, from the logo, header, or a brand prefix on item names. A screen photo still has a merchant.
 - If an existing category fits, set category.id to that id and isNew=false. suggestedColor is ignored when isNew=false.
 - If you must invent one, use a single short lowercase word (a-z only) as id, Title Case as name, isNew=true, and pick a tasteful hex color for suggestedColor.
 - date: ISO 8601 using today's date ${new Date().toISOString().slice(0, 10)} if unclear.
 - confidence: 0..1 based on image/text clarity.
 - lineId: id of the best matching unpaid budget line, or null if none fit. Prefer unpaid lines whose name/merchant is close and whose expected amount is within ~5%.
 - matchConfidence: 0..1 for that line match.
-- isPaymentConfirmation: true if this is a bill/receipt/email confirming a payment already made (mark the line complete), false if it is a new spend to log.
+- isPaymentConfirmation: true only for a bill, invoice, or payment-sent confirmation for a recurring payment (rent, utilities, insurance, subscription), so the budget line can be marked paid. A store receipt or a checkout screen is a new spend: false.
+- document_type "statement": the document lists several separate transactions on different dates (bank or card statement, transaction list). Set transaction_count to how many, amount to 0, and line_items to []. Otherwise transaction_count is 1.
 - If the receipt shows itemized line items, extract them as an array of { name, amount }.
 - Return at most ${SCAN_MAX_LINE_ITEMS} line_items. On a longer receipt, keep the most expensive ones.
 - If you can only read a total, return an empty array for line_items.
@@ -427,12 +443,25 @@ Rules:
   }
 
   try {
-    const parsed = parseModelJson(raw) as { amount?: unknown; line_items?: unknown };
-    if (!Number.isFinite(Number(parsed?.amount))) {
-      console.error('groq scan missing amount', raw.slice(0, 300));
-      return err('Groq scan had no amount', 502);
+    const parsed = parseModelJson(raw) as {
+      amount?: unknown; currency?: unknown; line_items?: unknown;
+      document_type?: unknown; transaction_count?: unknown;
+    };
+    if (parsed?.document_type === 'statement') {
+      const count = Number(parsed.transaction_count);
+      return statement(Number.isFinite(count) && count > 0 ? count : null);
     }
-    return ok({ ...parsed, line_items: sanitizeLineItems(parsed.line_items) });
+    const amount = Number(parsed?.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      console.error('groq scan had no amount', String(parsed?.document_type ?? ''));
+      return err('unreadable', 422);
+    }
+    return ok({
+      ...parsed,
+      amount,
+      currency: normalizeCurrency(parsed.currency),
+      line_items: sanitizeLineItems(parsed.line_items),
+    });
   } catch {
     console.error('groq scan parse failed', raw.slice(0, 300));
     return err('Failed to parse Groq response', 502);

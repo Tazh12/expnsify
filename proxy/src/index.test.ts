@@ -1,5 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import worker from './index.ts';
 
 const TESTER = 'uid-tester';
@@ -178,5 +179,105 @@ describe('scan against Groq limits', () => {
     assert.equal(groqBodies.length, 1);
     assert.ok(Date.now() - started < 1000);
     assert.equal((await res.json() as { retryAfter?: number }).retryAfter, 45);
+  });
+});
+
+function pdfScan(token: string, file: string) {
+  const b64 = readFileSync(new URL(`../test/fixtures/${file}`, import.meta.url)).toString('base64');
+  return new Request('https://proxy.test/scan', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pdfBase64: b64 }),
+  });
+}
+
+function groqJson(content: Record<string, unknown>) {
+  return () => Response.json({
+    choices: [{ message: { content: JSON.stringify(content) }, finish_reason: 'stop' }],
+    usage: { prompt_tokens: 500, completion_tokens: 120 },
+  });
+}
+
+const VOLG = {
+  merchant: 'Volg',
+  amount: 5.75,
+  currency: 'Fr.',
+  date: '2026-10-22',
+  category: { id: 'groceries', name: 'Groceries', isNew: false },
+  note: null,
+  confidence: 0.9,
+  lineId: null,
+  matchConfidence: 0,
+  isPaymentConfirmation: false,
+  document_type: 'receipt',
+  transaction_count: 1,
+  line_items: [
+    { name: 'VOLG MATE 33CL', amount: 1.0 },
+    { name: 'FRÜCHTE', amount: 2.15 },
+    { name: 'HIEST CHRUSTENK 300G', amount: 2.6 },
+  ],
+};
+
+describe('scan results', () => {
+  it('flags a bank statement PDF without spending a Groq call or an AI action', async () => {
+    const env = envWith(TESTER);
+    const res = await worker.fetch(pdfScan('token-tester', 'statement.pdf'), env);
+    assert.equal(res.status, 422);
+    assert.deepEqual(await res.json(), { error: 'statement', transactions: 20 });
+    assert.equal(groqBodies.length, 0);
+    const used = await (await worker.fetch(usage('token-tester'), env)).json() as { used: number };
+    assert.equal(used.used, 10);
+  });
+
+  it('sends a single invoice PDF to Groq as text', async () => {
+    groqReplies = [groqJson({ ...VOLG, merchant: 'Example Plumbing GmbH', amount: 432.4, currency: 'CHF', line_items: [] })];
+    const res = await worker.fetch(pdfScan('token-tester', 'invoice.pdf'), envWith(TESTER));
+    assert.equal(res.status, 200);
+    const messages = groqBodies[0].messages as { role: string; content: unknown }[];
+    assert.match(String(messages[1].content), /Total due CHF 432\.40/);
+    assert.equal((await res.json() as { amount: number }).amount, 432.4);
+  });
+
+  it('flags a statement the model recognises in an image', async () => {
+    groqReplies = [groqJson({ ...VOLG, amount: 0, document_type: 'statement', transaction_count: 14 })];
+    const res = await worker.fetch(scan('token-tester'), envWith(TESTER));
+    assert.equal(res.status, 422);
+    assert.deepEqual(await res.json(), { error: 'statement', transactions: 14 });
+  });
+
+  it('rejects a zero amount instead of returning it as a result', async () => {
+    groqReplies = [groqJson({ ...VOLG, merchant: 'Unknown', amount: 0, confidence: 0 })];
+    const env = envWith(TESTER);
+    const res = await worker.fetch(scan('token-tester'), env);
+    assert.equal(res.status, 422);
+    assert.equal((await res.json() as { error: string }).error, 'unreadable');
+    const used = await (await worker.fetch(usage('token-tester'), env)).json() as { used: number };
+    assert.equal(used.used, 10);
+  });
+
+  it('reads a POS screen with Swiss francs and its items', async () => {
+    groqReplies = [groqJson(VOLG)];
+    const res = await worker.fetch(scan('token-tester'), envWith(TESTER));
+    assert.equal(res.status, 200);
+    const body = await res.json() as typeof VOLG;
+    assert.equal(body.merchant, 'Volg');
+    assert.equal(body.amount, 5.75);
+    assert.equal(body.currency, 'CHF');
+    assert.equal(body.line_items.length, 3);
+    assert.equal(body.category.name, 'Groceries');
+  });
+
+  it('leaves currency empty when the document shows none', async () => {
+    groqReplies = [groqJson({ ...VOLG, currency: null })];
+    const body = await (await worker.fetch(scan('token-tester'), envWith(TESTER))).json() as { currency: unknown };
+    assert.equal(body.currency, null);
+  });
+
+  it('does not tell the model every amount is in USD, and covers screens', async () => {
+    await worker.fetch(scan('token-tester'), envWith(TESTER));
+    const system = String((groqBodies[0].messages as { content: unknown }[])[0].content);
+    assert.doesNotMatch(system, /"currency": "USD"/);
+    assert.match(system, /screen/i);
+    assert.match(system, /Zu zahlen/);
   });
 });
