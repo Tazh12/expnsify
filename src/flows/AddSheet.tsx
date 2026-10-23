@@ -100,11 +100,6 @@ type Phase = SheetPhase;
 type Method = 'photo' | 'image' | 'voice' | 'file' | 'manual';
 export type CaptureMethod = Method;
 
-// Temporary: traces the Add sheet on device. Watch in Console.app, filter "[SHEET]".
-function sheetLog(event: string, detail: Record<string, unknown>) {
-  console.log(`[SHEET] ${event} ${JSON.stringify(detail)}`);
-}
-
 async function uriToBase64(uri: string): Promise<string> {
   if (Platform.OS === 'web' || uri.startsWith('blob:') || uri.startsWith('data:')) {
     const res = await fetch(uri);
@@ -257,9 +252,6 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
         ?? matchLine(data.merchant, data.amount, data.date, monthLines)?.line ?? null
       : null;
     setMatchedLine(match);
-    sheetLog('review', {
-      paymentConfirmation: !!data?.isPaymentConfirmation, modelLineId: data?.lineId ?? null, matched: !!match,
-    });
     if (data?.isPaymentConfirmation && match && !editExpense) {
       setCompleteOpen(true);
       setPhase('review');
@@ -366,14 +358,9 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
           }
         }
 
-        const pickerStarted = Date.now();
         const result = m === 'photo'
           ? await ImagePicker.launchCameraAsync({ base64: true, quality: 0.5, mediaTypes: ['images'] })
           : await ImagePicker.launchImageLibraryAsync({ base64: true, quality: 0.5, mediaTypes: ['images'] });
-        sheetLog('picker returned', {
-          method: m, canceled: result.canceled, ms: Date.now() - pickerStarted,
-          width: result.assets?.[0]?.width, height: result.assets?.[0]?.height, mime: result.assets?.[0]?.mimeType,
-        });
 
         if (result.canceled || !result.assets[0]) { backToChoice(); return; }
         setPhase('scan');
@@ -523,10 +510,6 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
   const body = sheetBody(sheet);
   const empty = visible && sheetBody({ ...sheet, saving: saveState !== 'idle' }) === 'none';
 
-  useEffect(() => {
-    sheetLog('state', { open, visible, phase, body, completeOpen, blocked: !!blocked, saveState });
-  }, [open, visible, phase, body, completeOpen, !!blocked, saveState]);
-
   // Should never happen. If a state ever leaves nothing to draw, close instead of showing a bare handle.
   useEffect(() => {
     if (!empty) return;
@@ -539,12 +522,7 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
   return (
     <>
       {/* From the menu, the sheet stays hidden while the camera or a picker is up, so nothing sits behind it. */}
-      <BottomSheet
-        visible={visible}
-        onClose={saveState === 'idle' ? cancel : onClose}
-        onShow={() => sheetLog('modal shown', { phase })}
-        onDismiss={() => sheetLog('modal dismissed', { phase })}
-      >
+      <BottomSheet visible={visible} onClose={saveState === 'idle' ? cancel : onClose}>
         <View style={{ paddingHorizontal: 20, position: 'relative' }}>
           {body === 'blocked' && blocked && (
             // Shown in the sheet: iOS won't present the notice's own modal on top of this one.
