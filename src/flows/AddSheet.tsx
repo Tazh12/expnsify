@@ -20,6 +20,7 @@ import { useSettings } from '../store/useSettings';
 import { useRates, FRANKFURTER_CURRENCIES } from '../store/useRates';
 import { useAuth } from '../store/useAuth';
 import { scanImage, scanText, scanPdf, transcribeAudio, takeAiLimit, ScanRequestError, type ScannedExpense } from '../services/groq';
+import { scanFailureCopy, type ScanFailure } from '../services/scanErrors';
 import { capturePurchaseLocation } from '../services/location';
 import { uid, fmt, parseLocalDate, toLocalDateISO } from '../services/format';
 import { CurrencyPickerSheet } from '../components/CurrencyPicker';
@@ -93,7 +94,7 @@ function initialSpendLineId(
   return id;
 }
 
-type Phase = 'pick' | 'coach' | 'scan' | 'review';
+type Phase = 'pick' | 'coach' | 'scan' | 'review' | 'error';
 type Method = 'photo' | 'image' | 'voice' | 'file' | 'manual';
 export type CaptureMethod = Method;
 
@@ -170,6 +171,7 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'done'>('idle');
   const [completeOpen, setCompleteOpen] = useState(false);
   const [matchedLine, setMatchedLine] = useState<BudgetLine | null>(null);
+  const [scanError, setScanError] = useState<ScanFailure | null>(null);
 
   const doneScale = useRef(new Animated.Value(0.6)).current;
 
@@ -187,6 +189,7 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
     setSaveState('idle');
     setCompleteOpen(false);
     setMatchedLine(null);
+    setScanError(null);
     if (initialMethod && !editExpense && !pendingShare?.uri && !launchedCamera.current) {
       launchedCamera.current = true;
       startScan(initialMethod);
@@ -214,6 +217,13 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
   };
   const cancel = fromMenu ? onBackToChoice! : onClose;
 
+  // Scan failures show inside the sheet. A native Alert over the sheet, followed by closing the
+  // sheet from its button, left an empty sheet stuck on screen (iOS can't dismiss a modal mid-alert).
+  const showScanError = (failure: ScanFailure) => {
+    setScanError(failure);
+    setPhase('error');
+  };
+
   const failScan = (
     message = 'Could not read that receipt. Try again, or enter it manually.',
     title = 'Could not read that receipt',
@@ -222,8 +232,13 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
       setPhase('pick');
       return;
     }
-    Alert.alert(title, message);
-    backToChoice();
+    showScanError({ title, message });
+  };
+
+  const typeItInstead = () => {
+    setScanError(null);
+    setMethod('manual');
+    goReview(null);
   };
 
   const goReview = (data: ScannedExpense | null, uri?: string, src: TxnSource = 'manual') => {
@@ -244,17 +259,6 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
     setPhase('review');
   };
 
-  const offerManualEntry = () => {
-    Alert.alert(
-      "Scanning isn't available right now",
-      'You can add it by hand.',
-      [
-        { text: 'Not now', style: 'cancel', onPress: backToChoice },
-        { text: 'Type it', onPress: () => { setMethod('manual'); goReview(null); } },
-      ],
-    );
-  };
-
   const finishScan = async (
     run: () => Promise<ScannedExpense | null>,
     unreadable?: { title?: string; message?: string },
@@ -272,13 +276,8 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
         setPhase('pick');
         return null;
       }
-      if (e instanceof ScanRequestError && e.kind === 'auth') {
-        Alert.alert('Please sign in again.');
-        backToChoice();
-        return null;
-      }
       if (e instanceof ScanRequestError) {
-        offerManualEntry();
+        showScanError(scanFailureCopy(e.kind));
         return null;
       }
       throw e;
@@ -398,21 +397,15 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
       }
     } catch (e) {
       if (e instanceof ScanRequestError) {
-        if (e.kind === 'auth') {
-          Alert.alert('Please sign in again.');
-          backToChoice();
-        } else {
-          offerManualEntry();
-        }
+        showScanError(scanFailureCopy(e.kind));
         return;
       }
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.toLowerCase().includes('simulator') || msg.toLowerCase().includes('not available')) {
-        Alert.alert('Camera unavailable', 'The camera does not work in the simulator. Test on a real iPhone.');
+        showScanError({ title: 'Camera unavailable', message: 'The camera does not work in the simulator. Test on a real iPhone.' });
       } else {
-        Alert.alert('Something went wrong', 'Could not process the file. Please try again.');
+        failScan('Could not process the file. Please try again.', 'Something went wrong');
       }
-      backToChoice();
     }
   };
 
@@ -420,8 +413,8 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
     try {
       const perm = await Audio.requestPermissionsAsync();
       if (perm.status !== 'granted') {
-        Alert.alert('Microphone access needed', 'Please enable microphone access in Settings to log spending by voice.');
-        backToChoice();
+        // The coach screen is up, so say it in the sheet, not in an Alert over it.
+        showScanError({ title: 'Microphone access needed', message: 'Please enable microphone access in Settings to log spending by voice.' });
         return;
       }
       setPhase('scan');
@@ -528,6 +521,9 @@ export function AddSheet({ open, onClose, editExpense, pendingShare, initialMeth
             method === 'voice' && listening
               ? <ListeningPhase levels={voice.levels}/>
               : <ScanPhase method={method}/>
+          )}
+          {phase === 'error' && scanError && (
+            <ScanErrorCard failure={scanError} onTypeIt={typeItInstead} onDismiss={backToChoice}/>
           )}
           {phase === 'review' && !completeOpen && (
             <ReviewPhase
@@ -750,6 +746,30 @@ function ListeningPhase({ levels }: { levels: SharedValue<number[]> }) {
       <Text style={{ fontSize: 13, color: C.muted, marginTop: 6, textAlign: 'center' }}>
         Merchant, amount, and the budget line
       </Text>
+    </View>
+  );
+}
+
+function ScanErrorCard({ failure, onTypeIt, onDismiss }: {
+  failure: ScanFailure;
+  onTypeIt: () => void;
+  onDismiss: () => void;
+}) {
+  const C = useTheme();
+  return (
+    <View style={{ paddingBottom: 8 }}>
+      <Text style={{ fontFamily: C.fonts.serif, fontSize: 26, color: C.cream, letterSpacing: -0.3 }}>{failure.title}</Text>
+      <Text style={{ color: C.muted, fontSize: 15, lineHeight: 22, marginTop: 10 }}>{failure.message}</Text>
+      <Tap
+        onPress={onTypeIt}
+        haptic
+        style={{ marginTop: 20, paddingVertical: 14, borderRadius: 14, backgroundColor: C.sage, alignItems: 'center' }}
+      >
+        <Text style={{ color: C.onPrimary, fontSize: 15, fontWeight: '600' }}>Type it</Text>
+      </Tap>
+      <Tap onPress={onDismiss} style={{ marginTop: 8, paddingVertical: 14, alignItems: 'center' }}>
+        <Text style={{ color: C.muted, fontSize: 15, fontWeight: '500' }}>Not now</Text>
+      </Tap>
     </View>
   );
 }

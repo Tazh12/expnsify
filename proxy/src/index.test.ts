@@ -21,7 +21,18 @@ function fakeKv(seed: Record<string, string> = {}) {
 
 const realFetch = globalThis.fetch;
 
+const SCAN_OK = () => Response.json({
+  choices: [{ message: { content: '{"merchant":"Cafe","amount":4.5,"line_items":[]}' }, finish_reason: 'stop' }],
+  usage: { prompt_tokens: 300, completion_tokens: 40 },
+});
+
+// Each Groq call takes the next canned response; the last one repeats.
+let groqReplies: (() => Response)[] = [SCAN_OK];
+let groqBodies: Record<string, unknown>[] = [];
+
 beforeEach(() => {
+  groqReplies = [SCAN_OK];
+  groqBodies = [];
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.includes('identitytoolkit')) {
@@ -31,7 +42,9 @@ beforeEach(() => {
       return Response.json({ users: [{ localId: uid, email: `${uid}@example.com` }] });
     }
     if (url.includes('api.groq.com')) {
-      return Response.json({ choices: [{ message: { content: '{"merchant":"Cafe","amount":4.5,"line_items":[]}' } }] });
+      groqBodies.push(JSON.parse(String(init?.body)));
+      const reply = groqReplies.length > 1 ? groqReplies.shift()! : groqReplies[0];
+      return reply();
     }
     throw new Error(`unexpected fetch ${url}`);
   }) as typeof fetch;
@@ -110,5 +123,60 @@ describe('PRO_TESTER_UIDS', () => {
   it('treats everyone as free when the secret is unset', async () => {
     const res = await worker.fetch(scan('token-tester'), envWith(undefined));
     assert.equal(res.status, 429);
+  });
+});
+
+function groq429(message: string, retryAfter = '0') {
+  return () => new Response(JSON.stringify({ error: { message, type: 'tokens', code: 'rate_limit_exceeded' } }), {
+    status: 429,
+    headers: { 'Content-Type': 'application/json', 'retry-after': retryAfter },
+  });
+}
+
+describe('scan against Groq limits', () => {
+  it('asks for few enough output tokens to fit a 1000 OTPM limit', async () => {
+    const env = envWith(TESTER);
+    await worker.fetch(scan('token-tester'), env);
+    assert.equal(groqBodies.length, 1);
+    assert.ok(Number(groqBodies[0].max_tokens) <= 700, `max_tokens ${groqBodies[0].max_tokens}`);
+  });
+
+  it('retries once after a Groq rate limit, then succeeds and counts one action', async () => {
+    groqReplies = [groq429('Rate limit reached for model on tokens per minute (TPM)'), SCAN_OK];
+    const env = envWith(TESTER);
+    const res = await worker.fetch(scan('token-tester'), env);
+    assert.equal(res.status, 200);
+    assert.equal(groqBodies.length, 2);
+    assert.equal(res.headers.get('X-Ai-Used'), '11');
+  });
+
+  it('returns ai_busy, not a usage limit, when Groq stays rate limited', async () => {
+    groqReplies = [groq429('Rate limit reached for model on tokens per minute (TPM)')];
+    const env = envWith(TESTER);
+    const res = await worker.fetch(scan('token-tester'), env);
+    assert.equal(res.status, 503);
+    const body = await res.json() as { error: string; message?: string };
+    assert.equal(body.error, 'ai_busy');
+    assert.ok(!JSON.stringify(body).includes('org_'), 'leaks Groq details');
+    assert.equal(groqBodies.length, 2);
+    const used = await (await worker.fetch(usage('token-tester'), env)).json() as { used: number };
+    assert.equal(used.used, 10);
+  });
+
+  it('does not retry a request Groq calls too large', async () => {
+    groqReplies = [groq429('Request too large for model `qwen` in organization `org_x` on output tokens per minute (OTPM): Limit 1000, Requested 1024.')];
+    const res = await worker.fetch(scan('token-tester'), envWith(TESTER));
+    assert.equal(res.status, 503);
+    assert.equal(groqBodies.length, 1);
+  });
+
+  it('does not wait out a long retry-after', async () => {
+    groqReplies = [groq429('Rate limit reached', '45'), SCAN_OK];
+    const started = Date.now();
+    const res = await worker.fetch(scan('token-tester'), envWith(TESTER));
+    assert.equal(res.status, 503);
+    assert.equal(groqBodies.length, 1);
+    assert.ok(Date.now() - started < 1000);
+    assert.equal((await res.json() as { retryAfter?: number }).retryAfter, 45);
   });
 });

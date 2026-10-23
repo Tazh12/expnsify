@@ -46,6 +46,13 @@ function chatPayload(
   return body;
 }
 
+// Groq's on_demand tier caps output tokens per minute (1000 for the scan model),
+// counted against max_tokens. A worst-case scan (25 line items) is about 550 tokens.
+const SCAN_MAX_TOKENS = 700;
+const SCAN_MAX_LINE_ITEMS = 25;
+const MAX_RETRY_WAIT_MS = 5000;
+const CHAT_URL = 'https://api.groq.com/openai/v1/chat/completions';
+
 const FREE_LIMIT = 10;
 const PAID_LIMIT = 200;
 const PER_MINUTE = 10;
@@ -176,10 +183,73 @@ function withHeaders(res: Response, headers: Record<string, string>): Response {
   return new Response(res.body, { status: res.status, headers: next });
 }
 
+type GroqResult = { ok: true; res: Response } | { ok: false; reply: Response };
+
+function retryAfterSeconds(res: Response): number {
+  const raw = Number(res.headers.get('retry-after'));
+  return Number.isFinite(raw) && raw >= 0 ? raw : 2;
+}
+
+function busy(retryAfter: number): Response {
+  return ok({
+    error: 'ai_busy',
+    message: 'Vadri’s AI is busy. Try again in a minute.',
+    retryAfter: Math.ceil(retryAfter),
+  }, 503);
+}
+
+/**
+ * Calls Groq, retrying once on a rate limit when the wait is short.
+ * Never 429 to the app: shipped builds read any 429 as "AI actions used up".
+ */
+async function callGroq(
+  route: string,
+  model: string,
+  maxTokens: number | null,
+  url: string,
+  init: RequestInit,
+): Promise<GroqResult> {
+  for (let attempt = 1; ; attempt++) {
+    const res = await fetch(url, init);
+    const log: Record<string, unknown> = { route, model, attempt, status: res.status, max_tokens: maxTokens };
+    if (res.ok) {
+      const json = await res.clone().json().catch(() => null) as {
+        usage?: { prompt_tokens?: number; completion_tokens?: number };
+        choices?: { finish_reason?: string }[];
+      } | null;
+      log.prompt_tokens = json?.usage?.prompt_tokens ?? null;
+      log.completion_tokens = json?.usage?.completion_tokens ?? null;
+      log.finish_reason = json?.choices?.[0]?.finish_reason ?? null;
+      if (log.finish_reason === 'length') console.warn('groq output cut off', JSON.stringify(log));
+      else console.log('groq', JSON.stringify(log));
+      return { ok: true, res };
+    }
+
+    const text = await res.text();
+    console.error('groq failed', JSON.stringify(log), text.slice(0, 300));
+    if (res.status !== 429) return { ok: false, reply: err('ai_unavailable', 502) };
+
+    // "Request too large" means max_tokens alone exceeds the per-minute cap: waiting won't help.
+    const wait = retryAfterSeconds(res);
+    if (/request too large/i.test(text) || attempt > 1 || wait * 1000 > MAX_RETRY_WAIT_MS) {
+      return { ok: false, reply: busy(wait) };
+    }
+    await new Promise(r => setTimeout(r, wait * 1000));
+  }
+}
+
+function chatInit(env: Env, body: Record<string, unknown>): RequestInit {
+  return {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.GROQ_API_KEY}` },
+    body: JSON.stringify(body),
+  };
+}
+
 function sanitizeLineItems(raw: unknown): { name: string; amount: number }[] {
   if (!Array.isArray(raw)) return [];
   return raw
-    .slice(0, 40)
+    .slice(0, SCAN_MAX_LINE_ITEMS)
     .map(item => {
       const row = item as { name?: unknown; amount?: unknown };
       return {
@@ -315,6 +385,7 @@ Rules:
 - matchConfidence: 0..1 for that line match.
 - isPaymentConfirmation: true if this is a bill/receipt/email confirming a payment already made (mark the line complete), false if it is a new spend to log.
 - If the receipt shows itemized line items, extract them as an array of { name, amount }.
+- Return at most ${SCAN_MAX_LINE_ITEMS} line_items. On a longer receipt, keep the most expensive ones.
 - If you can only read a total, return an empty array for line_items.
 - Do not include the grand total as a line item.`;
 
@@ -339,20 +410,11 @@ Rules:
     return err('Provide imageBase64, pdfBase64, or text');
   }
 
-  const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${env.GROQ_API_KEY}`,
-    },
-    body: JSON.stringify(chatPayload(scanModel(env), messages, { temperature: 0.1, max_tokens: 1024 })),
-  });
-
-  if (!groqRes.ok) {
-    const groqText = await groqRes.text();
-    console.error('groq scan failed', groqRes.status, groqText.slice(0, 300));
-    return err(`Groq error: ${groqText}`, 502);
-  }
+  const model = scanModel(env);
+  const groq = await callGroq('/scan', model, SCAN_MAX_TOKENS, CHAT_URL, chatInit(env,
+    chatPayload(model, messages, { temperature: 0.1, max_tokens: SCAN_MAX_TOKENS })));
+  if (!groq.ok) return groq.reply;
+  const groqRes = groq.res;
 
   const groqJson = await groqRes.json() as {
     choices: { message: { content?: string | null; reasoning?: string | null } }[];
@@ -493,17 +555,13 @@ async function handleTranscribe(req: Request, env: Env): Promise<Response> {
   groqForm.append('model', audioModel(env));
   groqForm.append('response_format', 'json');
 
-  const groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+  const groq = await callGroq('/transcribe', audioModel(env), null, 'https://api.groq.com/openai/v1/audio/transcriptions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${env.GROQ_API_KEY}` },
     body: groqForm,
   });
-
-  if (!groqRes.ok) {
-    const text = await groqRes.text();
-    console.error('groq transcribe failed', groqRes.status, text.slice(0, 300));
-    return err(`Groq transcription error: ${text}`, 502);
-  }
+  if (!groq.ok) return groq.reply;
+  const groqRes = groq.res;
 
   const json = await groqRes.json() as { text: string };
   return ok({ text: json.text });
@@ -519,22 +577,16 @@ async function handleInsights(req: Request, env: Env): Promise<Response> {
 
   const expenses = Array.isArray(body.expenses) ? body.expenses.slice(0, 200) : [];
   const categories = body.categories ?? [];
-  const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${env.GROQ_API_KEY}`,
-    },
-    body: JSON.stringify(chatPayload(textModel(env), [
+  const model = textModel(env);
+  const groq = await callGroq('/insights', model, 400, CHAT_URL, chatInit(env, chatPayload(model, [
       {
         role: 'system',
         content: `You summarize personal spending. Return ONLY JSON: { "insights": string[] } with 3 or 4 short sentences. Use the category names. Do not invent purchases that are not in the data. Categories: ${categories.map(c => `${c.id}=${c.name}`).join(', ') || 'none'}.`,
       },
       { role: 'user', content: JSON.stringify(expenses) },
-    ], { temperature: 0.3, max_tokens: 400 })),
-  });
-
-  if (!groqRes.ok) return err(`Groq error: ${await groqRes.text()}`, 502);
+    ], { temperature: 0.3, max_tokens: 400 })));
+  if (!groq.ok) return groq.reply;
+  const groqRes = groq.res;
   const groqJson = await groqRes.json() as {
     choices: { message: { content?: string | null; reasoning?: string | null } }[];
   };
@@ -562,22 +614,16 @@ async function handleAsk(req: Request, env: Env): Promise<Response> {
   const expenses = Array.isArray(body.expenses) ? body.expenses.slice(0, 100) : [];
   const allowed = new Set(expenses.map(e => e.id).filter((id): id is string => typeof id === 'string'));
 
-  const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${env.GROQ_API_KEY}`,
-    },
-    body: JSON.stringify(chatPayload(textModel(env), [
+  const model = textModel(env);
+  const groq = await callGroq('/ask', model, 400, CHAT_URL, chatInit(env, chatPayload(model, [
       {
         role: 'system',
         content: 'Match a question to expenses. Return ONLY JSON: { "ids": string[] } using ids from the provided expenses. Match merchant, note, and item names. If nothing matches, return an empty array.',
       },
       { role: 'user', content: JSON.stringify({ question, expenses }) },
-    ], { temperature: 0.1, max_tokens: 400 })),
-  });
-
-  if (!groqRes.ok) return err(`Groq error: ${await groqRes.text()}`, 502);
+    ], { temperature: 0.1, max_tokens: 400 })));
+  if (!groq.ok) return groq.reply;
+  const groqRes = groq.res;
   const groqJson = await groqRes.json() as {
     choices: { message: { content?: string | null; reasoning?: string | null } }[];
   };

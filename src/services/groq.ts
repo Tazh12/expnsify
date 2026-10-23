@@ -4,6 +4,7 @@ import type { Expense, LineItem } from '../store/useExpenses';
 import * as FileSystem from 'expo-file-system/legacy';
 import { auth } from './firebase';
 import { publishAiLimit, publishAiUsage, type AiBlockCode, type UsageSnapshot } from './aiUsageBridge';
+import { scanErrorKind, scanFailureCopy, type ScanErrorKind } from './scanErrors';
 
 const proxyUrl = process.env.EXPO_PUBLIC_PROXY_URL ?? '';
 
@@ -29,11 +30,11 @@ export interface ScannedExpense {
 export type AiUsage = UsageSnapshot;
 
 export class ScanRequestError extends Error {
-  kind: 'unavailable' | 'auth';
+  kind: ScanErrorKind;
   status?: number;
 
-  constructor(kind: 'unavailable' | 'auth', status?: number) {
-    super(kind === 'auth' ? 'Please sign in again.' : "Scanning isn't available right now.");
+  constructor(kind: ScanErrorKind, status?: number) {
+    super(scanFailureCopy(kind).title);
     this.kind = kind;
     this.status = status;
   }
@@ -94,8 +95,7 @@ async function rejectIfNotOk(label: string, res: Response): Promise<void> {
   if (res.ok) return;
   const body = await res.text();
   console.error(label, res.status, body.slice(0, 500));
-  if (res.status === 401 || res.status === 403) throw new ScanRequestError('auth', res.status);
-  throw new ScanRequestError('unavailable', res.status);
+  throw new ScanRequestError(scanErrorKind(res.status, body), res.status);
 }
 
 // Guests can't use AI. Stop before the request so they see the account prompt, not an error.
