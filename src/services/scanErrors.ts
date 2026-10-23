@@ -1,4 +1,4 @@
-export type ScanErrorKind = 'auth' | 'busy' | 'unavailable' | 'unreadable' | 'statement';
+export type ScanErrorKind = 'auth' | 'busy' | 'unavailable' | 'unreadable' | 'pdf_unreadable' | 'statement';
 
 export interface ScanError {
   kind: ScanErrorKind;
@@ -23,6 +23,7 @@ export function scanErrorKind(status: number, body: string): ScanError {
   const error = parsed?.error;
   if (error === 'ai_busy') return { kind: 'busy' };
   if (error === 'unreadable') return { kind: 'unreadable' };
+  if (error === 'pdf_unreadable') return { kind: 'pdf_unreadable' };
   if (error === 'statement') {
     const count = Number(parsed?.transactions);
     return Number.isFinite(count) && count > 0 ? { kind: 'statement', transactions: count } : { kind: 'statement' };
@@ -38,6 +39,8 @@ export function scanFailureCopy(error: ScanError): ScanFailure {
       return { title: 'Scanning is busy', message: 'Too many scans at once. Try again in a minute, or add it by hand.' };
     case 'unreadable':
       return { title: 'Could not find a total', message: 'Vadri could not read an amount. Try a sharper photo, or add it by hand.' };
+    case 'pdf_unreadable':
+      return { title: "Couldn't read this PDF", message: 'Vadri found no text or image in it. Try a screenshot of the receipt, or add it by hand.' };
     case 'statement':
       return {
         title: error.transactions

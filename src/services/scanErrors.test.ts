@@ -40,3 +40,11 @@ describe('statement and unreadable scans', () => {
     assert.deepEqual(scanErrorKind(422, JSON.stringify({ error: 'unreadable' })), { kind: 'unreadable' });
   });
 });
+
+describe('unreadable PDFs', () => {
+  it('says the PDF could not be read instead of a generic error', () => {
+    const error = scanErrorKind(422, JSON.stringify({ error: 'pdf_unreadable' }));
+    assert.deepEqual(error, { kind: 'pdf_unreadable' });
+    assert.equal(scanFailureCopy(error).title, "Couldn't read this PDF");
+  });
+});

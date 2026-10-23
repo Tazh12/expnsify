@@ -281,3 +281,20 @@ describe('scan results', () => {
     assert.match(system, /Zu zahlen/);
   });
 });
+
+describe('unreadable PDFs', () => {
+  it('says the PDF could not be read, without spending a Groq call or an AI action', async () => {
+    const env = envWith(TESTER);
+    const req = new Request('https://proxy.test/scan', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer token-tester', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pdfBase64: Buffer.from('%PDF-1.4 broken bytes, no objects').toString('base64') }),
+    });
+    const res = await worker.fetch(req, env);
+    assert.equal(res.status, 422);
+    assert.equal((await res.json() as { error: string }).error, 'pdf_unreadable');
+    assert.equal(groqBodies.length, 0);
+    const used = await (await worker.fetch(usage('token-tester'), env)).json() as { used: number };
+    assert.equal(used.used, 10);
+  });
+});

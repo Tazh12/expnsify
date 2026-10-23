@@ -1,4 +1,5 @@
 import { countStatementRows, normalizeCurrency, STATEMENT_MIN_ROWS } from './statement.ts';
+import { decodeBase64, extractJpegFromPdf, extractPdfText, looksLikePaymentText } from './pdf.ts';
 
 interface Env {
   GROQ_API_KEY: string;
@@ -331,17 +332,19 @@ async function handleScan(req: Request, env: Env): Promise<Response> {
   let imageMime = body.mimeType ?? 'image/jpeg';
 
   if (body.pdfBase64 && !text && !imageBase64) {
-    const extracted = await extractPdfText(body.pdfBase64);
+    const { text: extracted, error } = await extractPdfText(body.pdfBase64);
     const jpeg = extractJpegFromPdf(body.pdfBase64);
     if (extracted && looksLikePaymentText(extracted)) {
       text = extracted;
     } else if (jpeg) {
       imageBase64 = jpeg;
       imageMime = 'image/jpeg';
-    } else if (extracted && extracted.trim().length > 12) {
+    } else if (extracted) {
       text = extracted;
     } else {
-      return err('Could not read that PDF. Try a screenshot of the confirmation.');
+      // Not counted (422) and no Groq call: there is nothing to send it.
+      console.error('pdf unreadable', JSON.stringify({ error: error ?? 'no text or image', bytes: body.pdfBase64.length }));
+      return err('pdf_unreadable', 422);
     }
   }
 
@@ -479,75 +482,6 @@ function parseModelJson(raw: string): unknown {
     if (objectMatch) return JSON.parse(objectMatch[0]);
     throw new Error('parse failed');
   }
-}
-
-async function extractPdfText(b64: string): Promise<string | null> {
-  try {
-    const binary = decodeBase64(b64);
-    const mod = await import('unpdf').catch(() => null);
-    if (mod) {
-      const pdf = await mod.getDocumentProxy(binary);
-      const result = await mod.extractText(pdf, { mergePages: true });
-      const text = Array.isArray(result.text) ? result.text.join('\n') : String(result.text ?? '');
-      if (text.trim().length > 12) return text;
-    }
-  } catch (e) {
-    console.error('unpdf failed', e);
-  }
-  return naivePdfText(b64);
-}
-
-function looksLikePaymentText(text: string): boolean {
-  return /(?:\$|usd|eur|gbp|cad|mxn)?\s*\d{1,7}(?:[.,]\d{2})\b|\b(total|paid|amount|invoice|receipt)\b/i.test(text);
-}
-
-function extractJpegFromPdf(b64: string): string | null {
-  try {
-    const bytes = decodeBase64(b64);
-    let best: Uint8Array | null = null;
-    for (let i = 0; i < bytes.length - 1; i++) {
-      if (bytes[i] !== 0xFF || bytes[i + 1] !== 0xD8) continue;
-      for (let j = i + 2; j < bytes.length - 1; j++) {
-        if (bytes[j] === 0xFF && bytes[j + 1] === 0xD9) {
-          const slice = bytes.subarray(i, j + 2);
-          if (slice.length > 8000 && (!best || slice.length > best.length)) best = slice;
-          i = j;
-          break;
-        }
-      }
-    }
-    return best ? encodeBase64(best) : null;
-  } catch (e) {
-    console.error('pdf jpeg extract failed', e);
-    return null;
-  }
-}
-
-function naivePdfText(b64: string): string | null {
-  try {
-    const raw = atob(b64);
-    const strings = [...raw.matchAll(/\(([^)]{3,120})\)/g)].map(m => m[1]);
-    const joined = strings.join(' ').replace(/\\n/g, ' ').trim();
-    return joined.length > 20 ? joined : null;
-  } catch {
-    return null;
-  }
-}
-
-function decodeBase64(b64: string): Uint8Array {
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
-
-function encodeBase64(bytes: Uint8Array): string {
-  let binary = '';
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-  }
-  return btoa(binary);
 }
 
 async function handleTranscribe(req: Request, env: Env): Promise<Response> {
