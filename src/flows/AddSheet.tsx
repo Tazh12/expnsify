@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, Modal, Pressable, ScrollView, Image,
-  Animated, TextInput, Platform, Alert,
+  Animated, TextInput, Platform, Alert, Keyboard,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
@@ -11,6 +11,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Audio } from 'expo-av';
 import { amountStyle, useTheme } from '../theme';
 import { Icon, Card, Tap, CategoryChip, BottomSheet } from '../components';
+import { KeyboardAccessory } from '../components/KeyboardAccessory';
 import { DatePicker } from '../components/DatePicker';
 import { useCategories } from '../store/useCategories';
 import { useExpenses, type Expense, type TxnSource } from '../store/useExpenses';
@@ -42,6 +43,8 @@ import { uploadReceipt } from '../services/receipts';
 import { RECEIPT_STORAGE_ENABLED, resolveReceiptUriToPersist } from '../services/receiptUri';
 import type { BudgetLine, SectionMeta } from '../store/budgetTypes';
 import { sectionColor } from '../store/budgetTypes';
+
+const KEYBOARD_ACCESSORY_ID = 'add-expense-keyboard';
 
 const PICKER_SECTION_ORDER = ['bills', 'variable', 'investments'] as const;
 
@@ -839,6 +842,9 @@ function ReviewPhase({
 
   const [currencyCode, setCurrencyCode] = useState(() => {
     if (editExpense && !scanned) return editExpense.currency;
+    // For manual entries (no scan), always use the preferred currency from settings
+    if (!scanned) return preferredCurrency;
+    // For scanned entries, use the scanned currency if supported, otherwise preferred
     return reviewCurrency({
       scanned: scanned?.currency,
       lineCurrencies: useBudget.getState().forMonth(monthKey(new Date())).map(l => l.currency),
@@ -931,6 +937,7 @@ function ReviewPhase({
 
   return (
     <View>
+      <KeyboardAccessory nativeID={KEYBOARD_ACCESSORY_ID} />
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -962,13 +969,14 @@ function ReviewPhase({
           currencyCode={currencyCode}
           onChangeAmount={setAmount}
           onPressCurrency={() => setCurrencyPickerOpen(true)}
+          inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
           footnote={currencyCode !== preferredCurrency && !!amount && parseFloat(amount) > 0
             ? `≈ ${fmt(convert(parseFloat(amount) || 0, currencyCode), preferredCurrency)} converted`
             : null}
         />
 
         <Card style={{ overflow: 'hidden', marginBottom: 12 }}>
-          <ReviewRow label="Merchant" value={merchant} onEdit={setMerchant} last/>
+          <ReviewRow label="Merchant" value={merchant} onEdit={setMerchant} last inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}/>
         </Card>
 
         <BudgetLinePicker
@@ -1035,8 +1043,8 @@ function ReviewPhase({
         {moreOpen && (
           <>
             <Card style={{ overflow: 'hidden', marginBottom: 12 }}>
-              <ReviewRow label="Date" value={dateDisplay} onPress={() => setDatePickerVisible(true)}/>
-              <ReviewRow label="Notes" value={note} onEdit={setNote} muted last/>
+              <ReviewRow label="Date" value={dateDisplay} onPress={() => { Keyboard.dismiss(); setDatePickerVisible(true); }}/>
+              <ReviewRow label="Notes" value={note} onEdit={setNote} muted last inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}/>
             </Card>
             {(scanned?.line_items?.length ?? 0) > 0 && (
               <Card style={{ padding: 14, marginBottom: 12 }}>
@@ -1309,6 +1317,7 @@ function BudgetLinePicker({
               placeholder="Name"
               placeholderTextColor={C.muted}
               style={{ borderWidth: 0.5, borderColor: C.hair, borderRadius: 12, padding: 12, color: C.cream, marginBottom: 10 }}
+              inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
             />
             <TextInput
               value={newAmount}
@@ -1317,6 +1326,7 @@ function BudgetLinePicker({
               placeholderTextColor={C.muted}
               keyboardType="decimal-pad"
               style={{ borderWidth: 0.5, borderColor: C.hair, borderRadius: 12, padding: 12, color: C.cream, marginBottom: 12 }}
+              inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
             />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
               <View style={{ flexDirection: 'row', gap: 8 }}>

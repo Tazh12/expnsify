@@ -8,13 +8,14 @@ import { Icon } from './Icon';
 
 /** The large amount at the top of a scanned or typed expense. Read-only without onChangeAmount. */
 export function AmountCard({
-  amount, currencyCode, onChangeAmount, onPressCurrency, footnote,
+  amount, currencyCode, onChangeAmount, onPressCurrency, footnote, inputAccessoryViewID,
 }: {
   amount: string;
   currencyCode: string;
   onChangeAmount?: (v: string) => void;
   onPressCurrency?: () => void;
   footnote?: string | null;
+  inputAccessoryViewID?: string;
 }) {
   const C = useTheme();
   const valueStyle = { ...amountStyle('semibold'), fontSize: 52, lineHeight: 64, color: C.text, flex: 1 };
@@ -34,6 +35,7 @@ export function AmountCard({
             style={valueStyle}
             placeholderTextColor={C.muted}
             placeholder="0.00"
+            inputAccessoryViewID={inputAccessoryViewID}
           />
         ) : (
           <Text style={[valueStyle, !amount && { color: C.muted }]}>{amount || '0.00'}</Text>
@@ -57,7 +59,7 @@ export function AmountCard({
   );
 }
 
-export function ReviewRow({ label, value, onEdit, onPress, muted, last }: { label: string; value: string; onEdit?: (v: string) => void; onPress?: () => void; muted?: boolean; last?: boolean }) {
+export function ReviewRow({ label, value, onEdit, onPress, muted, last, inputAccessoryViewID }: { label: string; value: string; onEdit?: (v: string) => void; onPress?: () => void; muted?: boolean; last?: boolean; inputAccessoryViewID?: string }) {
   const C = useTheme();
   const [editing, setEditing] = useState(false);
 
@@ -79,6 +81,7 @@ export function ReviewRow({ label, value, onEdit, onPress, muted, last }: { labe
           onBlur={() => setEditing(false)}
           autoFocus
           style={{ fontSize: 14, color: C.cream, textAlign: 'right', minWidth: 120 }}
+          inputAccessoryViewID={inputAccessoryViewID}
         />
       ) : (
         <Text style={{ fontSize: 14, color: muted ? C.muted : C.cream }}>{value || '—'}</Text>

@@ -99,6 +99,80 @@ export function SettingsScreen({ onClose }: Props) {
     ]);
   }
 
+  async function handleCurrencyChange(newCurrency: string) {
+    const oldCurrency = settings.preferredCurrency;
+    
+    if (oldCurrency === newCurrency) {
+      setCurrencyPickerOpen(false);
+      return;
+    }
+
+    // If there are existing expenses or budget lines, ask about conversion
+    const hasData = expenses.length > 0 || lines.length > 0;
+    
+    if (!hasData) {
+      await settings.set('preferredCurrency', newCurrency);
+      setCurrencyPickerOpen(false);
+      return;
+    }
+
+    Alert.alert(
+      'Convert to ' + newCurrency + '?',
+      `You have ${expenses.length} transaction${expenses.length === 1 ? '' : 's'} and ${lines.length} budget line${lines.length === 1 ? '' : 's'}. Convert all amounts to ${newCurrency} using current exchange rates?`,
+      [
+        {
+          text: 'Keep as-is',
+          style: 'cancel',
+          onPress: async () => {
+            await settings.set('preferredCurrency', newCurrency);
+            setCurrencyPickerOpen(false);
+          },
+        },
+        {
+          text: 'Convert all',
+          onPress: async () => {
+            await settings.set('preferredCurrency', newCurrency);
+            
+            // Convert all expenses
+            const { convert } = useRates.getState();
+            const { update } = useExpenses.getState();
+            for (const expense of expenses) {
+              if (expense.currency !== newCurrency) {
+                const convertedAmount = convert(expense.amount, expense.currency);
+                await update(expense.id, {
+                  amount: convertedAmount,
+                  currency: newCurrency,
+                });
+              }
+            }
+
+            // Convert all budget lines
+            const budgetUpdate = useBudget.getState().update;
+            for (const line of lines) {
+              if (line.currency !== newCurrency) {
+                const convertedExpected = convert(line.expected, line.currency);
+                const updates: Partial<typeof line> = {
+                  expected: convertedExpected,
+                  currency: newCurrency,
+                };
+                if (line.actualOverride != null) {
+                  updates.actualOverride = convert(line.actualOverride, line.currency);
+                }
+                await budgetUpdate(line.id, updates);
+              }
+            }
+
+            setCurrencyPickerOpen(false);
+            setToast(`Converted all amounts to ${newCurrency}`);
+            if (toastTimer.current) clearTimeout(toastTimer.current);
+            toastTimer.current = setTimeout(() => setToast(null), 3000);
+          },
+        },
+      ],
+      { cancelable: true }
+    );
+  }
+
   const isGuest = !!user?.isAnonymous;
   const displayName = user?.displayName || user?.email?.split('@')[0] || (isGuest ? 'Guest' : 'You');
 
@@ -464,7 +538,7 @@ export function SettingsScreen({ onClose }: Props) {
     <CurrencyPickerSheet
       visible={currencyPickerOpen}
       current={settings.preferredCurrency}
-      onSelect={(code) => settings.set('preferredCurrency', code)}
+      onSelect={handleCurrencyChange}
       onClose={() => setCurrencyPickerOpen(false)}
     />
     <NotifySheet open={notifyOpen} onClose={() => setNotifyOpen(false)}/>

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, Modal, TextInput, ScrollView, KeyboardAvoidingView, Platform, Alert,
+  View, Text, Modal, TextInput, ScrollView, KeyboardAvoidingView, Platform, Alert, Keyboard,
 } from 'react-native';
 import { BottomSheet } from '../components/BottomSheet';
 import { TouchableOpacity } from 'react-native';
@@ -11,6 +11,7 @@ import { Icon } from '../components/Icon';
 import { Card } from '../components/Card';
 import { Toggle } from '../components/Toggle';
 import { DatePicker } from '../components/DatePicker';
+import { KeyboardAccessory } from '../components/KeyboardAccessory';
 import {
   REPEAT_OPTIONS, parseRepeatEvery, sectionColor,
   type BudgetLine, type BudgetSection, type RepeatEvery,
@@ -19,6 +20,8 @@ import { dueDateFor, formatDueDate, occurrenceDaysInMonth, parseMonthKey, repeat
 import { findLineByName, inferDestination } from '../services/budget';
 import { GoesToPicker } from '../components/GoesToPicker';
 import { useBudgetGroups } from '../store/useBudgetGroups';
+
+const LINE_EDITOR_KEYBOARD_ACCESSORY_ID = 'line-editor-keyboard';
 
 function parseMoney(raw: string): number {
   const n = parseFloat(raw.replace(/,/g, '').trim());
@@ -157,6 +160,7 @@ export function LineEditor({
 
   return (
     <>
+      <KeyboardAccessory nativeID={LINE_EDITOR_KEYBOARD_ACCESSORY_ID} />
       <BottomSheet visible={open} onClose={onClose}>
         <ScrollView
           keyboardShouldPersistTaps="handled"
@@ -247,7 +251,7 @@ export function LineEditor({
                   <DueField
                     month={month}
                     dueDay={dueDay}
-                    onPress={() => setDatePickerOpen(true)}
+                    onPress={() => { Keyboard.dismiss(); setDatePickerOpen(true); }}
                     C={C}
                   />
                   <Field label="Note" value={observation} onChange={setObservation} placeholder="optional" C={C}/>
@@ -337,6 +341,7 @@ function Field({
           placeholder={placeholder}
           placeholderTextColor={C.muted}
           keyboardType={keyboard}
+          inputAccessoryViewID={LINE_EDITOR_KEYBOARD_ACCESSORY_ID}
           style={{
             flex: 1, paddingVertical: 14, paddingRight: 12,
             fontSize: 16, color: C.cream,
