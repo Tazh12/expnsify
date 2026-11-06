@@ -20,6 +20,8 @@ interface RatesState {
   fetchedAt: number | null;
   loadCache: () => Promise<void>;
   fetch: (base: string) => Promise<void>;
+  /** Rates for `base`, leaving the store alone. Rejects if they can't be loaded. */
+  loadFor: (base: string) => Promise<{ base: string; rates: Record<string, number> }>;
   convert: (amount: number, fromCurrency: string) => number;
   isStale: () => boolean;
 }
@@ -49,6 +51,13 @@ export const useRates = create<RatesState>((set, get) => ({
       set({ base: json.base, rates: json.rates, fetchedAt });
       await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ base: json.base, rates: json.rates, fetchedAt }));
     } catch {}
+  },
+
+  loadFor: async (base) => {
+    const res = await fetch(`https://api.frankfurter.app/latest?from=${base}`);
+    if (!res.ok) throw new Error(`Rates request failed: ${res.status}`);
+    const json = await res.json() as { base: string; rates: Record<string, number> };
+    return { base: json.base, rates: json.rates };
   },
 
   convert: (amount, fromCurrency) => {

@@ -11,7 +11,6 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Audio } from 'expo-av';
 import { amountStyle, useTheme } from '../theme';
 import { Icon, Card, Tap, CategoryChip, BottomSheet } from '../components';
-import { KeyboardAccessory } from '../components/KeyboardAccessory';
 import { DatePicker } from '../components/DatePicker';
 import { useCategories } from '../store/useCategories';
 import { useExpenses, type Expense, type TxnSource } from '../store/useExpenses';
@@ -43,8 +42,6 @@ import { uploadReceipt } from '../services/receipts';
 import { RECEIPT_STORAGE_ENABLED, resolveReceiptUriToPersist } from '../services/receiptUri';
 import type { BudgetLine, SectionMeta } from '../store/budgetTypes';
 import { sectionColor } from '../store/budgetTypes';
-
-const KEYBOARD_ACCESSORY_ID = 'add-expense-keyboard';
 
 const PICKER_SECTION_ORDER = ['bills', 'variable', 'investments'] as const;
 
@@ -937,7 +934,6 @@ function ReviewPhase({
 
   return (
     <View>
-      <KeyboardAccessory nativeID={KEYBOARD_ACCESSORY_ID} />
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -969,14 +965,13 @@ function ReviewPhase({
           currencyCode={currencyCode}
           onChangeAmount={setAmount}
           onPressCurrency={() => setCurrencyPickerOpen(true)}
-          inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
           footnote={currencyCode !== preferredCurrency && !!amount && parseFloat(amount) > 0
             ? `≈ ${fmt(convert(parseFloat(amount) || 0, currencyCode), preferredCurrency)} converted`
             : null}
         />
 
         <Card style={{ overflow: 'hidden', marginBottom: 12 }}>
-          <ReviewRow label="Merchant" value={merchant} onEdit={setMerchant} last inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}/>
+          <ReviewRow label="Merchant" value={merchant} onEdit={setMerchant} last/>
         </Card>
 
         <BudgetLinePicker
@@ -1044,7 +1039,7 @@ function ReviewPhase({
           <>
             <Card style={{ overflow: 'hidden', marginBottom: 12 }}>
               <ReviewRow label="Date" value={dateDisplay} onPress={() => { Keyboard.dismiss(); setDatePickerVisible(true); }}/>
-              <ReviewRow label="Notes" value={note} onEdit={setNote} muted last inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}/>
+              <ReviewRow label="Notes" value={note} onEdit={setNote} muted last/>
             </Card>
             {(scanned?.line_items?.length ?? 0) > 0 && (
               <Card style={{ padding: 14, marginBottom: 12 }}>
@@ -1317,7 +1312,6 @@ function BudgetLinePicker({
               placeholder="Name"
               placeholderTextColor={C.muted}
               style={{ borderWidth: 0.5, borderColor: C.hair, borderRadius: 12, padding: 12, color: C.cream, marginBottom: 10 }}
-              inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
             />
             <TextInput
               value={newAmount}
@@ -1326,7 +1320,6 @@ function BudgetLinePicker({
               placeholderTextColor={C.muted}
               keyboardType="decimal-pad"
               style={{ borderWidth: 0.5, borderColor: C.hair, borderRadius: 12, padding: 12, color: C.cream, marginBottom: 12 }}
-              inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
             />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
               <View style={{ flexDirection: 'row', gap: 8 }}>

@@ -16,6 +16,7 @@ import { aiRemainingLabel } from '../flows/UpgradeModal';
 import { deleteAccount } from '../services/account';
 import { useAccountPrompt } from '../flows/CreateAccountSheet';
 import { expensesToCsv } from '../services/export';
+import { convertAllToCurrency, ConversionSaveError } from '../services/convertAll';
 import { LinesGroupsScreen } from './LinesGroupsScreen';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -131,35 +132,24 @@ export function SettingsScreen({ onClose }: Props) {
         {
           text: 'Convert all',
           onPress: async () => {
-            await settings.set('preferredCurrency', newCurrency);
-            
-            // Convert all expenses
-            const { convert } = useRates.getState();
-            const { update } = useExpenses.getState();
-            for (const expense of expenses) {
-              if (expense.currency !== newCurrency) {
-                const convertedAmount = convert(expense.amount, expense.currency);
-                await update(expense.id, {
-                  amount: convertedAmount,
-                  currency: newCurrency,
-                });
-              }
-            }
-
-            // Convert all budget lines
-            const budgetUpdate = useBudget.getState().update;
-            for (const line of lines) {
-              if (line.currency !== newCurrency) {
-                const convertedExpected = convert(line.expected, line.currency);
-                const updates: Partial<typeof line> = {
-                  expected: convertedExpected,
-                  currency: newCurrency,
-                };
-                if (line.actualOverride != null) {
-                  updates.actualOverride = convert(line.actualOverride, line.currency);
-                }
-                await budgetUpdate(line.id, updates);
-              }
+            try {
+              await convertAllToCurrency({
+                target: newCurrency,
+                expenses,
+                lines,
+                loadRates: useRates.getState().loadFor,
+                updateExpense: useExpenses.getState().update,
+                updateLine: useBudget.getState().update,
+                setPreferred: (currency) => settings.set('preferredCurrency', currency),
+              });
+            } catch (e) {
+              Alert.alert(
+                'Couldn’t convert',
+                e instanceof ConversionSaveError
+                  ? `Some amounts may not have saved, and your currency is still ${oldCurrency}. Converted amounts stay correct, so you can try again.`
+                  : `Couldn’t get exchange rates for ${newCurrency}. Nothing was changed.`,
+              );
+              return;
             }
 
             setCurrencyPickerOpen(false);
