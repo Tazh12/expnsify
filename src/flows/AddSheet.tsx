@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, Modal, Pressable, ScrollView, Image,
-  Animated, TextInput, Platform, Alert,
+  Animated, TextInput, Platform, Alert, Keyboard,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
@@ -839,6 +839,9 @@ function ReviewPhase({
 
   const [currencyCode, setCurrencyCode] = useState(() => {
     if (editExpense && !scanned) return editExpense.currency;
+    // For manual entries (no scan), always use the preferred currency from settings
+    if (!scanned) return preferredCurrency;
+    // For scanned entries, use the scanned currency if supported, otherwise preferred
     return reviewCurrency({
       scanned: scanned?.currency,
       lineCurrencies: useBudget.getState().forMonth(monthKey(new Date())).map(l => l.currency),
@@ -1035,7 +1038,7 @@ function ReviewPhase({
         {moreOpen && (
           <>
             <Card style={{ overflow: 'hidden', marginBottom: 12 }}>
-              <ReviewRow label="Date" value={dateDisplay} onPress={() => setDatePickerVisible(true)}/>
+              <ReviewRow label="Date" value={dateDisplay} onPress={() => { Keyboard.dismiss(); setDatePickerVisible(true); }}/>
               <ReviewRow label="Notes" value={note} onEdit={setNote} muted last/>
             </Card>
             {(scanned?.line_items?.length ?? 0) > 0 && (

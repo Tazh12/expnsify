@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, Modal, TextInput, ScrollView, KeyboardAvoidingView, Platform, Alert,
+  View, Text, Modal, TextInput, ScrollView, KeyboardAvoidingView, Platform, Alert, Keyboard,
 } from 'react-native';
 import { BottomSheet } from '../components/BottomSheet';
 import { TouchableOpacity } from 'react-native';
@@ -17,8 +17,10 @@ import {
 } from '../store/budgetTypes';
 import { dueDateFor, formatDueDate, occurrenceDaysInMonth, parseMonthKey, repeatStepDays, slugKey } from '../services/month';
 import { findLineByName, inferDestination } from '../services/budget';
+import { editableAmount, resolveLineAmounts } from '../services/lineEditorCurrency';
 import { GoesToPicker } from '../components/GoesToPicker';
 import { useBudgetGroups } from '../store/useBudgetGroups';
+import { useRates } from '../store/useRates';
 
 function parseMoney(raw: string): number {
   const n = parseFloat(raw.replace(/,/g, '').trim());
@@ -65,12 +67,21 @@ export function LineEditor({
   const [sectionLocked, setSectionLocked] = useState(true);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const hydrated = useRef({ expected: '', actual: '' });
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setDatePickerOpen(false);
+      return;
+    }
+    const { convert } = useRates.getState();
+    const lineCurrency = initial?.currency || 'USD';
+    const hydratedExpected = initial?.expected ? editableAmount(initial.expected, lineCurrency, currency, convert) : '';
+    const hydratedActual = initial?.actualOverride != null ? editableAmount(initial.actualOverride, lineCurrency, currency, convert) : '';
+    hydrated.current = { expected: hydratedExpected, actual: hydratedActual };
     setName(initial?.name ?? '');
-    setExpected(initial?.expected ? String(initial.expected) : '');
-    setActual(initial?.actualOverride != null ? String(initial.actualOverride) : '');
+    setExpected(hydratedExpected);
+    setActual(hydratedActual);
     setDueDay(initial?.dueDay ?? null);
     setDatePickerOpen(false);
     setAutomated(initial?.automated ?? false);
@@ -117,14 +128,21 @@ export function LineEditor({
     if (!name.trim()) return;
     setSaving(true);
     const target = initial ?? match;
+    const amounts = resolveLineAmounts({
+      target: target ?? null,
+      editing: !!initial,
+      untouched: expected === hydrated.current.expected && actual === hydrated.current.actual,
+      expected: parseMoney(expected),
+      actual: isIncome && actual !== '' ? parseMoney(actual) : null,
+      preferred: currency,
+      convert: useRates.getState().convert,
+    });
     await onSave({
       id: target?.id,
       month,
       section: incomeFlow ? 'income' : section,
       name: name.trim(),
-      expected: parseMoney(expected),
-      actualOverride: isIncome && actual !== '' ? parseMoney(actual) : target?.actualOverride ?? null,
-      currency: target?.currency ?? currency,
+      ...amounts,
       dueDay,
       automated: isIncome ? false : automated,
       notifyDaysBefore: isIncome ? null : (automated ? (target?.notifyDaysBefore ?? 1) : null),
@@ -182,7 +200,7 @@ export function LineEditor({
                 C={C}
               />
               <Field
-                label="Amount"
+                label={`Amount (${currency})`}
                 value={expected}
                 onChange={setExpected}
                 placeholder="0.00"
@@ -232,7 +250,7 @@ export function LineEditor({
                 <>
                   {isIncome && (
                     <Field
-                      label="Actual"
+                      label={`Actual (${currency})`}
                       value={actual}
                       onChange={setActual}
                       placeholder="when it lands"
@@ -247,7 +265,7 @@ export function LineEditor({
                   <DueField
                     month={month}
                     dueDay={dueDay}
-                    onPress={() => setDatePickerOpen(true)}
+                    onPress={() => { Keyboard.dismiss(); setDatePickerOpen(true); }}
                     C={C}
                   />
                   <Field label="Note" value={observation} onChange={setObservation} placeholder="optional" C={C}/>
@@ -295,17 +313,18 @@ export function LineEditor({
                 </Tap>
               )}
             </ScrollView>
-      </BottomSheet>
 
-      <DatePicker
-        visible={datePickerOpen}
-        value={pickerDate}
-        presentation="popover"
-        allowClear
-        onSelect={(d) => setDueDay(d.getDate())}
-        onClear={() => setDueDay(null)}
-        onClose={() => setDatePickerOpen(false)}
-      />
+        {/* Inside the sheet: iOS won't present the calendar's modal beside this one. */}
+        <DatePicker
+          visible={datePickerOpen}
+          value={pickerDate}
+          presentation="popover"
+          allowClear
+          onSelect={(d) => setDueDay(d.getDate())}
+          onClear={() => setDueDay(null)}
+          onClose={() => setDatePickerOpen(false)}
+        />
+      </BottomSheet>
     </>
   );
 }

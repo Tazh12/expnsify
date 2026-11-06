@@ -16,6 +16,7 @@ import { aiRemainingLabel } from '../flows/UpgradeModal';
 import { deleteAccount } from '../services/account';
 import { useAccountPrompt } from '../flows/CreateAccountSheet';
 import { expensesToCsv } from '../services/export';
+import { convertAllToCurrency, ConversionSaveError } from '../services/convertAll';
 import { LinesGroupsScreen } from './LinesGroupsScreen';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -97,6 +98,69 @@ export function SettingsScreen({ onClose }: Props) {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign out', style: 'destructive', onPress: () => signOut() },
     ]);
+  }
+
+  async function handleCurrencyChange(newCurrency: string) {
+    const oldCurrency = settings.preferredCurrency;
+    
+    if (oldCurrency === newCurrency) {
+      setCurrencyPickerOpen(false);
+      return;
+    }
+
+    // If there are existing expenses or budget lines, ask about conversion
+    const hasData = expenses.length > 0 || lines.length > 0;
+    
+    if (!hasData) {
+      await settings.set('preferredCurrency', newCurrency);
+      setCurrencyPickerOpen(false);
+      return;
+    }
+
+    Alert.alert(
+      'Convert to ' + newCurrency + '?',
+      `You have ${expenses.length} transaction${expenses.length === 1 ? '' : 's'} and ${lines.length} budget line${lines.length === 1 ? '' : 's'}. Convert all amounts to ${newCurrency} using current exchange rates?`,
+      [
+        {
+          text: 'Keep as-is',
+          style: 'cancel',
+          onPress: async () => {
+            await settings.set('preferredCurrency', newCurrency);
+            setCurrencyPickerOpen(false);
+          },
+        },
+        {
+          text: 'Convert all',
+          onPress: async () => {
+            try {
+              await convertAllToCurrency({
+                target: newCurrency,
+                expenses,
+                lines,
+                loadRates: useRates.getState().loadFor,
+                updateExpense: useExpenses.getState().update,
+                updateLine: useBudget.getState().update,
+                setPreferred: (currency) => settings.set('preferredCurrency', currency),
+              });
+            } catch (e) {
+              Alert.alert(
+                'Couldn’t convert',
+                e instanceof ConversionSaveError
+                  ? `Some amounts may not have saved, and your currency is still ${oldCurrency}. Converted amounts stay correct, so you can try again.`
+                  : `Couldn’t get exchange rates for ${newCurrency}. Nothing was changed.`,
+              );
+              return;
+            }
+
+            setCurrencyPickerOpen(false);
+            setToast(`Converted all amounts to ${newCurrency}`);
+            if (toastTimer.current) clearTimeout(toastTimer.current);
+            toastTimer.current = setTimeout(() => setToast(null), 3000);
+          },
+        },
+      ],
+      { cancelable: true }
+    );
   }
 
   const isGuest = !!user?.isAnonymous;
@@ -464,7 +528,7 @@ export function SettingsScreen({ onClose }: Props) {
     <CurrencyPickerSheet
       visible={currencyPickerOpen}
       current={settings.preferredCurrency}
-      onSelect={(code) => settings.set('preferredCurrency', code)}
+      onSelect={handleCurrencyChange}
       onClose={() => setCurrencyPickerOpen(false)}
     />
     <NotifySheet open={notifyOpen} onClose={() => setNotifyOpen(false)}/>

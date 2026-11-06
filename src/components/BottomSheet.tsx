@@ -1,9 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Modal, Pressable, ScrollView, Keyboard, Platform,
+  View, Text, Modal, Pressable, ScrollView, Keyboard, Platform,
   useWindowDimensions, Dimensions, StyleSheet,
 } from 'react-native';
 import { useTheme } from '../theme';
+import { Tap } from './Tap';
+import { Icon } from './Icon';
+
+const DONE_BAR_HEIGHT = 44;
 
 export function BottomSheet({
   visible,
@@ -39,8 +43,10 @@ export function BottomSheet({
     });
   };
 
-  const bottomPad = (keyboard > 0 ? 0 : below) + 16;
-  const scrollMax = Math.max(160, Math.round(windowHeight * 0.9) - 36 - bottomPad - keyboard);
+  const showDoneBar = Platform.OS === 'ios' && keyboard > 0;
+  const bottomPad = showDoneBar ? 0 : (keyboard > 0 ? 0 : below) + 16;
+  const doneBarSpace = showDoneBar ? DONE_BAR_HEIGHT : 0;
+  const scrollMax = Math.max(160, Math.round(windowHeight * 0.9) - 36 - bottomPad - doneBarSpace - keyboard);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
@@ -79,6 +85,28 @@ export function BottomSheet({
           >
             {children}
           </ScrollView>
+          {showDoneBar && (
+            <View style={{
+              height: DONE_BAR_HEIGHT,
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
+              paddingHorizontal: 12,
+              backgroundColor: C.surface,
+              borderTopWidth: 0.5, borderTopColor: C.hair,
+            }}>
+              <Tap
+                onPress={() => Keyboard.dismiss()}
+                accessibilityLabel="Hide keyboard"
+                style={{
+                  minHeight: DONE_BAR_HEIGHT,
+                  flexDirection: 'row', alignItems: 'center', gap: 6,
+                  paddingHorizontal: 12,
+                }}
+              >
+                <Icon name="chev-d" size={14} stroke={C.sage} sw={2}/>
+                <Text style={{ fontSize: 15, color: C.sage, fontWeight: '600' }}>Done</Text>
+              </Tap>
+            </View>
+          )}
         </View>
       </View>
     </Modal>
